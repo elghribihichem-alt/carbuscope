@@ -10,19 +10,17 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
-import { SERVICE_LABELS } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
 import { StarRating, StationRow, toggleIn } from "../shared"
 import { useFavoritesStore } from "../favorites-store"
 
-const SERVICES = Object.keys(SERVICE_LABELS)
-const HOURS = [
-  { id: "24h", label: "24h/24" },
-  { id: "7j", label: "7j/7" },
-] as const
+const SERVICES = ["boutique", "gonflage", "toilettes", "atm", "cafe", "lavage", "vidange", "atelier", "recharge"]
+const HOURS_IDS = ["24h", "7j"] as const
 
 export function SearchScreen({ api }: { api: AppApi }) {
+  const { t, svc } = useI18n()
   const [brandSel, setBrandSel] = useState<Set<string>>(new Set())
   const [serviceSel, setServiceSel] = useState<Set<string>>(new Set())
   const [hours, setHours] = useState<string | null>(null)
@@ -66,14 +64,14 @@ export function SearchScreen({ api }: { api: AppApi }) {
       {/* Barre de recherche + tri */}
       <div className="z-20 shrink-0 border-b border-slate-200/70 bg-white px-3 pb-2 pt-1.5">
         <div className="relative" role="search">
-          <Search aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search aria-hidden className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={api.searchQuery}
             onChange={e => api.setSearchQuery(e.target.value)}
-            placeholder="Ville, station, enseigne…"
-            aria-label="Rechercher une ville, une station ou une enseigne"
+            placeholder={t("search.placeholder")}
+            aria-label={t("search.aria")}
             enterKeyHint="search"
-            className="h-10 rounded-full border-slate-200 bg-slate-50 pl-10 pr-4 text-[13px] focus-visible:border-emerald-400 focus-visible:ring-emerald-500/30"
+            className="h-10 rounded-full border-slate-200 bg-slate-50 ps-10 pe-4 text-[13px] focus-visible:border-emerald-400 focus-visible:ring-emerald-500/30"
           />
         </div>
         <div className="mt-2 flex items-center gap-2">
@@ -89,7 +87,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
             )}
           >
             <Heart className={cn("h-3.5 w-3.5", favOnly && "fill-amber-400 text-amber-500")} />
-            Favoris
+            {t("search.favorites")}
             {favIds.length > 0 && (
               <span className={cn(
                 "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold",
@@ -109,7 +107,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
             )}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filtres
+            {t("search.filters")}
             {activeFilters > (favOnly ? 1 : 0) && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white">
                 {activeFilters - (favOnly ? 1 : 0)}
@@ -117,15 +115,15 @@ export function SearchScreen({ api }: { api: AppApi }) {
             )}
             <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 transition-transform", filtersOpen && "rotate-180")} />
           </button>
-          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-slate-400">
-            Trier
+          <span className="ms-auto flex items-center gap-1.5 text-[10px] text-slate-400">
+            {t("search.sort")}
             <Select value={sort} onValueChange={v => setSort(v === "rating" ? "rating" : "distance")}>
-              <SelectTrigger size="sm" aria-label="Trier les résultats" className="h-8 w-[110px] rounded-full bg-white text-[11px] font-semibold text-slate-700">
+              <SelectTrigger size="sm" aria-label={t("search.sortAria")} className="h-8 w-[110px] rounded-full bg-white text-[11px] font-semibold text-slate-700">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="distance">Distance</SelectItem>
-                <SelectItem value="rating">Note</SelectItem>
+                <SelectItem value="distance">{t("search.sortDistance")}</SelectItem>
+                <SelectItem value="rating">{t("search.sortRating")}</SelectItem>
               </SelectContent>
             </Select>
           </span>
@@ -137,7 +135,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
         <CollapsibleContent>
           <div className="space-y-3 px-3 py-3">
             <div>
-              <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Enseigne</p>
+              <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">{t("search.brand")}</p>
               <div className="flex flex-wrap gap-1.5">
                 {api.brands.map(b => {
                   const on = brandSel.has(b.slug)
@@ -161,7 +159,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
             </div>
 
             <div>
-              <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Service</p>
+              <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">{t("search.service")}</p>
               <div className="flex flex-wrap gap-1.5">
                 {SERVICES.map(slug => {
                   const Icon = SERVICE_ICONS[slug]
@@ -178,7 +176,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
                       )}
                     >
                       {Icon ? <Icon className={cn("h-3.5 w-3.5", on ? "text-emerald-600" : "text-slate-400")} /> : null}
-                      {SERVICE_LABELS[slug]}
+                      {svc(slug)}
                     </button>
                   )
                 })}
@@ -186,22 +184,22 @@ export function SearchScreen({ api }: { api: AppApi }) {
             </div>
 
             <div>
-              <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Horaires</p>
+              <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">{t("search.hours")}</p>
               <div className="flex gap-1.5">
-                {HOURS.map(h => {
-                  const on = hours === h.id
+                {HOURS_IDS.map(id => {
+                  const on = hours === id
                   return (
                     <button
-                      key={h.id}
+                      key={id}
                       type="button"
-                      onClick={() => setHours(on ? null : h.id)}
+                      onClick={() => setHours(on ? null : id)}
                       aria-pressed={on}
                       className={cn(
                         "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-semibold transition-colors",
                         on ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"
                       )}
                     >
-                      {h.label}
+                      {id === "24h" ? t("common.open24h") : t("common.open7j")}
                     </button>
                   )
                 })}
@@ -209,7 +207,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
             </div>
 
             <div className="flex items-center justify-between">
-              <p className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Note minimum</p>
+              <p className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">{t("search.minRating")}</p>
               <span className="flex items-center gap-2">
                 <StarRating value={minRating} onChange={v => setMinRating(v === minRating ? 0 : v)} size="sm" />
                 <span className={cn("w-8 text-right text-[11px] font-semibold", minRating ? "text-emerald-700" : "text-slate-300")}>
@@ -225,7 +223,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
                 className="flex h-8 w-full items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Réinitialiser les filtres
+                {t("search.reset")}
               </button>
             )}
           </div>
@@ -236,9 +234,9 @@ export function SearchScreen({ api }: { api: AppApi }) {
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center justify-between px-3 py-2">
           <p className="text-[12.5px] font-bold text-slate-700">
-            {results.length} station{results.length !== 1 ? "s" : ""}
+            {results.length === 1 ? t("search.resultsOne", { n: results.length }) : t("search.resultsMany", { n: results.length })}
           </p>
-          <p className="text-[10px] text-slate-400">{api.allStations.length} fiches actives · recherche locale</p>
+          <p className="text-[10px] text-slate-400">{t("search.activeFiles", { n: api.allStations.length })}</p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-5">
           <div className="mx-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -249,14 +247,14 @@ export function SearchScreen({ api }: { api: AppApi }) {
               {results.length === 0 && (
                 <div className="p-8 text-center">
                   <MapPin className="mx-auto h-8 w-8 text-slate-300" />
-                  <p className="mt-2 text-[13px] font-semibold text-slate-600">Aucune station trouvée</p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">Ajustez vos filtres ou élargissez la recherche.</p>
+                  <p className="mt-2 text-[13px] font-semibold text-slate-600">{t("search.emptyTitle")}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">{t("search.emptyDesc")}</p>
                 </div>
               )}
             </div>
           </div>
           {results.length > 60 && (
-            <p className="mt-2 text-center text-[10px] text-slate-400">60 premiers résultats affichés sur {results.length}</p>
+            <p className="mt-2 text-center text-[10px] text-slate-400">{t("search.more", { shown: 60, total: results.length })}</p>
           )}
         </div>
       </div>

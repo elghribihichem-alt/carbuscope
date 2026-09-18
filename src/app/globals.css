@@ -189,6 +189,17 @@
   animation: ping-slow 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+/* B.3.4 — Arabe (RTL) : pile de polices avec fallbacks arabes */
+[dir="rtl"] {
+  font-family: var(--font-geist-sans), "Segoe UI", "Noto Sans Arabic", "Geeza Pro",
+    "DejaVu Sans", Tahoma, sans-serif;
+  font-feature-settings: "kern" 1;
+  letter-spacing: 0;
+}
+[dir="rtl"] .tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Scrollbars discrètes */
 * {
   scrollbar-width: thin;

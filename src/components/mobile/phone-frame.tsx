@@ -3,19 +3,22 @@
 // CarbuScope Mobile — maquette de téléphone réaliste
 // Cadre métal/noir, encoche « dynamic island », barre de statut (heure réelle),
 // indicateur home. Ratio ~9/19,5 — 390 × min(844px, 100vh−220px).
+// B.3.4 : la direction du contenu suit la langue (dir="rtl" pour l'arabe).
 
 import { useEffect, useState } from "react"
 import { BatteryFull, Signal, Wifi } from "lucide-react"
+import { useI18n } from "@/lib/i18n"
 
 function StatusBar() {
+  const { locale, dir } = useI18n()
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 15_000)
     return () => clearInterval(id)
   }, [])
-  const hhmm = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+  const hhmm = now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
   return (
-    <div className="relative z-30 flex h-[44px] shrink-0 items-end justify-between px-7 pb-[8px] text-slate-900">
+    <div dir={dir} className="relative z-30 flex h-[44px] shrink-0 items-end justify-between px-7 pb-[8px] text-slate-900">
       <span className="text-[13.5px] font-semibold tabular-nums tracking-tight">{hhmm}</span>
       <span className="flex items-center gap-[5px]">
         <span className="text-[10px] font-semibold leading-none">4G+</span>
@@ -28,6 +31,7 @@ function StatusBar() {
 }
 
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
+  const { dir } = useI18n()
   return (
     <div className="relative w-[min(390px,calc(100vw-3rem))]">
       {/* Boutons latéraux (silence, volume, power) */}
@@ -49,7 +53,7 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
 
             <StatusBar />
 
-            <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>
+            <div dir={dir} className="relative flex min-h-0 flex-1 flex-col">{children}</div>
 
             {/* Indicateur home */}
             <div aria-hidden className="pointer-events-none absolute bottom-[6px] left-1/2 z-40 h-[4px] w-[112px] -translate-x-1/2 rounded-full bg-slate-900/60" />

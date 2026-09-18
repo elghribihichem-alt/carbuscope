@@ -8,6 +8,7 @@ import { useMemo } from "react"
 import { BadgePercent, CreditCard, MapPin, Megaphone, ShieldCheck, Smartphone, Tag, TicketPercent } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { AppApi, StationWithDist } from "../shared"
 import { BrandDot, ScreenHeader, SectionTitle, fmtKm } from "../shared"
@@ -18,50 +19,51 @@ const PARTNERS = [
   {
     icon: ShieldCheck,
     name: "AssurPlus",
-    offer: "Assurance auto dès 29 DT/mois",
-    sub: "Devis en 2 min dans l'app · partenaire CarbuScope",
+    offerKey: "partner.assurplus.offer" as const,
+    subKey: "partner.assurplus.sub" as const,
     tint: "bg-emerald-50 text-emerald-600",
   },
   {
     icon: CreditCard,
     name: "CarbuBank",
-    offer: "Carte carburant — 5 % de cashback",
-    sub: "Utilisable dans toutes les stations partenaires",
+    offerKey: "partner.carpubank.offer" as const,
+    subKey: "partner.carpubank.sub" as const,
     tint: "bg-purple-50 text-purple-600",
   },
   {
     icon: Smartphone,
     name: "Simio Telecom",
-    offer: "App illimitée + 10 Go à 9 DT",
-    sub: "CarbuScope inclus dans le forfait",
+    offerKey: "partner.simio.offer" as const,
+    subKey: "partner.simio.sub" as const,
     tint: "bg-amber-50 text-amber-600",
   },
 ]
 
 export function PromosScreen({ api }: { api: AppApi }) {
+  const { t } = useI18n()
   // Offres géolocalisées : dérivées des stations réellement proches (B.2.9)
   const offers = useMemo<GeoOffer[]>(() => {
     const list: GeoOffer[] = []
     const lavage = api.nearby.find(s => s.services.includes("lavage"))
-    if (lavage) list.push({ station: lavage, title: "Lavage auto complet −15 %", sub: "Sur présentation de l'application en caisse" })
+    if (lavage) list.push({ station: lavage, title: t("promos.geo.wash"), sub: t("promos.geo.washSub") })
     const cafe = api.nearby.find(s => s.services.includes("cafe"))
-    if (cafe) list.push({ station: cafe, title: "Café offert dès 30 L de carburant", sub: "Offre week-end, dans la limite des stocks" })
+    if (cafe) list.push({ station: cafe, title: t("promos.geo.coffee"), sub: t("promos.geo.coffeeSub") })
     const atm = api.nearby.find(s => s.services.includes("atm"))
-    if (atm) list.push({ station: atm, title: "+5 % de points fidélité", sub: "Sur tout passage avant fin juillet" })
+    if (atm) list.push({ station: atm, title: t("promos.geo.atm"), sub: t("promos.geo.atmSub") })
     const open24 = api.nearby.find(s => s.open24)
-    if (open24) list.push({ station: open24, title: "Double points de nuit (22h–6h)", sub: "Programme cross-enseignes CarbuScope" })
+    if (open24) list.push({ station: open24, title: t("promos.geo.night"), sub: t("promos.geo.nightSub") })
     return list
-  }, [api.nearby])
+  }, [api.nearby, t])
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f6f7f5]">
       <ScreenHeader
-        title="Promotions"
-        subtitle="Offres & contenus partenaires"
+        title={t("promos.title")}
+        subtitle={t("promos.subtitle")}
         right={
-          <span className="mr-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700">
+          <span className="me-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700">
             <Tag className="h-3 w-3" />
-            Partenaires
+            {t("promos.partnersBadge")}
           </span>
         }
       />
@@ -74,7 +76,7 @@ export function PromosScreen({ api }: { api: AppApi }) {
           <div className="relative">
             <div className="flex items-center justify-between">
               <span className="rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest backdrop-blur-sm">
-                Sponsorisé
+                {t("promos.sponsored")}
               </span>
               <span className="flex items-center gap-1.5 text-[11px] font-bold">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#ea580c] ring-2 ring-white/40" />
@@ -82,24 +84,24 @@ export function PromosScreen({ api }: { api: AppApi }) {
               </span>
             </div>
             <p className="mt-2.5 text-[17px] font-extrabold leading-tight drop-shadow-sm">
-              −10 % sur le lavage
+              {t("promos.bannerTitle1")}
               <br />
-              cette semaine
+              {t("promos.bannerTitle2")}
             </p>
-            <p className="mt-1 text-[11px] text-white/90">34 stations TotalEnergies participantes autour de vous</p>
+            <p className="mt-1 text-[11px] text-white/90">{t("promos.bannerSub", { n: 34 })}</p>
             <Button
               size="sm"
-              onClick={() => toast.success("Offre activée — bon de −10 %", { description: "Présentez cet écran en caisse participant (démo)." })}
+              onClick={() => toast.success(t("promos.bannerToast"), { description: t("promos.bannerToastDesc") })}
               className="mt-3 h-9 rounded-full bg-white px-5 text-[12px] font-bold text-emerald-700 shadow-md hover:bg-white/90"
             >
-              Profiter de l'offre
+              {t("promos.bannerCta")}
             </Button>
           </div>
         </div>
 
         {/* Offres géolocalisées */}
         <section className="mt-4">
-          <SectionTitle icon={TicketPercent}>Offres près de vous</SectionTitle>
+          <SectionTitle icon={TicketPercent}>{t("promos.geoTitle")}</SectionTitle>
           <div className="space-y-2">
             {offers.map(o => (
               <div key={o.station.id + o.title} className="flex items-start gap-2.5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -115,21 +117,21 @@ export function PromosScreen({ api }: { api: AppApi }) {
                   <p className="truncate text-[10.5px] text-slate-400">{o.sub}</p>
                   <p className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
                     <MapPin className="h-3 w-3 text-emerald-500" />
-                    {o.station.name} · {fmtKm(o.station.distanceKm)} · valable jusqu'au 31/07
+                    {o.station.name} · {fmtKm(o.station.distanceKm)} · {t("promos.validUntil")}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => toast.info("Offre enregistrée dans « Mes promos » (démo).")}
+                  onClick={() => toast.info(t("promos.saveToast"))}
                   className="shrink-0 self-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10.5px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
                 >
-                  Enregistrer
+                  {t("promos.save")}
                 </button>
               </div>
             ))}
             {offers.length === 0 && (
               <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-center text-[12px] text-slate-400">
-                Aucune offre géolocalisée pour le moment.
+                {t("promos.geoEmpty")}
               </p>
             )}
           </div>
@@ -137,7 +139,7 @@ export function PromosScreen({ api }: { api: AppApi }) {
 
         {/* Contenus partenaires (B.4) */}
         <section className="mt-4">
-          <SectionTitle icon={Megaphone}>Contenus partenaires</SectionTitle>
+          <SectionTitle icon={Megaphone}>{t("promos.partnersTitle")}</SectionTitle>
           <div className="space-y-2">
             {PARTNERS.map(p => {
               const Icon = p.icon
@@ -148,22 +150,22 @@ export function PromosScreen({ api }: { api: AppApi }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{p.name}</p>
-                    <p className="truncate text-[12.5px] font-semibold text-slate-800">{p.offer}</p>
-                    <p className="truncate text-[10px] text-slate-400">{p.sub}</p>
+                    <p className="truncate text-[12.5px] font-semibold text-slate-800">{t(p.offerKey)}</p>
+                    <p className="truncate text-[10px] text-slate-400">{t(p.subKey)}</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => toast.info(`${p.name} — page partenaire (démo).`)}
+                    onClick={() => toast.info(t("promos.partnerToast", { name: p.name }))}
                     className="shrink-0 self-center rounded-full border border-slate-200 px-3 py-1.5 text-[10.5px] font-semibold text-slate-600 transition-colors hover:border-emerald-300 hover:text-emerald-700"
                   >
-                    Découvrir
+                    {t("promos.discover")}
                   </button>
                 </div>
               )
             })}
           </div>
           <p className="mt-2.5 text-center text-[10px] leading-snug text-slate-400">
-            Les contenus partenaires financent la gratuité de l'application (modèle B.4).
+            {t("promos.partnersFoot")}
           </p>
         </section>
       </div>

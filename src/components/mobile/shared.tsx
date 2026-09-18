@@ -7,8 +7,10 @@ import { useState } from "react"
 import { Camera, ChevronLeft, ChevronRight, Heart, Image as ImageIcon, Star, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SERVICE_LABELS, type BrandDTO, type StationDTO, type StationDetail } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 import { useFavoritesStore } from "./favorites-store"
+import { relativeDate } from "@/lib/i18n"
 
 // ---------- Types ----------
 
@@ -60,14 +62,7 @@ export function fmtNote(n: number): string {
 }
 
 export function relativeFr(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
-  if (days <= 0) return "aujourd'hui"
-  if (days === 1) return "hier"
-  if (days < 7) return `il y a ${days} jours`
-  if (days < 30) return `il y a ${Math.floor(days / 7)} sem.`
-  if (days < 365) return `il y a ${Math.floor(days / 30)} mois`
-  const y = Math.floor(days / 365)
-  return y === 1 ? "il y a 1 an" : `il y a ${y} ans`
+  return relativeDate("fr", iso)
 }
 
 export function dateFr(iso: string): string {
@@ -95,12 +90,13 @@ export function StarRating({
   size?: "xs" | "sm" | "md" | "lg"
   className?: string
 }) {
+  const { t } = useI18n()
   const sizes: Record<string, string> = { xs: "h-3 w-3", sm: "h-4 w-4", md: "h-5 w-5", lg: "h-8 w-8" }
   return (
     <div
       className={cn("flex items-center gap-0.5", className)}
       role={onChange ? "radiogroup" : undefined}
-      aria-label={onChange ? "Attribuer une note" : `Note ${fmtNote(value)} sur 5`}
+      aria-label={onChange ? t("review.tapStars") : `${fmtNote(value)} / 5`}
     >
       {[1, 2, 3, 4, 5].map(i =>
         onChange ? (
@@ -108,7 +104,7 @@ export function StarRating({
             key={i}
             type="button"
             onClick={() => onChange(i)}
-            aria-label={`${i} étoile${i > 1 ? "s" : ""}`}
+            aria-label={`${i}/5`}
             className="transition-transform hover:scale-110 active:scale-95"
           >
             <Star className={cn(sizes[size], i <= value ? "fill-amber-400 text-amber-400" : "fill-slate-200 text-slate-300")} />
@@ -138,13 +134,14 @@ export function BrandDot({ color, className }: { color: string; className?: stri
   return <span aria-hidden className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", className)} style={{ backgroundColor: color }} />
 }
 
-/** Chip service (icône + libellé) */
+/** Chip service (icône + libellé localisé) */
 export function ServicePill({ slug, className }: { slug: string; className?: string }) {
+  const { svc } = useI18n()
   const Icon = SERVICE_ICONS[slug]
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600", className)}>
       {Icon ? <Icon className="h-3 w-3 text-slate-400" /> : null}
-      {SERVICE_LABELS[slug] ?? slug}
+      {svc(slug)}
     </span>
   )
 }
@@ -152,27 +149,28 @@ export function ServicePill({ slug, className }: { slug: string; className?: str
 /** Ligne de résultat station (listes carte / recherche) — cœur si favorite */
 export function StationRow({ station, onClick }: { station: StationWithDist; onClick?: () => void }) {
   const isFav = useFavoritesStore(st => st.stationIds.includes(station.id))
+  const { t } = useI18n()
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-emerald-50/70 active:bg-emerald-100/70"
+      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-start transition-colors hover:bg-emerald-50/70 active:bg-emerald-100/70"
     >
       <BrandMark color={station.brandColor} name={station.brandName} className="mt-0.5" />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[13px] font-semibold leading-tight text-slate-800">{station.name}</span>
           {isFav && (
-            <Heart className="h-3 w-3 shrink-0 fill-amber-400 text-amber-500" aria-label="Station favorite" />
+            <Heart className="h-3 w-3 shrink-0 fill-amber-400 text-amber-500" aria-label={t("common.favoriteStation")} />
           )}
           {station.open24 && (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold text-emerald-700">24h/24</span>
+            <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold text-emerald-700">{t("common.open24h")}</span>
           )}
         </span>
         <span className="mt-1 flex items-center gap-1.5 text-[11px] leading-none text-slate-500">
           <span className="font-semibold text-emerald-700">{fmtKm(station.distanceKm)}</span>
           <span aria-hidden>·</span>
-          <span>{driveMinutes(station.distanceKm)} min</span>
+          <span>{driveMinutes(station.distanceKm)} {t("common.min")}</span>
           <span aria-hidden>·</span>
           <span className="flex items-center gap-0.5">
             <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
@@ -189,7 +187,7 @@ export function StationRow({ station, onClick }: { station: StationWithDist; onC
           )}
         </span>
       </span>
-      <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-slate-300" />
+      <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-slate-300 rtl:rotate-180" />
     </button>
   )
 }
@@ -203,16 +201,17 @@ export function ScreenHeader({
   onBack?: () => void
   right?: React.ReactNode
 }) {
+  const { t } = useI18n()
   return (
     <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-slate-200/80 bg-white px-2">
       {onBack && (
         <button
           type="button"
           onClick={onBack}
-          aria-label="Retour"
+          aria-label={t("common.back")}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100 active:bg-slate-200"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
         </button>
       )}
       <div className="min-w-0 flex-1">
@@ -230,13 +229,14 @@ export function SectionTitle({ icon: Icon, children, action }: { icon?: IconType
     <div className="mb-2 flex items-center gap-1.5">
       {Icon ? <Icon className="h-3.5 w-3.5 text-emerald-600" /> : null}
       <h2 className="text-[11.5px] font-bold uppercase tracking-wide text-slate-500">{children}</h2>
-      <span className="ml-auto">{action}</span>
+      <span className="ms-auto">{action}</span>
     </div>
   )
 }
 
 /** Barre de contexte station (écrans signalement / avis) */
 export function StationContextBar({ station }: { station: StationWithDist }) {
+  const { t } = useI18n()
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
       <BrandMark color={station.brandColor} name={station.brandName} className="h-9 w-9 text-sm" />
@@ -245,15 +245,17 @@ export function StationContextBar({ station }: { station: StationWithDist }) {
         <p className="truncate text-[11px] text-slate-400">{station.address}</p>
       </div>
       <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-        {fmtKm(station.distanceKm)} · {driveMinutes(station.distanceKm)} min
+        {fmtKm(station.distanceKm)} · {driveMinutes(station.distanceKm)} {t("common.min")}
       </span>
     </div>
   )
 }
 
 /** Mock d'ajout de photo (signalement / avis) */
-export function PhotoMock({ label = "Ajouter une photo", fileName = "IMG_2481.jpg" }: { label?: string; fileName?: string }) {
+export function PhotoMock({ label, fileName = "IMG_2481.jpg" }: { label?: string; fileName?: string }) {
+  const { t } = useI18n()
   const [added, setAdded] = useState(false)
+  const addLabel = label ?? t("report.photo")
   if (added) {
     return (
       <div className="flex items-center gap-3 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/60 p-3">
@@ -262,12 +264,12 @@ export function PhotoMock({ label = "Ajouter une photo", fileName = "IMG_2481.jp
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12px] font-semibold text-slate-700">{fileName}</span>
-          <span className="block text-[10px] text-slate-400">Géolocalisée · 36,80 N — 10,18 E · prête à être envoyée</span>
+          <span className="block text-[10px] text-slate-400">36,80 N — 10,18 E</span>
         </span>
         <button
           type="button"
           onClick={() => setAdded(false)}
-          aria-label="Retirer la photo"
+          aria-label={t("report.photo")}
           className="shrink-0 rounded-full p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
         >
           <X className="h-4 w-4" />
@@ -282,7 +284,7 @@ export function PhotoMock({ label = "Ajouter une photo", fileName = "IMG_2481.jp
       className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-3 text-[12px] font-medium text-slate-500 transition-colors hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
     >
       <Camera className="h-4 w-4" />
-      {label}
+      {addLabel}
     </button>
   )
 }

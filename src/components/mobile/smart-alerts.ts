@@ -5,7 +5,7 @@
 
 import type { ComponentType } from "react"
 import { BadgeCheck, Clock3, Star, Wrench } from "lucide-react"
-import { SERVICE_LABELS } from "@/lib/types"
+import { translate, serviceLabel, type Lang } from "@/lib/i18n"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 import type { StationWithDist } from "./shared"
 import { fmtKm, fmtNote } from "./shared"
@@ -51,7 +51,7 @@ function byDistance(list: StationWithDist[]): StationWithDist[] {
   return [...list].sort((a, b) => a.distanceKm - b.distanceKm)
 }
 
-export function computeSmartAlerts(all: StationWithDist[], prefs: AlertPrefs): SmartAlertCard[] {
+export function computeSmartAlerts(all: StationWithDist[], prefs: AlertPrefs, lang: Lang = "fr"): SmartAlertCard[] {
   const inRadius = all.filter(
     s => s.status === "ACTIVE" && s.distanceKm <= prefs.radiusKm && (!prefs.open24Only || s.open24)
   )
@@ -65,7 +65,7 @@ export function computeSmartAlerts(all: StationWithDist[], prefs: AlertPrefs): S
       id: `${s.id}-open24`,
       kind: "open24",
       icon: Clock3,
-      title: `Station ${s.brandName} ouverte 24h/24 à ${fmtKm(s.distanceKm)}`,
+      title: translate(lang, "smart.open24Title", { brand: s.brandName, km: fmtKm(s.distanceKm) }),
       sub: `${s.name} — ${s.delegation}`,
       tint: "bg-emerald-50 text-emerald-600",
       station: s,
@@ -80,7 +80,7 @@ export function computeSmartAlerts(all: StationWithDist[], prefs: AlertPrefs): S
       id: `${st.id}-svc-${slug}`,
       kind: "service",
       icon: SERVICE_ICONS[slug] ?? Wrench,
-      title: `${SERVICE_LABELS[slug] ?? slug} disponible à ${fmtKm(st.distanceKm)}`,
+      title: translate(lang, "smart.serviceTitle", { service: serviceLabel(lang, slug), km: fmtKm(st.distanceKm) }),
       sub: `${st.name} — ${st.brandName}`,
       tint: slug === "recharge" ? "bg-purple-50 text-purple-600" : "bg-amber-50 text-amber-600",
       station: st,
@@ -94,8 +94,8 @@ export function computeSmartAlerts(all: StationWithDist[], prefs: AlertPrefs): S
       id: `${s.id}-rating`,
       kind: "rating",
       icon: Star,
-      title: `Station notée ${fmtNote(s.rating)}/5 à ${fmtKm(s.distanceKm)}`,
-      sub: `${s.name} — ${s.reviewsCount} avis vérifiés`,
+      title: translate(lang, "smart.ratingTitle", { note: fmtNote(s.rating), km: fmtKm(s.distanceKm) }),
+      sub: translate(lang, "smart.ratingSub", { name: s.name, n: s.reviewsCount }),
       tint: "bg-amber-50 text-amber-600",
       station: s,
     })
@@ -109,8 +109,10 @@ export function computeSmartAlerts(all: StationWithDist[], prefs: AlertPrefs): S
       id: `${s.id}-fresh`,
       kind: "fresh",
       icon: BadgeCheck,
-      title: `Fiche vérifiée ${d === 0 ? "aujourd'hui" : `il y a ${d} j`} à ${fmtKm(s.distanceKm)}`,
-      sub: `${s.name} — certifiée ${s.verifiedBy}`,
+      title: d === 0
+        ? translate(lang, "smart.freshToday", { km: fmtKm(s.distanceKm) })
+        : translate(lang, "smart.freshDays", { n: d, km: fmtKm(s.distanceKm) }),
+      sub: translate(lang, "smart.freshSub", { name: s.name, by: s.verifiedBy }),
       tint: "bg-slate-100 text-slate-600",
       station: s,
     })

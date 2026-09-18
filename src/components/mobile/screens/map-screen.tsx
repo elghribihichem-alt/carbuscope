@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TunisiaMap } from "@/components/map/tunisia-map"
+import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
 import { SectionTitle, StationRow } from "../shared"
@@ -20,12 +21,13 @@ import { useAlertsStore } from "../alerts-store"
 import { computeSmartAlerts } from "../smart-alerts"
 
 export function MapScreen({ api }: { api: AppApi }) {
+  const { t, lang } = useI18n()
   const [query, setQuery] = useState("")
   const [alertIdx, setAlertIdx] = useState(0)
   const prefs = useAlertsStore()
 
   // Alertes personnalisées (B.3.1) — recalculées selon les préférences persistées
-  const allAlerts = useMemo(() => computeSmartAlerts(api.allStations, prefs), [api.allStations, prefs])
+  const allAlerts = useMemo(() => computeSmartAlerts(api.allStations, prefs, lang), [api.allStations, prefs, lang])
   const alerts = useMemo(() => allAlerts.slice(0, 5), [allAlerts])
 
   // Rotation automatique des alertes toutes les 4 s (une seule visible)
@@ -52,40 +54,40 @@ export function MapScreen({ api }: { api: AppApi }) {
           className="relative"
           role="search"
         >
-          <Search aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search aria-hidden className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Ville, station, enseigne…"
-            aria-label="Rechercher une ville, une station ou une enseigne"
+            placeholder={t("map.searchPlaceholder")}
+            aria-label={t("map.searchAria")}
             enterKeyHint="search"
-            className="h-10 rounded-full border-slate-200 bg-slate-50 pl-10 pr-4 text-[13px] focus-visible:border-emerald-400 focus-visible:ring-emerald-500/30"
+            className="h-10 rounded-full border-slate-200 bg-slate-50 ps-10 pe-4 text-[13px] focus-visible:border-emerald-400 focus-visible:ring-emerald-500/30"
           />
         </form>
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
-            onClick={() => toast.info("Position centrée sur Tunis — Centre", { description: "GPS simulé pour la démonstration." })}
+            onClick={() => toast.info(t("map.aroundMeToast"), { description: t("map.aroundMeToastDesc") })}
             className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-700 shadow-sm"
           >
             <LocateFixed className="h-3.5 w-3.5" />
-            Autour de moi
+            {t("map.aroundMe")}
           </button>
           <button
             type="button"
-            onClick={() => toast.info("Ouvrez une fiche station puis appuyez sur « Itinéraire ».")}
+            onClick={() => toast.info(t("map.routeToast"))}
             className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-[11px] font-medium text-slate-600 shadow-sm transition-colors hover:border-emerald-300 hover:text-emerald-700"
           >
             <Navigation className="h-3.5 w-3.5" />
-            Itinéraire
+            {t("map.route")}
           </button>
 
           {/* Centre d'alertes intelligentes (B.3.1) */}
           <button
             type="button"
             onClick={() => api.go("alertes")}
-            aria-label={`${allAlerts.length} alertes intelligentes — ouvrir le centre d'alertes`}
-            className="relative ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border border-red-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 shadow-sm transition-colors hover:border-red-300 hover:text-red-600"
+            aria-label={t("map.bellAria", { n: allAlerts.length })}
+            className="relative ms-auto inline-flex h-8 items-center gap-1.5 rounded-full border border-red-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 shadow-sm transition-colors hover:border-red-300 hover:text-red-600"
           >
             <Bell className="h-3.5 w-3.5 text-red-500" />
             {allAlerts.length > 0 && (
@@ -106,17 +108,17 @@ export function MapScreen({ api }: { api: AppApi }) {
                 )}
               >
                 <CloudOff className="h-3.5 w-3.5" />
-                Hors ligne
+                {t("offline.label")}
                 <Switch
                   checked={api.offline}
                   onCheckedChange={api.toggleOffline}
-                  aria-label="Basculer le mode hors ligne"
+                  aria-label={t("offline.mode")}
                   className="h-4 w-7 scale-[0.85] data-[state=checked]:bg-amber-500"
                 />
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="end" className="max-w-[210px] border-amber-200 text-[11px] leading-snug">
-              Cartes et fiches en cache — signalements synchronisés à la reconnexion.
+              {t("offline.tooltip")}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -136,13 +138,13 @@ export function MapScreen({ api }: { api: AppApi }) {
             onViewDetail={api.openStation}
           />
           {api.offline && (
-            <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2 py-1 text-[10px] font-bold text-white shadow">
+            <span className="absolute start-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2 py-1 text-[10px] font-bold text-white shadow">
               <CloudOff className="h-3 w-3" />
-              Mode hors ligne
+              {t("offline.mode")}
             </span>
           )}
-          <span className="absolute bottom-2 left-2 z-10 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 shadow backdrop-blur">
-            {api.nearby.length} stations autour de vous
+          <span className="absolute bottom-2 start-2 z-10 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 shadow backdrop-blur">
+            {t("map.stationsAround", { n: api.nearby.length })}
           </span>
         </div>
 
@@ -153,8 +155,8 @@ export function MapScreen({ api }: { api: AppApi }) {
               type="button"
               onClick={() => api.go("alertes")}
               aria-live="polite"
-              aria-label="Alerte intelligente — ouvrir le centre d'alertes"
-              className="relative block w-full overflow-hidden rounded-2xl border border-emerald-200/80 bg-white p-2.5 text-left shadow-sm transition-shadow hover:shadow-md"
+              aria-label={t("map.noAlerts")}
+              className="relative block w-full overflow-hidden rounded-2xl border border-emerald-200/80 bg-white p-2.5 text-start shadow-sm transition-shadow hover:shadow-md"
             >
               <AnimatePresence mode="wait">
                 <motion.div
@@ -174,12 +176,12 @@ export function MapScreen({ api }: { api: AppApi }) {
                   </span>
                 </motion.div>
               </AnimatePresence>
-              <span className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded-full bg-red-50 px-2 py-[3px]">
+              <span className="absolute end-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded-full bg-red-50 px-2 py-[3px]">
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
                 </span>
-                <span className="text-[9px] font-bold uppercase tracking-wide text-red-600">En direct</span>
+                <span className="text-[9px] font-bold uppercase tracking-wide text-red-600">{t("map.live")}</span>
               </span>
               <span className="absolute bottom-1.5 right-3 flex gap-1">
                 {alerts.map((_, i) => (
@@ -191,30 +193,30 @@ export function MapScreen({ api }: { api: AppApi }) {
             <button
               type="button"
               onClick={() => api.go("alertes")}
-              className="flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-slate-300 bg-white p-2.5 text-left shadow-sm transition-colors hover:border-emerald-400"
+              className="flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-slate-300 bg-white p-2.5 text-start shadow-sm transition-colors hover:border-emerald-400"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
                 <SlidersHorizontal className="h-[18px] w-[18px]" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-semibold text-slate-700">Aucune alerte active</span>
-                <span className="block truncate text-[11px] text-slate-400">Personnalisez vos alertes intelligentes</span>
+                <span className="block text-[12.5px] font-semibold text-slate-700">{t("map.noAlerts")}</span>
+                <span className="block truncate text-[11px] text-slate-400">{t("map.noAlertsSub")}</span>
               </span>
             </button>
           )}
         </div>
 
         {/* Stations les plus proches (B.2.1) */}
-        <section className="shrink-0 px-3 pb-6 pt-3" aria-label="Stations les plus proches">
+        <section className="shrink-0 px-3 pb-6 pt-3" aria-label={t("map.nearest")}>
           <SectionTitle
             icon={Navigation}
             action={
               <button type="button" onClick={() => api.go("search")} className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
-                Tout voir
+                {t("common.seeAll")}
               </button>
             }
           >
-            Stations les plus proches
+            {t("map.nearest")}
           </SectionTitle>
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="divide-y divide-slate-100">
@@ -224,7 +226,7 @@ export function MapScreen({ api }: { api: AppApi }) {
             </div>
           </div>
           <p className="mt-2 text-center text-[10px] leading-snug text-slate-400">
-            Temps de trajet estimé à 35 km/h en zone urbaine · données vérifiées par la communauté
+            {t("map.travelNote")}
           </p>
         </section>
       </div>

@@ -11,7 +11,7 @@ import { BellOff, ChevronRight, RotateCcw, SlidersHorizontal } from "lucide-reac
 import { toast } from "sonner"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
-import { SERVICE_LABELS } from "@/lib/types"
+import { useI18n } from "@/lib/i18n"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
@@ -19,14 +19,9 @@ import { BrandDot, ScreenHeader, SectionTitle, driveMinutes, fmtKm } from "../sh
 import { useAlertsStore } from "../alerts-store"
 import { computeSmartAlerts, type SmartAlertCard } from "../smart-alerts"
 
-const KIND_LABEL: Record<SmartAlertCard["kind"], string> = {
-  open24: "Ouverture 24h/24",
-  service: "Service disponible",
-  rating: "Qualité confirmée",
-  fresh: "Donnée fraîche",
-}
+const SERVICES = ["boutique", "gonflage", "toilettes", "atm", "cafe", "lavage", "vidange", "atelier", "recharge"]
 
-function AlertCard({ alert, index, onOpen }: { alert: SmartAlertCard; index: number; onOpen: () => void }) {
+function AlertCard({ alert, index, onOpen, t }: { alert: SmartAlertCard; index: number; onOpen: () => void; t: ReturnType<typeof useI18n>["t"] }) {
   const Icon = alert.icon
   return (
     <motion.button
@@ -37,51 +32,54 @@ function AlertCard({ alert, index, onOpen }: { alert: SmartAlertCard; index: num
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
       transition={{ duration: 0.22, delay: Math.min(index * 0.04, 0.3) }}
-      className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-emerald-300 active:bg-emerald-50/60"
+      className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-start shadow-sm transition-colors hover:border-emerald-300 active:bg-emerald-50/60"
     >
       <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", alert.tint)}>
         <Icon className="h-5 w-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="inline-block rounded-full bg-slate-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-slate-500">
-          {KIND_LABEL[alert.kind]}
+          {t(`alert.kind.${alert.kind}`)}
         </span>
         <span className="mt-1 block text-[13px] font-semibold leading-snug text-slate-800">{alert.title}</span>
         <span className="mt-0.5 block truncate text-[11px] text-slate-400">{alert.sub}</span>
         <span className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium">
           <span className="text-emerald-700">{fmtKm(alert.station.distanceKm)}</span>
           <span aria-hidden className="text-slate-300">·</span>
-          <span className="text-slate-500">{driveMinutes(alert.station.distanceKm)} min</span>
+          <span className="text-slate-500">{driveMinutes(alert.station.distanceKm)} {t("common.min")}</span>
           <span aria-hidden className="text-slate-300">·</span>
           <BrandDot color={alert.station.brandColor} />
           <span className="truncate text-slate-500">{alert.station.brandName}</span>
         </span>
       </span>
-      <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-300" />
+      <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-300 rtl:rotate-180" />
     </motion.button>
   )
 }
 
 export function AlertsScreen({ api }: { api: AppApi }) {
+  const { t, lang, locale, svc } = useI18n()
   const prefs = useAlertsStore()
   const [showPrefs, setShowPrefs] = useState(false)
   const [computedAt] = useState(() =>
-    new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    new Date().toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
   )
 
-  const alerts = useMemo(() => computeSmartAlerts(api.allStations, prefs), [api.allStations, prefs])
+  const alerts = useMemo(() => computeSmartAlerts(api.allStations, prefs, lang), [api.allStations, prefs, lang])
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ScreenHeader
-        title="Alertes intelligentes"
-        subtitle={`${alerts.length} alerte${alerts.length > 1 ? "s" : ""} dans un rayon de ${prefs.radiusKm} km`}
+        title={t("alerts.title")}
+        subtitle={alerts.length === 1
+          ? t("alerts.subtitleOne", { n: alerts.length, km: prefs.radiusKm })
+          : t("alerts.subtitleMany", { n: alerts.length, km: prefs.radiusKm })}
         onBack={api.back}
         right={
           <button
             type="button"
             onClick={() => setShowPrefs(v => !v)}
-            aria-label={showPrefs ? "Masquer les préférences d'alertes" : "Afficher les préférences d'alertes"}
+            aria-label={showPrefs ? t("alerts.hidePrefs") : t("alerts.showPrefs")}
             aria-expanded={showPrefs}
             className={cn(
               "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
@@ -100,9 +98,9 @@ export function AlertsScreen({ api }: { api: AppApi }) {
           <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
         </span>
         <p className="text-[11.5px] font-semibold text-emerald-800" aria-live="polite">
-          Veille active — {alerts.length} alerte{alerts.length > 1 ? "s" : ""} personnalisée{alerts.length > 1 ? "s" : ""}
+          {alerts.length === 1 ? t("alerts.liveOne", { n: alerts.length }) : t("alerts.liveMany", { n: alerts.length })}
         </p>
-        <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-400">calculées à {computedAt}</span>
+        <span className="ms-auto shrink-0 text-[10px] font-medium text-slate-400">{t("alerts.computedAt", { time: computedAt })}</span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
@@ -116,28 +114,26 @@ export function AlertsScreen({ api }: { api: AppApi }) {
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="overflow-hidden"
-              aria-label="Préférences des alertes"
+              aria-label={t("alerts.prefsTitle")}
             >
               <div className="m-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[13px] font-bold text-slate-800">Mes préférences</p>
+                  <p className="text-[13px] font-bold text-slate-800">{t("alerts.prefsTitle")}</p>
                   <button
                     type="button"
                     onClick={() => {
                       prefs.resetPrefs()
-                      toast.success("Préférences d'alertes réinitialisées", {
-                        description: "Lavage et recharge surveillés, rayon de 8 km.",
-                      })
+                      toast.success(t("alerts.resetToast"), { description: t("alerts.resetToastDesc") })
                     }}
                     className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-semibold text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
                   >
                     <RotateCcw className="h-3 w-3" />
-                    Réinitialiser
+                    {t("alerts.reset")}
                   </button>
                 </div>
 
                 {/* Enseignes favorites */}
-                <SectionTitle>Enseignes favorites</SectionTitle>
+                <SectionTitle>{t("alerts.favBrands")}</SectionTitle>
                 <div className="mb-3.5 flex flex-wrap gap-1.5">
                   {api.brands.map(b => {
                     const active = prefs.favBrands.includes(b.slug)
@@ -161,9 +157,9 @@ export function AlertsScreen({ api }: { api: AppApi }) {
                 </div>
 
                 {/* Services surveillés */}
-                <SectionTitle>Services surveillés</SectionTitle>
+                <SectionTitle>{t("alerts.watchedServices")}</SectionTitle>
                 <div className="mb-3.5 flex flex-wrap gap-1.5">
-                  {Object.keys(SERVICE_LABELS).map(slug => {
+                  {SERVICES.map(slug => {
                     const Icon = SERVICE_ICONS[slug]
                     const active = prefs.watchedServices.includes(slug)
                     return (
@@ -180,16 +176,16 @@ export function AlertsScreen({ api }: { api: AppApi }) {
                         )}
                       >
                         {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                        {SERVICE_LABELS[slug]}
+                        {svc(slug)}
                       </button>
                     )
                   })}
                 </div>
 
                 {/* Rayon de veille */}
-                <SectionTitle>Rayon de veille</SectionTitle>
+                <SectionTitle>{t("alerts.radius")}</SectionTitle>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[12px] font-medium text-slate-600">Distance maximale</span>
+                  <span className="text-[12px] font-medium text-slate-600">{t("alerts.maxDistance")}</span>
                   <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
                     {prefs.radiusKm} km
                   </span>
@@ -200,22 +196,22 @@ export function AlertsScreen({ api }: { api: AppApi }) {
                   min={2}
                   max={20}
                   step={1}
-                  aria-label="Rayon de veille en kilomètres"
+                  aria-label={t("alerts.radiusAria")}
                   className="mb-4"
                 />
 
                 {/* 24h/24 uniquement */}
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
                   <div className="min-w-0">
-                    <p className="text-[12px] font-semibold text-slate-700">Stations 24h/24 uniquement</p>
+                    <p className="text-[12px] font-semibold text-slate-700">{t("alerts.open24Only")}</p>
                     <p className="mt-0.5 text-[10.5px] leading-snug text-slate-400">
-                      Restreindre toutes les alertes aux stations ouvertes en continu
+                      {t("alerts.open24OnlyDesc")}
                     </p>
                   </div>
                   <Switch
                     checked={prefs.open24Only}
                     onCheckedChange={prefs.setOpen24Only}
-                    aria-label="Restreindre aux stations ouvertes 24h/24"
+                    aria-label={t("alerts.open24OnlyAria")}
                   />
                 </div>
               </div>
@@ -228,11 +224,11 @@ export function AlertsScreen({ api }: { api: AppApi }) {
           <div className="flex flex-col gap-2 px-3 pb-6 pt-3">
             <AnimatePresence initial={false}>
               {alerts.map((a, i) => (
-                <AlertCard key={a.id} alert={a} index={i} onOpen={() => api.openStation(a.station)} />
+                <AlertCard key={a.id} alert={a} index={i} onOpen={() => api.openStation(a.station)} t={t} />
               ))}
             </AnimatePresence>
             <p className="mt-1 text-center text-[10px] leading-snug text-slate-400">
-              Alertes recalculées à chaque changement de préférences · données certifiées communauté & enseignes
+              {t("alerts.footnote")}
             </p>
           </div>
         ) : (
@@ -241,9 +237,9 @@ export function AlertsScreen({ api }: { api: AppApi }) {
               <BellOff className="h-7 w-7" />
             </span>
             <div>
-              <p className="text-[13px] font-semibold text-slate-700">Aucune alerte dans votre rayon</p>
+              <p className="text-[13px] font-semibold text-slate-700">{t("alerts.emptyTitle")}</p>
               <p className="mt-1 text-[11px] leading-snug text-slate-400">
-                Élargissez le rayon de veille ou ajoutez des services surveillés pour recevoir des alertes.
+                {t("alerts.emptyDesc")}
               </p>
             </div>
             <button
@@ -252,7 +248,7 @@ export function AlertsScreen({ api }: { api: AppApi }) {
               className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-600 px-4 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:scale-95"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              Ajuster mes préférences
+              {t("alerts.emptyCta")}
             </button>
           </div>
         )}

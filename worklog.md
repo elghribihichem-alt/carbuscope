@@ -208,3 +208,34 @@ Work Log:
 
 Stage Summary:
 - B.2.7 (préférences utilisateur) pleinement réalisé avec persistance réelle : stations favorites + enseignes + services. Styles : accents ambre cohérents sur toute la chaîne favoris (cœur, chip, section profil). Prochaines priorités recommandées : i18n 5 langues effectif (A.9/B.3.4 — la sélection de langue existe mais ne traduit pas encore), widget comparaison sur la carte (tâche 8 → carte), statistiques d'usage des favoris dans le portail enseigne (C.2.5).
+
+---
+Task ID: 10
+Agent: orchestrator (Z.ai Code) — cron QA 15 min
+Task: QA de routine + Module B.3.4/A.9 « Multilingue 5 langues » — i18n réel avec arabe RTL, détection automatique, persistance
+
+Work Log:
+- QA initial : serveur 200 (next-server ~2,1 Go RSS, à surveiller), sweep 4 modes (dashboard Agil, mobile 8 alertes, portail, back-office), 0 erreur console.
+- Audit cahier des charges : §B.3.4 Multilingue (arabe RTL, français, anglais, italien, espagnol + détection automatique) et §A.9 (langue de l'interface) — la sélection existait mais ne traduisait RIEN (toasts « sera appliquée à la prochaine session »).
+- NOUVELLE infrastructure `src/lib/i18n/` :
+  - `fr.ts` : dictionnaire de base (278 clés, source de vérité typée `DictKey`)
+  - `ar.ts` / `en.ts` / `it.ts` / `es.ts` : traductions complètes (fallback FR automatique si clé manquante)
+  - `store.ts` : zustand persist « carbuscope-lang » (`lang: null` = automatique), merge assainissant, `detectLang()` mémoïsée (navigator.language → ar/fr/en/it/es, défaut fr)
+  - `index.ts` : hook `useI18n()` { t, svc, lang, isRTL, dir, locale, setLang, setAuto } avec drapeau « mounted » (setTimeout 0 — évite tout écart d'hydratation SSR) + helpers `relativeDate` (Intl.RelativeTimeFormat), `formatDate`, `formatTime`, `serviceLabel`, `formatNumber`
+- Application complète à l'app mobile (dossier mobile/) — 13 fichiers modifiés :
+  - Chrome : mobile-app.tsx (TABS → labelKey, splash, toasts offline, transitions framer-motion miroir RTL), phone-frame.tsx (dir sur le contenu + StatusBar heure localisée), shared.tsx (ScreenHeader chevron rtl:rotate-180, StationRow, ServicePill, PhotoMock, SectionTitle ms-auto, StarRating aria, relativeFr → Intl)
+  - 9 écrans traduits : map, search, station (fiche), alerts (centre + préférences), profile (+ section langue reliée au store), promos, loyalty, report (6 types + hints), review (notes/critères)
+  - smart-alerts.ts : `computeSmartAlerts(all, prefs, lang)` — titres dynamiques traduits avec paramètres {brand}/{km}/{service}/{note}/{n} (ex. « محطة Agil مفتوحة 24 ساعة على بعد 1,8 km »)
+  - RTL : dir=rtl sur le contenu du téléphone, chevrons miroirs (rtl:rotate-180), propriétés logiques (ps-/pe-/ms-/me-/start-/end-) sur les éléments touchés, transitions écran inversées, pile de polices arabes dans globals.css ([dir=rtl] → Noto Sans Arabic/DejaVu Sans fallback)
+- `settings/settings-language-card.tsx` (A.9) réécrit : relié au store global — radios 5 langues + option « Automatique » (badge ambre, affiche la langue détectée), reflète l'état courant, applique immédiatement. Chaîne complète : profil mobile ↔ paramètres A.9 ↔ localStorage.
+- Vérifications agent-browser E2E :
+  - Auto-détection : navigateur headless EN → app mobile en anglais d'office (Map/Search/Deals/Loyalty/Profile, « 354 stations around you ») ✓
+  - Arabe : clic « العربية » → bascule instantanée RTL (dir=rtl confirmé via getComputedStyle), onglets الخريطة/البحث/العروض/الولاء/الملف, carte « من حولي / الاتجاهات / مباشر », centre d'alertes « مراقبة مباشرة — 8 تنبيهات شخصية » avec alertes dynamiques traduites (y compris l'exemple exact du cahier §B.3.1) ✓
+  - Italien : « Mappa | Ricerca | Promo | Fedeltà | Profilo » instantané ✓
+  - Paramètres A.9 : Italiano coché → sélection Français → app mobile en français (boucle profil ↔ paramètres vérifiée) ✓
+  - Persistance : reload → état conservé ; « Automatique » → localStorage {lang:null} + retour à l'anglais détecté ✓
+  - Console : 0 erreur, 0 warning d'hydratation à chaque étape ✓
+- `bun run lint` : 0 erreur. `bunx tsc --noEmit` : 0 erreur nouvelle (5 erreurs préexistantes api/reviews, api/stations, serialize — non liées, l'app compile). Navigateur fermé (1,2 Go dispo), serveur 200.
+
+Stage Summary:
+- B.3.4 et A.9 pleinement réalisés : les 5 langues traduisent réellement l'application mobile (interface + alertes dynamiques + dates/heures/nombres via Intl), l'arabe passe l'UI en RTL complet, la détection automatique du terminal fonctionne au premier lancement, et le choix persiste. Les libellés desktop (observatoire B2B, portail, back-office) restent en français par choix assumé (outil pro tunisien) — l'infrastructure i18n est prête à les couvrir plus tard si demandé. Prochaines priorités recommandées : widget comparaison de stations sur la carte interactive (prolongement tâche 8), statistiques d'usage des favoris côté portail enseigne (C.2.5), export PDF enrichi (A.8).

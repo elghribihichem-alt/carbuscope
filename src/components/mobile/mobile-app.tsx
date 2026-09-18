@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { Fuel, Gift, Map, Search, Tag, UserRound } from "lucide-react"
 import { toast } from "sonner"
 import { haversineKm } from "@/lib/geo"
+import { useI18n } from "@/lib/i18n"
 import type { BrandDTO, StationDTO, StationDetail } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import type { AppApi, Screen, StationWithDist, UserStats } from "./shared"
@@ -22,13 +23,14 @@ import { PromosScreen } from "./screens/promos-screen"
 import { LoyaltyScreen } from "./screens/loyalty-screen"
 import { ProfileScreen } from "./screens/profile-screen"
 import { AlertsScreen } from "./screens/alerts-screen"
+import type { DictKey } from "@/lib/i18n"
 
-const TABS: { id: Screen; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
-  { id: "map", label: "Carte", icon: Map },
-  { id: "search", label: "Recherche", icon: Search },
-  { id: "promos", label: "Promos", icon: Tag },
-  { id: "fidelite", label: "Fidélité", icon: Gift },
-  { id: "profil", label: "Profil", icon: UserRound },
+const TABS: { id: Screen; labelKey: DictKey; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
+  { id: "map", labelKey: "tab.map", icon: Map },
+  { id: "search", labelKey: "tab.search", icon: Search },
+  { id: "promos", labelKey: "tab.promos", icon: Tag },
+  { id: "fidelite", labelKey: "tab.fidelite", icon: Gift },
+  { id: "profil", labelKey: "tab.profil", icon: UserRound },
 ]
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -43,6 +45,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 /** Écran de démarrage (splash) pendant le chargement initial */
 function SplashScreen() {
+  const { t } = useI18n()
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-4 bg-gradient-to-b from-emerald-600 to-emerald-800 text-white">
       <motion.div
@@ -54,7 +57,7 @@ function SplashScreen() {
       </motion.div>
       <div className="text-center">
         <p className="text-xl font-extrabold tracking-tight">CarbuScope</p>
-        <p className="text-[12px] text-emerald-100">Le Waze du carburant — Tunisie</p>
+        <p className="text-[12px] text-emerald-100">{t("splash.tagline")}</p>
       </div>
       <div className="h-1 w-36 overflow-hidden rounded-full bg-white/20">
         <motion.div
@@ -63,28 +66,29 @@ function SplashScreen() {
           transition={{ repeat: Infinity, duration: 1.1, ease: "easeInOut" }}
         />
       </div>
-      <p className="absolute bottom-8 text-[10px] text-emerald-100/80">Chargement des stations autour de vous…</p>
+      <p className="absolute bottom-8 text-[10px] text-emerald-100/80">{t("splash.loading")}</p>
     </div>
   )
 }
 
 function TabBar({ active, onSelect }: { active: Screen; onSelect: (s: Screen) => void }) {
+  const { t } = useI18n()
   return (
     <nav aria-label="Navigation principale" className="z-20 flex h-[62px] shrink-0 items-stretch border-t border-slate-200 bg-white/95 pb-1.5 backdrop-blur-md">
-      {TABS.map(t => {
-        const Icon = t.icon
-        const isActive = active === t.id
+      {TABS.map(tab => {
+        const Icon = tab.icon
+        const isActive = active === tab.id
         return (
           <button
-            key={t.id}
+            key={tab.id}
             type="button"
-            onClick={() => onSelect(t.id)}
+            onClick={() => onSelect(tab.id)}
             aria-current={isActive ? "page" : undefined}
             className="relative flex flex-1 flex-col items-center justify-center gap-[3px] pt-1 outline-none transition-transform active:scale-95"
           >
             {isActive && <motion.span layoutId="tab-indicator" className="absolute top-0 h-[3px] w-9 rounded-full bg-emerald-500" />}
             <Icon className={cn("h-[21px] w-[21px]", isActive ? "text-emerald-600" : "text-slate-400")} strokeWidth={isActive ? 2.3 : 1.9} />
-            <span className={cn("text-[9.5px] leading-none", isActive ? "font-bold text-emerald-700" : "font-medium text-slate-400")}>{t.label}</span>
+            <span className={cn("text-[9.5px] leading-none", isActive ? "font-bold text-emerald-700" : "font-medium text-slate-400")}>{t(tab.labelKey)}</span>
           </button>
         )
       })}
@@ -93,6 +97,7 @@ function TabBar({ active, onSelect }: { active: Screen; onSelect: (s: Screen) =>
 }
 
 export function MobileApp() {
+  const { t, isRTL } = useI18n()
   const [screen, setScreen] = useState<Screen>("map")
   const [returnTo, setReturnTo] = useState<Screen>("map")
   const [selected, setSelected] = useState<StationWithDist | null>(null)
@@ -189,11 +194,9 @@ export function MobileApp() {
     const next = !offline
     setOffline(next)
     if (next) {
-      toast.info("Mode hors ligne activé", {
-        description: "Cartes et fiches en cache — vos signalements partiront à la reconnexion (B.3.3).",
-      })
+      toast.info(t("offline.toastOn"), { description: t("offline.toastOnDesc") })
     } else {
-      toast.success("Reconnexion — 0 signalement en attente de synchronisation.")
+      toast.success(t("offline.toastOff"))
     }
   }
 
@@ -240,9 +243,9 @@ export function MobileApp() {
           <motion.div
             key={screen}
             className="absolute inset-0 flex min-h-0 flex-col bg-[#f6f7f5]"
-            initial={{ opacity: 0, x: 14 }}
+            initial={{ opacity: 0, x: isRTL ? -14 : 14 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
+            exit={{ opacity: 0, x: isRTL ? 10 : -10 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
           >
             {screen === "map" && <MapScreen api={api} />}

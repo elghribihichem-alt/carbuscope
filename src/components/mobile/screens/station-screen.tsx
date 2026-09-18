@@ -10,15 +10,17 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/shell/badges"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
-import { SERVICE_LABELS } from "@/lib/types"
+import { formatDate, useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
 import {
-  BrandDot, ScreenHeader, SectionTitle, StarRating, dateFr, driveMinutes, fmtKm, fmtNote, relativeFr,
+  BrandDot, ScreenHeader, SectionTitle, StarRating, driveMinutes, fmtKm, fmtNote,
 } from "../shared"
+import { relativeDate } from "@/lib/i18n"
 import { useFavoritesStore } from "../favorites-store"
 
 export function StationScreen({ api }: { api: AppApi }) {
+  const { t, lang, locale, svc } = useI18n()
   const s = api.selected
   const isFav = useFavoritesStore(st => (s ? st.stationIds.includes(s.id) : false))
   const toggleFavorite = useFavoritesStore(st => st.toggleFavorite)
@@ -28,33 +30,31 @@ export function StationScreen({ api }: { api: AppApi }) {
     const next = !isFav
     toggleFavorite(s.id)
     if (next) {
-      toast.success("Station ajoutée aux favoris", {
-        description: "Retrouvez-la dans votre profil et filtrez-la depuis la recherche (B.2.7).",
-      })
+      toast.success(t("station.favAdded"), { description: t("station.favAddedDesc") })
     } else {
-      toast.info("Station retirée des favoris")
+      toast.info(t("station.favRemoved"))
     }
   }
 
   const reviews = (api.detail?.reviews ?? []).slice(0, 3)
   const nearbyChips = (api.detail?.nearby ?? []).slice(0, 6)
   const horaires = s.open24
-    ? "Ouvert 24h/24 — 7j/7"
+    ? t("station.hours24")
     : s.open7j
-      ? "Ouvert 7j/7 · 6h00 – 22h00"
-      : "Lun–Sam 6h00 – 22h00 · Dimanche 7h00 – 13h00"
+      ? t("station.hours7j")
+      : t("station.hoursDefault")
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f6f7f5]">
       <ScreenHeader
-        title="Fiche station"
+        title={t("station.title")}
         subtitle={s.brandName}
         onBack={api.back}
         right={
-          <span className="mr-1 flex items-center">
+          <span className="me-1 flex items-center">
             <button
               type="button"
-              aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+              aria-label={isFav ? t("station.removeFavAria") : t("station.addFavAria")}
               aria-pressed={isFav}
               onClick={onToggleFav}
               className={cn(
@@ -66,8 +66,8 @@ export function StationScreen({ api }: { api: AppApi }) {
             </button>
             <button
               type="button"
-              aria-label="Partager la fiche"
-              onClick={() => toast.success("Lien de la fiche copié (démo)")}
+              aria-label={t("station.shareAria")}
+              onClick={() => toast.success(t("station.shareToast"))}
               className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
             >
               <Share2 className="h-[18px] w-[18px]" />
@@ -104,7 +104,7 @@ export function StationScreen({ api }: { api: AppApi }) {
             <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
             <p className="min-w-0 flex-1 truncate text-[12px] text-slate-600">{s.address}</p>
             <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10.5px] font-bold text-emerald-700">
-              {fmtKm(s.distanceKm)} · {driveMinutes(s.distanceKm)} min
+              {fmtKm(s.distanceKm)} · {driveMinutes(s.distanceKm)} {t("common.min")}
             </span>
           </div>
 
@@ -113,24 +113,24 @@ export function StationScreen({ api }: { api: AppApi }) {
             <StatusBadge status={s.status} />
             {s.open24 && (
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                <Clock3 className="h-3 w-3" /> 24h/24
+                <Clock3 className="h-3 w-3" /> {t("common.open24h")}
               </span>
             )}
             {s.open7j && !s.open24 && (
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">7j/7</span>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{t("common.open7j")}</span>
             )}
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
               <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
-              {fmtNote(s.rating)} · {s.reviewsCount} avis
+              {fmtNote(s.rating)} · {t("station.reviewsUnit", { n: s.reviewsCount })}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-              {s.traffic > 0 ? `${new Intl.NumberFormat("fr-FR").format(s.traffic)} véh/jour estimés` : "Trafic non estimé"}
+              {s.traffic > 0 ? t("station.trafficEst", { n: new Intl.NumberFormat(locale).format(s.traffic) }) : t("station.trafficNone")}
             </span>
           </div>
 
           {/* Services (B.2.3) */}
           <section>
-            <SectionTitle>Services disponibles</SectionTitle>
+            <SectionTitle>{t("station.services")}</SectionTitle>
             {s.services.length ? (
               <div className="grid grid-cols-3 gap-1.5">
                 {s.services.map(slug => {
@@ -142,21 +142,21 @@ export function StationScreen({ api }: { api: AppApi }) {
                           <Icon className="h-4 w-4" />
                         </span>
                       ) : null}
-                      <span className="text-center text-[10px] font-medium leading-tight text-slate-600">{SERVICE_LABELS[slug] ?? slug}</span>
+                      <span className="text-center text-[10px] font-medium leading-tight text-slate-600">{svc(slug)}</span>
                     </div>
                   )
                 })}
               </div>
             ) : (
               <p className="rounded-xl border border-dashed border-slate-200 bg-white p-3 text-center text-[12px] text-slate-400">
-                Aucun service documenté pour cette station.
+                {t("station.noServices")}
               </p>
             )}
           </section>
 
           {/* Horaires + fraîcheur */}
           <section>
-            <SectionTitle icon={Clock3}>Horaires</SectionTitle>
+            <SectionTitle icon={Clock3}>{t("station.hoursTitle")}</SectionTitle>
             <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
               <p className="flex items-center gap-2 text-[13px] font-semibold text-slate-800">
                 <span className={cnDot(s.status)} aria-hidden />
@@ -164,20 +164,20 @@ export function StationScreen({ api }: { api: AppApi }) {
               </p>
               <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-400">
                 <BadgeCheck className="h-3.5 w-3.5 text-emerald-500" />
-                Dernière vérification : {dateFr(s.lastVerified)} · {s.verifiedBy}
+                {t("station.lastCheck", { date: formatDate(lang, s.lastVerified), by: s.verifiedBy })}
               </p>
             </div>
           </section>
 
           {/* Note + avis (B.2.6 lecture) */}
           <section>
-            <SectionTitle>Avis des automobilistes</SectionTitle>
+            <SectionTitle>{t("station.reviewsTitle")}</SectionTitle>
             <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="flex items-center gap-3">
                 <span className="text-3xl font-extrabold tabular-nums text-slate-800">{fmtNote(s.rating)}</span>
                 <span className="flex-1">
                   <StarRating value={s.rating} size="md" />
-                  <span className="mt-1 block text-[11px] text-slate-400">{s.reviewsCount} avis vérifiés · communauté CarbuScope</span>
+                  <span className="mt-1 block text-[11px] text-slate-400">{t("station.reviewsVerified", { n: s.reviewsCount })}</span>
                 </span>
               </div>
 
@@ -189,7 +189,7 @@ export function StationScreen({ api }: { api: AppApi }) {
                   </>
                 )}
                 {api.detail && reviews.length === 0 && (
-                  <p className="py-2 text-center text-[12px] text-slate-400">Pas encore d'avis — soyez le premier à en laisser un !</p>
+                  <p className="py-2 text-center text-[12px] text-slate-400">{t("station.noReviews")}</p>
                 )}
                 {reviews.map(r => (
                   <div key={r.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
@@ -200,7 +200,7 @@ export function StationScreen({ api }: { api: AppApi }) {
                         </span>
                         <span className="text-[12px] font-semibold text-slate-700">{r.author}</span>
                       </span>
-                      <span className="shrink-0 text-[10px] text-slate-400">{relativeFr(r.createdAt)}</span>
+                      <span className="shrink-0 text-[10px] text-slate-400">{relativeDate(lang, r.createdAt)}</span>
                     </div>
                     <div className="mt-1.5">
                       <StarRating value={r.rating} size="xs" />
@@ -215,7 +215,7 @@ export function StationScreen({ api }: { api: AppApi }) {
           {/* Stations à proximité */}
           {nearbyChips.length > 0 && (
             <section>
-              <SectionTitle>Au alentour</SectionTitle>
+              <SectionTitle>{t("station.nearby")}</SectionTitle>
               <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
                 {nearbyChips.map(n => (
                   <button
@@ -234,7 +234,7 @@ export function StationScreen({ api }: { api: AppApi }) {
           )}
 
           <p className="pb-2 text-center text-[10px] text-slate-400">
-            Fiche {s.code} · coordonnées {s.lat.toFixed(3).replace(".", ",")} / {s.lng.toFixed(3).replace(".", ",")}
+            {t("station.foot", { code: s.code, lat: s.lat.toFixed(3).replace(".", ","), lng: s.lng.toFixed(3).replace(".", ",") })}
           </p>
         </div>
       </div>
@@ -243,10 +243,10 @@ export function StationScreen({ api }: { api: AppApi }) {
       <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-3 pb-3 pt-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
         <Button
           className="h-11 w-full rounded-xl bg-emerald-600 text-[13.5px] font-bold text-white shadow-md hover:bg-emerald-700"
-          onClick={() => toast.success("Itinéraire transmis à Google Maps / Waze", { description: `Navigation vers ${s.name} — ${fmtKm(s.distanceKm)}, environ ${driveMinutes(s.distanceKm)} min (démo).` })}
+          onClick={() => toast.success(t("station.routeToast"), { description: t("station.routeToastDesc", { name: s.name, km: fmtKm(s.distanceKm), min: driveMinutes(s.distanceKm) }) })}
         >
           <Navigation className="h-4 w-4" />
-          Itinéraire
+          {t("map.route")}
         </Button>
         <div className="grid grid-cols-2 gap-2">
           <Button
@@ -255,7 +255,7 @@ export function StationScreen({ api }: { api: AppApi }) {
             onClick={() => api.go("signalement")}
           >
             <Flag className="h-3.5 w-3.5" />
-            Signaler un problème
+            {t("station.report")}
           </Button>
           <Button
             variant="outline"
@@ -263,7 +263,7 @@ export function StationScreen({ api }: { api: AppApi }) {
             onClick={() => api.go("avis")}
           >
             <Star className="h-3.5 w-3.5" />
-            Laisser un avis
+            {t("station.review")}
           </Button>
         </div>
       </div>
