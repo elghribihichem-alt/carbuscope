@@ -24,11 +24,12 @@ import {
 } from "recharts"
 import {
   Star, Trophy, TrendingUp, TrendingDown, MessageSquareQuote, MessageSquareReply, Award, Gauge,
-  Users, Quote, Info, Send, Pencil, Loader2, Trash2, Clock, Radar as RadarIcon, AlertTriangle, Download, CheckCircle2, Printer, Fuel,
+  Users, Quote, Info, Send, Pencil, Loader2, Trash2, Clock, Radar as RadarIcon, AlertTriangle, Download, CheckCircle2, Printer, Fuel, BellPlus,
 } from "lucide-react"
 import type { ReputationStats } from "@/lib/types"
 import { num, relDays } from "@/components/settings/settings-shared"
 import { StationDetailDialog } from "@/components/stations/station-detail-dialog"
+import { WatchAlertsDialog } from "@/components/portal/watch-alerts-dialog"
 
 const EMERALD = "#059669"
 const AMBER = "#d97706"
@@ -41,9 +42,79 @@ const PRINT_CSS = `
   body > *:not(#cs-reputation-print) { display: none !important; }
   #cs-reputation-print { display: block !important; }
   #cs-reputation-print .bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  #cs-reputation-print svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
 @page { size: A4 portrait; margin: 12mm; }
 `
+
+// ---------- Tendance mensuelle imprimable (SVG pur, fiable à l'impression) ----------
+// Barres = volume d'avis ; ligne pleine = note moyenne de l'enseigne ; ligne pointillée = marché.
+function PrintTrendChart({ months, own, market, counts }: {
+  months: string[]; own: number[]; market: number[]; counts: number[]
+}) {
+  const W = 560, H = 122
+  const PAD_L = 30, PAD_R = 10, PAD_T = 12, PAD_B = 20
+  const innerW = W - PAD_L - PAD_R
+  const innerH = H - PAD_T - PAD_B
+  const n = months.length
+  if (n === 0) return null
+  const step = n > 1 ? innerW / (n - 1) : innerW
+  const x = (i: number) => PAD_L + i * step
+  const maxCount = Math.max(...counts, 1)
+  const yRating = (v: number) => PAD_T + innerH - (Math.max(0, Math.min(5, v)) / 5) * innerH
+  const yCount = (v: number) => PAD_T + innerH - (v / maxCount) * innerH
+  const barW = Math.min(16, step * 0.45)
+  const ownPts = own.map((v, i) => `${x(i)},${yRating(v)}`).join(" ")
+  const mktPts = market.map((v, i) => `${x(i)},${yRating(v)}`).join(" ")
+  const fmt1 = (v: number) => v.toFixed(1).replace(".", ",")
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
+      aria-label={`Tendance mensuelle : note moyenne et volume d’avis sur ${n} mois`}
+    >
+      {/* Grille horizontale (notes 1-5) */}
+      {[1, 2, 3, 4, 5].map(g => (
+        <g key={g}>
+          <line x1={PAD_L} x2={W - PAD_R} y1={yRating(g)} y2={yRating(g)} stroke="#e2e8f0" strokeWidth="1" />
+          <text x={PAD_L - 4} y={yRating(g) + 3} textAnchor="end" fontSize="7.5" fill="#64748b">{g}</text>
+        </g>
+      ))}
+      {/* Volume d'avis (barres ambre discrètes) */}
+      {counts.map((c, i) => c > 0 && (
+        <rect
+          key={i} className="bar"
+          x={x(i) - barW / 2} y={yCount(c)} width={barW} height={PAD_T + innerH - yCount(c)}
+          rx="2" fill="#f59e0b" fillOpacity="0.28"
+        />
+      ))}
+      {/* Note marché (pointillée) */}
+      <polyline points={mktPts} fill="none" stroke="#94a3b8" strokeWidth="1.6" strokeDasharray="4 3" />
+      {/* Note enseigne (pleine émeraude + points) */}
+      <polyline points={ownPts} fill="none" stroke="#059669" strokeWidth="2.2" />
+      {own.map((v, i) => (
+        <circle key={i} cx={x(i)} cy={yRating(v)} r="3" fill="#059669" stroke="#fff" strokeWidth="1" />
+      ))}
+      {/* Mois (étiquettes courtes) */}
+      {months.map((m, i) => (
+        <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="7.5" fill="#64748b">{m}</text>
+      ))}
+      {/* Valeurs de note sur les points */}
+      {own.map((v, i) => v > 0 && (
+        <text key={i} x={x(i)} y={yRating(v) - 6} textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#047857">{fmt1(v)}</text>
+      ))}
+      {/* Légende */}
+      <g>
+        <line x1={PAD_L} x2={PAD_L + 16} y1={PAD_T - 4} y2={PAD_T - 4} stroke="#059669" strokeWidth="2.2" />
+        <text x={PAD_L + 20} y={PAD_T - 1} fontSize="7.5" fill="#334155">Note</text>
+        <line x1={PAD_L + 58} x2={PAD_L + 74} y1={PAD_T - 4} y2={PAD_T - 4} stroke="#94a3b8" strokeWidth="1.6" strokeDasharray="4 3" />
+        <text x={PAD_L + 78} y={PAD_T - 1} fontSize="7.5" fill="#334155">Marché</text>
+        <rect x={PAD_L + 116} y={PAD_T - 8} width="8" height="8" rx="1.5" fill="#f59e0b" fillOpacity="0.4" />
+        <text x={PAD_L + 128} y={PAD_T - 1} fontSize="7.5" fill="#334155">Volume d’avis</text>
+      </g>
+    </svg>
+  )
+}
 
 // ---------- Étoiles ----------
 function Stars({ value, className = "h-3.5 w-3.5" }: { value: number; className?: string }) {
@@ -93,6 +164,8 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all")
   // Fiche station ouverte depuis la surveillance des notes
   const [watchFicheId, setWatchFicheId] = useState<string | null>(null)
+  // Veille automatisée : dialog de programmation des alertes email
+  const [watchAlertsOpen, setWatchAlertsOpen] = useState(false)
 
   useEffect(() => {
     const ac = new AbortController()
@@ -156,6 +229,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
   }
 
   // Export CSV du flux d'avis filtré (BOM UTF-8, séparateur « ; » standard Excel fr)
+  // En-tête de synthèse : note moyenne, taux de réponse, distribution des notes + watchlist.
   const exportCsv = () => {
     if (!stats || reviewFlow.list.length === 0) {
       toast.error("Aucun avis à exporter avec le filtre courant.")
@@ -165,6 +239,40 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
       const s = String(v ?? "")
       return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
     }
+    const own = stats.own
+    const distTotal = Math.max(1, own.distribution.reduce((s, x) => s + x.count, 0))
+    const filterLabel = reviewFilter === "pending" ? "À traiter" : reviewFilter === "replied" ? "Traités" : "Tous"
+    // Bloc synthèse (avant le détail) — analyser la réputation sans ouvrir le portail.
+    const summary: (string | number)[][] = [
+      ["Synthèse réputation", stats.brand.name],
+      ["Généré le", new Date().toLocaleString("fr-FR")],
+      ["Filtre du détail", filterLabel],
+      [],
+      ["Note moyenne", `${own.avgRating.toFixed(1).replace(".", ",")}/5`],
+      ["Avis (total enseigne)", num(own.reviewsCount)],
+      ["Stations notées", `${own.stationsWithReviews}/${own.stationsTotal}`],
+      ["Taux de réponse", `${own.responseRate.toFixed(1).replace(".", ",")} %`],
+      ["Part de voix", `${own.shareOfVoice.toFixed(1).replace(".", ",")} %`],
+      [],
+      ["Distribution des notes", "Volume", "Part"],
+      ...[5, 4, 3, 2, 1].map(st => {
+        const row = own.distribution.find(x => x.rating === st)
+        const c = row?.count ?? 0
+        return [`${st} étoile${st > 1 ? "s" : ""}`, c, `${Math.round((c / distTotal) * 1000) / 10} %`]
+      }),
+    ]
+    if (own.watchlist.length > 0) {
+      summary.push(
+        [],
+        ["Surveillance des notes (chute ≥ 0,8 pt)", "Note antérieure", "Note récente", "Écart"],
+        ...own.watchlist.map(w => [
+          w.name,
+          w.previousRating.toFixed(1).replace(".", ","),
+          w.currentRating.toFixed(1).replace(".", ","),
+          `−${w.delta.toFixed(1).replace(".", ",")} pt`,
+        ]),
+      )
+    }
     const header = ["Date avis", "Auteur", "Note", "Station", "Gouvernorat", "Commentaire", "Réponse publiée", "Texte de la réponse", "Répondu par", "Date réponse"]
     const rows = reviewFlow.list.map(r => [
       new Date(r.createdAt).toLocaleDateString("fr-FR"),
@@ -172,7 +280,8 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
       r.replyText ? "oui" : "non", r.replyText ?? "", r.repliedBy ?? "",
       r.repliedAt ? new Date(r.repliedAt).toLocaleDateString("fr-FR") : "",
     ])
-    const csv = [header, ...rows].map(row => row.map(esc).join(";")).join("\r\n")
+    const csv = [...summary, [], ["Détail des avis", `filtre : ${filterLabel}`], header, ...rows]
+      .map(row => row.map(esc).join(";")).join("\r\n")
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -182,8 +291,9 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    const filterLabel = reviewFilter === "pending" ? "À traiter" : reviewFilter === "replied" ? "Traités" : null
-    toast.success(`${reviewFlow.list.length} avis exportés${filterLabel ? ` (filtre « ${filterLabel} »)` : ""}.`)
+    toast.success(`${reviewFlow.list.length} avis exportés`, {
+      description: "Le fichier inclut la synthèse (note, distribution, surveillance) puis le détail des avis filtrés.",
+    })
   }
 
   // Rapport réputation imprimable (PDF via la boîte d'impression du navigateur)
@@ -581,7 +691,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
       {/* ---------- Surveillance des notes (chutes récentes) ---------- */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             <RadarIcon className="h-4 w-4 text-orange-600 dark:text-orange-400" aria-hidden />
             Surveillance des notes
             <Badge
@@ -593,10 +703,20 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
             >
               {own.watchlist.length} station{own.watchlist.length > 1 ? "s" : ""}
             </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto h-8 gap-1.5 border-orange-300/70 text-orange-700 transition-all hover:border-orange-400 hover:bg-orange-50 hover:text-orange-800 dark:border-orange-800/70 dark:text-orange-400 dark:hover:bg-orange-950/60 dark:hover:text-orange-300"
+              onClick={() => setWatchAlertsOpen(true)}
+            >
+              <BellPlus className="h-3.5 w-3.5" aria-hidden />
+              Programmer une alerte email
+            </Button>
           </CardTitle>
           <CardDescription>
             Stations en perte de vitesse : moyenne récente (≤ 90 jours) en baisse d’au moins 0,8 point
-            par rapport à l’historique — vos priorités d’audit terrain.
+            par rapport à l’historique — vos priorités d’audit terrain. Programmez une alerte email
+            pour être notifié automatiquement, même portail fermé.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -615,10 +735,10 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                 return (
                   <div
                     key={w.code}
-                    className={`rounded-lg border p-3 transition-colors hover:bg-muted/30 ${
+                    className={`group rounded-lg border p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-within:ring-2 focus-within:ring-ring/40 hover:bg-muted/30 ${
                       severe
-                        ? "border-red-200/80 dark:border-red-900/60"
-                        : "border-orange-200/80 dark:border-orange-900/50"
+                        ? "border-red-200/80 hover:border-red-300/80 dark:border-red-900/60 dark:hover:border-red-700/70"
+                        : "border-orange-200/80 hover:border-orange-300/80 dark:border-orange-900/50 dark:hover:border-orange-700/60"
                     }`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
@@ -681,6 +801,17 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
           toast.info("L’édition d’une station se fait depuis l’onglet « Mes stations » de l’observatoire.")
         }}
         onLocate={() => setWatchFicheId(null)}
+      />
+
+      {/* Veille automatisée : programmation des alertes email (C.2.6+) */}
+      <WatchAlertsDialog
+        open={watchAlertsOpen}
+        onOpenChange={setWatchAlertsOpen}
+        brandSlug={brandSlug}
+        brandName={brand.name}
+        watchlist={own.watchlist.map(w => ({
+          code: w.code, name: w.name, gouvernorat: w.gouvernorat, delta: w.delta,
+        }))}
       />
 
       {/* ---------- Flux d'avis récents + gestion des réponses ---------- */}
@@ -1029,6 +1160,30 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Tendance mensuelle (graphique imprimable) */}
+          <h2 className="mt-5 border-b border-slate-300 pb-1 text-[13px] font-bold uppercase tracking-wide text-emerald-800">
+            Tendance mensuelle — {own.trend.months.length} derniers mois
+          </h2>
+          <div className="mt-2">
+            <PrintTrendChart
+              months={own.trend.months}
+              own={own.trend.values}
+              market={market.trend.values}
+              counts={own.trend.counts}
+            />
+            <p className="mt-1 text-[9.5px] leading-snug text-slate-600">
+              Note moyenne mensuelle de l’enseigne (émeraude) contre le marché (pointillé gris) ;
+              les barres ambre représentent le volume d’avis reçus chaque mois.
+              {own.trend.values.filter(v => v > 0).length >= 2 && (
+                <>
+                  {" "}Évolution sur la période :{" "}
+                  <strong>{(own.trend.values.filter(v => v > 0).slice(-1)[0] - own.trend.values.filter(v => v > 0)[0]) >= 0 ? "+" : "−"}{Math.abs(own.trend.values.filter(v => v > 0).slice(-1)[0] - own.trend.values.filter(v => v > 0)[0]).toFixed(1).replace(".", ",")} pt</strong>
+                  {own.trend.counts.reduce((s, c) => s + c, 0) > 0 && <> sur {num(own.trend.counts.reduce((s, c) => s + c, 0))} avis cumulés</>}.
+                </>
+              )}
+            </p>
           </div>
 
           {/* Top 5 / Flop 5 */}

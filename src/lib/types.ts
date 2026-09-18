@@ -380,6 +380,29 @@ export type ReputationStats = {
   }
 }
 
+// ---- Portail : veille automatisée des notes (alertes email programmées, C.2.6+) ----
+
+export type WatchlistAlertDTO = {
+  id: string
+  scope: string // "ALL" ou code station
+  stationLabel: string
+  thresholdPoints: number
+  frequency: string // IMMEDIATE | DAILY | WEEKLY
+  email: string
+  active: boolean
+  triggerCount: number
+  lastTriggeredAt: string | null
+  createdAt: string
+  // Évaluation live contre la watchlist courante
+  nowExceedCount: number
+  nowExamples: string[]
+}
+
+export type WatchlistAlertsResponse = {
+  watchlistCount: number
+  alerts: WatchlistAlertDTO[]
+}
+
 // ---- Back-office : statistiques plateforme réelles (D.2.5 étendu) ----
 
 export type PlatformStats = {

@@ -1,0 +1,220 @@
+    15→   189→- `bun run lint` complet : 0 erreur. GET / 200. Mémoire : 1,6 Go disponibles.
+    16→   190→
+    17→   191→Stage Summary:
+    18→   192→- Comparateur livré et vérifié de bout en bout. Conventions respectées (shadcn, palette sans bleu, français, responsive, accessibilité aria). Reste recommandé : i18n 5 langues (A.9/B.3.4), export PDF enrichi, widget comparaison sur carte.
+    19→   193→
+    20→   194→---
+    21→   195→Task ID: 9
+    22→   196→Agent: orchestrator (Z.ai Code) — cron QA 15 min
+    23→   197→Task: QA de routine + Module B.2.7 « Favoris stations » — favoris persistés (cœur), section profil, filtre recherche
+    24→   198→
+    25→   199→Work Log:
+    26→   200→- QA initial : serveur 200, mémoire 1,6 Go dispo. Sweep navigateur : onglets Concurrence/Veille/Rapports/Paramètres ✓, centre d'alertes (8 alertes) ✓, 0 erreur console. Régression tâches 7-8 : OK.
+    27→   201→- Nouveau fichier `mobile/favorites-store.ts` : zustand persist « carbuscope-favorites » — stationIds (favoris), favBrands, favServices (préférences du profil désormais persistées, étaient en useState local), toggle/remove, merge assainissant (défense localStorage corrompu, cf. leçon tâche 7).
+    28→   202→- `screens/station-screen.tsx` : bouton cœur à côté du partage dans ScreenHeader — aria-pressed, micro-interactions (fill amber + scale-110 actif, active:scale-90), toasts ajout/retrait, hooks appelés avant l'early-return (règle des hooks respectée).
+    29→   203→- `shared.tsx` StationRow : badge cœur (fill-amber-400, aria-label « Station favorite ») sur toute ligne de station favorite — visible carte/recherche/profil automatiquement (le composant lit le store).
+    30→   204→- `screens/profile-screen.tsx` : remplacement des Set locaux par le store persisté (favBrands/favServices) + NOUVELLE section « Mes stations favorites » (compteur badge ambre, liste avec BrandDot + cœur superposé, clic → fiche, bouton X retirer + toast, bordure ambre, état vide guide « appuyez sur le cœur ♥ »).
+    31→   205→- `screens/search-screen.tsx` : chip « Favoris » (cœur, ton ambre, badge compteur, active:scale-95) avant le bouton Filtres — filtre favOnly dans le useMemo results, inclus dans reset(), compteur Filtres ajusté (n'inclut pas favoris).
+    32→   206→- Vérifications agent-browser : fiche Petro Mégrine 2 → cœur cliqué → toast « Station ajoutée aux favoris » + bouton basculé « Retirer des favoris » ; profil → section « Mes stations favorites 1 » avec boutons Ouvrir/Retirer ; recherche → chip « Favoris 1 » → résultats filtrés (uniquement le favori, badge « Station favorite » sur la ligne) ; carte → cœur visible sur la ligne du favori ; rechargement complet page → localStorage persisté (stationIds + prefs), section profil toujours « 1 » ; 0 erreur console à chaque étape.
+    33→   207→- `bun run lint` complet : 0 erreur. GET / 200. Mémoire : 1,5 Go disponibles. Navigateur fermé.
+    34→   208→
+    35→   209→Stage Summary:
+    36→   210→- B.2.7 (préférences utilisateur) pleinement réalisé avec persistance réelle : stations favorites + enseignes + services. Styles : accents ambre cohérents sur toute la chaîne favoris (cœur, chip, section profil). Prochaines priorités recommandées : i18n 5 langues effectif (A.9/B.3.4 — la sélection de langue existe mais ne traduit pas encore), widget comparaison sur la carte (tâche 8 → carte), statistiques d'usage des favoris dans le portail enseigne (C.2.5).
+    37→   211→
+    38→   212→---
+    39→   213→Task ID: 10
+    40→   214→Agent: orchestrator (Z.ai Code) — cron QA 15 min
+    41→   215→Task: QA de routine + Module B.3.4/A.9 « Multilingue 5 langues » — i18n réel avec arabe RTL, détection automatique, persistance
+    42→   216→
+    43→   217→Work Log:
+    44→   218→- QA initial : serveur 200 (next-server ~2,1 Go RSS, à surveiller), sweep 4 modes (dashboard Agil, mobile 8 alertes, portail, back-office), 0 erreur console.
+    45→   219→- Audit cahier des charges : §B.3.4 Multilingue (arabe RTL, français, anglais, italien, espagnol + détection automatique) et §A.9 (langue de l'interface) — la sélection existait mais ne traduisait RIEN (toasts « sera appliquée à la prochaine session »).
+    46→   220→- NOUVELLE infrastructure `src/lib/i18n/` :
+    47→   221→  - `fr.ts` : dictionnaire de base (278 clés, source de vérité typée `DictKey`)
+    48→   222→  - `ar.ts` / `en.ts` / `it.ts` / `es.ts` : traductions complètes (fallback FR automatique si clé manquante)
+    49→   223→  - `store.ts` : zustand persist « carbuscope-lang » (`lang: null` = automatique), merge assainissant, `detectLang()` mémoïsée (navigator.language → ar/fr/en/it/es, défaut fr)
+    50→   224→  - `index.ts` : hook `useI18n()` { t, svc, lang, isRTL, dir, locale, setLang, setAuto } avec drapeau « mounted » (setTimeout 0 — évite tout écart d'hydratation SSR) + helpers `relativeDate` (Intl.RelativeTimeFormat), `formatDate`, `formatTime`, `serviceLabel`, `formatNumber`
+    51→   225→- Application complète à l'app mobile (dossier mobile/) — 13 fichiers modifiés :
+    52→   226→  - Chrome : mobile-app.tsx (TABS → labelKey, splash, toasts offline, transitions framer-motion miroir RTL), phone-frame.tsx (dir sur le contenu + StatusBar heure localisée), shared.tsx (ScreenHeader chevron rtl:rotate-180, StationRow, ServicePill, PhotoMock, SectionTitle ms-auto, StarRating aria, relativeFr → Intl)
+    53→   227→  - 9 écrans traduits : map, search, station (fiche), alerts (centre + préférences), profile (+ section langue reliée au store), promos, loyalty, report (6 types + hints), review (notes/critères)
+    54→   228→  - smart-alerts.ts : `computeSmartAlerts(all, prefs, lang)` — titres dynamiques traduits avec paramètres {brand}/{km}/{service}/{note}/{n} (ex. « محطة Agil مفتوحة 24 ساعة على بعد 1,8 km »)
+    55→   229→  - RTL : dir=rtl sur le contenu du téléphone, chevrons miroirs (rtl:rotate-180), propriétés logiques (ps-/pe-/ms-/me-/start-/end-) sur les éléments touchés, transitions écran inversées, pile de polices arabes dans globals.css ([dir=rtl] → Noto Sans Arabic/DejaVu Sans fallback)
+    56→   230→- `settings/settings-language-card.tsx` (A.9) réécrit : relié au store global — radios 5 langues + option « Automatique » (badge ambre, affiche la langue détectée), reflète l'état courant, applique immédiatement. Chaîne complète : profil mobile ↔ paramètres A.9 ↔ localStorage.
+    57→   231→- Vérifications agent-browser E2E :
+    58→   232→  - Auto-détection : navigateur headless EN → app mobile en anglais d'office (Map/Search/Deals/Loyalty/Profile, « 354 stations around you ») ✓
+    59→   233→  - Arabe : clic « العربية » → bascule instantanée RTL (dir=rtl confirmé via getComputedStyle), onglets الخريطة/البحث/العروض/الولاء/الملف, carte « من حولي / الاتجاهات / مباشر », centre d'alertes « مراقبة مباشرة — 8 تنبيهات شخصية » avec alertes dynamiques traduites (y compris l'exemple exact du cahier §B.3.1) ✓
+    60→   234→  - Italien : « Mappa | Ricerca | Promo | Fedeltà | Profilo » instantané ✓
+    61→   235→  - Paramètres A.9 : Italiano coché → sélection Français → app mobile en français (boucle profil ↔ paramètres vérifiée) ✓
+    62→   236→  - Persistance : reload → état conservé ; « Automatique » → localStorage {lang:null} + retour à l'anglais détecté ✓
+    63→   237→  - Console : 0 erreur, 0 warning d'hydratation à chaque étape ✓
+    64→   238→- `bun run lint` : 0 erreur. `bunx tsc --noEmit` : 0 erreur nouvelle (5 erreurs préexistantes api/reviews, api/stations, serialize — non liées, l'app compile). Navigateur fermé (1,2 Go dispo), serveur 200.
+    65→   239→
+    66→   240→Stage Summary:
+    67→   241→- B.3.4 et A.9 pleinement réalisés : les 5 langues traduisent réellement l'application mobile (interface + alertes dynamiques + dates/heures/nombres via Intl), l'arabe passe l'UI en RTL complet, la détection automatique du terminal fonctionne au premier lancement, et le choix persiste. Les libellés desktop (observatoire B2B, portail, back-office) restent en français par choix assumé (outil pro tunisien) — l'infrastructure i18n est prête à les couvrir plus tard si demandé. Prochaines priorités recommandées : widget comparaison de stations sur la carte interactive (prolongement tâche 8), statistiques d'usage des favoris côté portail enseigne (C.2.5), export PDF enrichi (A.8).
+    68→   242→---
+    69→   243→Task ID: 11
+    70→   244→Agent: orchestrator (Z.ai Code)
+    71→   245→Task: Fond cartographique réel (OSM/Esri/OpenTopoMap) pour toutes les cartes de la plateforme
+    72→   246→
+    73→   247→Work Log:
+    74→   248→- `bun add leaflet react-leaflet @types/leaflet` (Leaflet 1.9.4 + react-leaflet 5.0.0, React 19 OK).
+    75→   249→- Nouveau fichier `src/components/map/osm-map.tsx` : carte Leaflet `preferCanvas` (fluide avec 2 200 marqueurs) — CircleMarkers colorés par enseigne (rayon selon trafic, statuts : fermée=barré gris, projet=pointillé, rénovation=contour ambre, sélection=halo), routes en Polyline [lng,lat]→[lat,lng] (tooltips A1–A4/RN/GP + tmj), heatmap trafic en halos, projets en pastilles émeraude/prune, popup fiche unique contrôlée par la sélection (mini-carte : badges statut/trafic/note/24h, icônes services, bouton « Voir la fiche détaillée »), tooltips survol natifs, attribution en bas-gauche (libère la légende), fitBounds Tunisie + flyTo focus/sélection.
+    76→   250→- Tuiles : détection que tile.openstreetmap.org et basemaps.cartocdn.com renvoient des tuiles bloquées/filigranées « API KEY REQUIRED » depuis une IP datacenter → bascule vers **Esri (World_Street_Map / Light_Gray / Dark_Gray — sans clé, propres)** + **OpenTopoMap (relief)** + OSM communautaire en option. 6 fonds : auto (thème), street, clair, noir, topo, osm.
+    77→   251→- `tunisia-map.tsx` : import dynamique `ssr:false` + loading skeleton ; état `realMap`/`osmBg` persistés localStorage (`carbuscope-map-bg` = real par défaut, `carbuscope-map-osmbg`) avec lecture différée setTimeout 0 (hydratation + lint set-state-in-effect) et écriture seulement après lecture (bug d'écrasement évité) ; bouton Globe dans les contrôles (aria-pressed, toast) ; SVG/popup/outils/zoom custom masqués en mode réel ; popover Couches enrichi (section « Fond cartographique », zones/parc auto désactivés en mode réel) ; StationPopup et tooltip SVG gated `!realMap`.
+    78→   252→- `globals.css` : styles Leaflet charte (popups rayon 0.625rem, tooltips, zoom, attribution en variables CSS, thème sombre).
+    79→   253→- `carte-interactive-tab.tsx` : bouton « Voir la fiche » de la popup désormais fonctionnel — rend `StationDetailDialog` (onLocate → focus carte, onEdit → toast guidant vers « Mes stations »).
+    80→   254→- QA agent-browser E2E : carte interactive → tuiles Esri réelles + 600 marqueurs colorés + légende ; clic marqueur (Station Soukra) → popup « En rénovation, 4.5 » → « Voir la fiche détaillée » → dialog complet (photo, historique) ; commutation topo (`a.tile.opentopomap.org`) et nuit (Dark_Gray) vérifiée par URL de tuiles ; bascule Globe → SVG schéma + toast ; **persistance rechargée** (real/noir conservés) ; dashboard mini-carte Leaflet OK ; **Mobile B2C** : carte réelle dans le phone frame (VLM : tuiles + marqueurs visibles) ; 0 erreur console liée (seuls warnings Radix DialogTitle préexistants du StationDetailDialog).
+    81→   255→- Incident dev-server résolu : serveur tombé pendant la session → relance `(setsid bun run dev …)` → 200, RSS ~1,8 Go.
+    82→   256→- Bug crucial trouvé et corrigé (Leaflet canvas) : le clic marqueur déclenchait ENSUITE le `map.on("click")` de désélection (ordre `targets = filtered.concat(targets)` dans `_fireDOMEvent`) → sélection immédiatement effacée. Correctif : `bubblingMouseEvents={false}` sur les CircleMarkers + toggle re-clic même station + popup avec `key={station.code}` (prop `open` inexistante en react-leaflet v5, `onClose` non supporté → retirés).
+    83→   257→- `bun run lint` : 0 erreur. Navigateur fermé (1,8 Go libres).
+    84→   258→
+    85→   259→Stage Summary:
+    86→   260→- Fond cartographique réel opérationnel sur TOUTES les cartes (observatoire, dashboard, mobile B2C, back-office agents) avec 6 fonds sans clé API, bascule schéma/réel persistée, popups interactives, routes/heatmap/projets superposés, mode sombre. Points d'attention : OSM communautaire peut être bloqué depuis certaines IP (403) — Esri/OpenTopoMap sûrs ; l'outil mesure/rayon/polygone reste en mode schéma uniquement ; warning Radix DialogTitle sur station-detail-dialog (préexistant, à corriger un jour).
+    87→   261→---
+    88→   262→Task ID: 12
+    89→   263→Agent: orchestrator (Z.ai Code)
+    90→   264→Task: Portail enseigne — Avis clients, comparaison concurrents, valeur de l'enseigne (C.2.6)
+    91→   265→
+    92→   266→Work Log:
+    93→   267→- Analyse des données : 4 588 avis / 1 643 stations / 6 enseignes, critères JSON {proprete, accueil, rapidite, services}, 8 mois d'historique (févr→sept 2026), createdAt en millisecondes (÷1000 pour SQL brut).
+    94→   268→- `src/lib/types.ts` : types `ReputationStats`, `ReputationBrandRow`, `REVIEW_CRITERIA_LABELS`.
+    95→   269→- Nouvelle API `GET /api/stats/reputation?brand=` (`src/app/api/stats/reputation/route.ts`) : agrégats par enseigne (notes, volume, distribution 1-5, critères, tendance mensuelle 8 mois, réseau actif/24h/fraîcheur 90j), top 5 / flop 5 stations (≥3 avis), 20 derniers avis détaillés, part de voix, comparaison toutes enseignes, et **IVE — Indice de Valeur d'Enseigne (0-100)** : note client 40 pts + volume d'avis 20 pts (3 avis/station = max) + expérience réseau 20 pts (actifs + 24h/7j) + fraîcheur des vérifications 20 pts, avec classement rang/N et décomposition détaillée.
+    96→   270→- Nouveau composant `src/components/portal/portal-reviews.tsx` (~520 lignes) : carte synthèse rédigée (delta vs marché coloré, badges stations notées/part de voix/IVE + pastille score), 4 KpiCard (note, avis, rang concurrentiel, IVE), 4 graphiques recharts (barres horizontales comparaison enseignes avec ligne de référence marché + (moi) en émeraude, distribution étoiles % moi vs marché, radar critères, ligne tendance moi vs marché), carte IVE avec barres de progression par composante + méthodologie, top 5 / flop 5 stations (étoiles, classement ambre/orange), flux ScrollArea max-h-96 des 20 derniers avis (avatar initiale, étoiles, citation, station + gouvernorat, relDays), états squelette/erreur/vides.
+    97→   271→- `portal-view.tsx` : 4e onglet « Avis & réputation » (icône Star), PortalReviews monté avec key={brandSlug} (remontage propre au changement d'enseigne).
+    98→   272→- QA agent-browser : portail Agil → onglet actif → synthèse « 3,9/5 sur 561 avis, +0,1 pt au-dessus du marché, IVE 64 » ; graphiques vérifiés (comparaison 6 enseignes avec Agil en émeraude + ligne Marché, distribution 1★-5★ moi vs marché, radar 4 critères, tendance 2 lignes vert/pointillé) ; bascule enseigne → Ola Energy « 3,7/5, IVE 65, 4e/6 » avec rechargement propre ; 0 erreur console ; API testée pour ola/agil (données complètes et cohérentes).
+    99→   273→- Correctifs pendant QA : comparaison `(moi)` (comparaison slug avec l'objet own au lieu de stats.brand.slug — toujours faux), setState dans l'effet → key remount, class terracotta inexistante → orange-600.
+   100→   274→- `bun run lint` : 0 erreur. Navigateur fermé.
+   101→   275→
+   102→   276→Stage Summary:
+   103→   277→- L'enseigne voit désormais les avis clients, se positionne face aux concurrents (notes, distribution, critères, tendance) et pilote la valeur perçue de son enseigne via l'IVE composite (rang + décomposition actionnable). Reste possible : réponses de l'enseigne aux avis, alertes « chute de note d'une station », export PDF réputation.
+   104→   278→---
+   105→   279→Task ID: 13
+   106→   280→Agent: orchestrator (Z.ai Code)
+   107→   281→Task: Back-office enrichi — « plus de données » réelles pour le pilotage de la plateforme (D.2.5 étendu)
+   108→   282→
+   109→   283→Work Log:
+   110→   284→- Exploration des données réelles : 4 588 avis / 16 auteurs distincts, 14 contributions (12 en attente, 2 rejetées, 6 types), 44 alertes (14 critiques, 20 moyennes, 10 info, 5 types), 4 comptes utilisateurs (4 rôles), 6 rapports générés, qualité fiches (1 786/1 814 notées, 1 426 ≥ 3 avis, 386 fraîches < 90 j, 716 en 24h/7j, 6 901 services = 3,8/fiche).
+   111→   285→- Nouvelle API `GET /api/stats/platform` (`src/app/api/stats/platform/route.ts`) : tout est calculé depuis la base (plus aucune valeur codée en dur) — qualité des fiches + indice qualité global (complétude 30 + notoriété 25 + fraîcheur 25 + services 20), avis (total, note moyenne, tendance 8 mois avec auteurs actifs, top 5 évaluateurs), modération (statuts, types, taux de résolution, top 5 contributeurs), alertes (sévérité + types), comptes (rôles, actifs), rapports.
+   112→   286→- `src/lib/types.ts` : type `PlatformStats`.
+   113→   287→- Réécriture enrichie de `src/components/backoffice/bo-stats.tsx` (202 → ~530 lignes) : 5 KPI réelles (stations suivies + services/fiche, avis + note moyenne, contributeurs actifs, contributions + en attente, indice qualité) ; part de marché (conservée) ; contributions par type (conservé) ; NOUVEAU « Qualité des données du référentiel » (jauge donut 70/100 + 5 barres de progression détaillées) ; NOUVEAU « Entonnoir de modération » (barres colorées PENDING/VALIDATED/REJECTED + taux de résolution + top contributeurs avec podium) ; NOUVEAU « Activité de la communauté » (ComposedChart aire avis/vert + ligne auteurs/ambre) ; NOUVEAU « Alertes stratégiques » (badges sévérité colorés + barres horizontales par type) ; NOUVEAU « Comptes plateforme & rapports » (rôles, rapports, 3 compteurs de synthèse).
+   114→   288→- Correctif pendant QA : Progress shadcn n'accepte pas de couleur personnalisée (bg-primary fixe) → barres de l'entonnoir en divs stylées accessibles (role=progressbar + aria).
+   115→   289→- QA agent-browser : onglet Stats plateforme → 5 KPI réelles, jauge 70/100 + 5 barres, entonnoir (12 en attente en ambre), top contributeurs, aire d'activité, badges alertes (Critique 14), comptes/rapports — tout rendu, 0 erreur console. (Note : les Tabs Radix nécessitent un clic natif agent-browser, pas .click() synthétique.)
+   116→   290→- `bun run lint` : 0 erreur. Navigateur fermé.
+   117→   291→
+   118→   292→Stage Summary:
+   119→   293→- Le back-office pilote désormais la plateforme avec des données réelles et détaillées : qualité du référentiel (indice + décomposition), entonnoir de modération avec contributeurs, activité communautaire mensuelle, alertes par sévérité/type, comptes par rôle et rapports. Idées suivantes : logs d'appels API, délai moyen de modération (updatedAt manquant), carte de santé des endpoints, export du tableau de bord.
+   120→   294→---
+   121→   295→Task ID: 14
+   122→   296→Agent: orchestrator (Z.ai Code)
+   123→   297→Task: Clôture de session — vérification finale des 3 demandes utilisateur
+   124→   298→
+   125→   299→Work Log:
+   126→   300→- Smoke tests : GET / 200, /api/stats/reputation 200, /api/stats/platform 200, lint 0 erreur, dev.log sans erreur, next-server RSS ~1,9 Go (sous contrôle), mémoire disponible ~1,6 Go.
+   127→   301→- Cron QA 15 min (webDevReview) déjà en place depuis les sessions précédentes — non dupliqué.
+   128→   302→- Livrables de la session : fond cartographique réel (Task 11), portail « Avis & réputation » avec IVE (Task 12), back-office enrichi données réelles (Task 13).
+   129→   303→
+   130→   304→Stage Summary:
+   131→   305→- Les 3 demandes utilisateur sont livrées et vérifiées E2E navigateur. Priorités suivantes recommandées : réponse de l'enseigne aux avis (C.2.6+), widget comparaison de stations sur carte réelle, export PDF réputation, correction du warning Radix DialogTitle sur station-detail-dialog, délai moyen de modération (champ updatedAt à ajouter au modèle Contribution).
+   132→   306→
+   133→   307→---
+   134→   308→Task ID: 15
+   135→   309→Agent: orchestrator (Z.ai Code) — cron QA 15 min
+   136→   310→Task: QA de routine + « Réponses de l'enseigne aux avis » (C.2.6+) + délai moyen de modération + correctif Radix DialogTitle
+   137→   311→
+   138→   312→Work Log:
+   139→   313→- QA initial : serveur 200 (next-server ~2,0 Go RSS, sous contrôle), 9 endpoints API 200, sweep navigateur 4 modes (carte réelle Esri + popup clic marqueur, portail Avis & réputation, back-office Stats plateforme, mobile B2C), 0 erreur console.
+   140→   314→- Prisma : Review + replyText/repliedAt/repliedBy (réponse officielle enseigne) ; Contribution + updatedAt (délai de modération). `bun run db:push` + régénération client.
+   141→   315→- INCIDENT résolu : le serveur dev gardait l'ANCIEN client Prisma en mémoire → /api/stats/reputation 500 (PrismaClientValidationError sur replyText). Correctif : kill + relance `(setsid bun run dev …)` → 200.
+   142→   316→- Seed one-shot `prisma/seed-replies.ts` : 1 195 réponses d'enseigne réalistes (ton adapté à la note : remerciement / prise en charge / excuses + actions correctives, délai 6 h → 5 j), updatedAt sur les 2 contributions résolues.
+   143→   317→- API : GET /api/stations/[id] + GET /api/reviews renvoient les champs de réponse ; NOUVEAU POST/DELETE `/api/reviews/[id]/reply` (validation 10-600 caractères, repliedBy = « Équipe {enseigne} ») ; /api/stats/reputation → own.repliesCount/responseRate/avgReplyDelayHours + market.responseRate + responseRate par enseigne (brandComparison) + réponses dans recentReviews ; /api/stats/platform → moderation.avgDelayHours + resolvedCount ; PATCH /api/contributions pose updatedAt à chaque changement de statut.
+   144→   318→- Portail (`portal-reviews.tsx`) : 5e KPI « Taux de réponse » (delta vs marché + délai moyen) ; badge synthèse ; flux d'avis enrichi — filtre ToggleGroup « Tous / À traiter (n) / Traités (n) », cartes à bordure colorée selon statut (ambre = à traiter, émeraude = répondu), bloc « Réponse officielle · Équipe X » (filet gauche émeraude, horodatage relatif), boutons Répondre / Modifier / Retirer, éditeur inline Textarea + compteur 0/600 + Annuler/Publier (spinner), mises à jour optimistes via setStats + toasts.
+   145→   319→- Mobile (`station-screen.tsx`) : la réponse officielle est visible par le CONSOMMATEUR sous chaque avis (bloc émeraude, clé i18n station.brandReply traduite dans les 5 langues fr/en/it/es/ar).
+   146→   320→- Back-office (`bo-stats.tsx`) : badge « Délai moyen : X j/h (n traitées) » dans l'entonnoir de modération (title explicatif).
+   147→   321→- Correctif Radix : station-detail-dialog émettait « Missing Description/Title for DialogContent » pendant les états chargement/erreur → sr-only DialogTitle + DialogDescription ajoutés aux deux branches. Vérifié console vide après clear + réouverture.
+   148→   322→- Correctif opportuniste : erreur tsc préexistante api/reviews (`agg._count`) → cast propre.
+   149→   323→- QA E2E agent-browser : réponse publiée depuis le portail (textarea → Publier → bloc « Réponse officielle » affiché + compteur À traiter 11→10 + 0 erreur console) ; boucle complète vérifiée : POST /api/reviews/[id]/reply sur « Station Tunis Centre » (Ahmed T.) → fiche mobile recharge → « Official reply from the brand · Équipe Station Tunis Centre » affiché dans l'app (i18n EN actif) ; back-office « Délai moyen : 3 j (2 traitées) » ; mode sombre vérifié (bg oklab émeraude 950/40, filet émeraude) ; VLM : synthèse réputation propre, aucun glitch.
+   150→   324→- `bun run lint` : 0 erreur. Navigateur fermé (1,7 Go libres). next-server ~1,97 Go RSS.
+   151→   325→
+   152→   326→Stage Summary:
+   153→   327→- La boucle de réputation est bouclée de bout en bout : le client laisse un avis (mobile), l'enseigne répond officiellement (portail), la réponse est publiée sur l'app mobile, et le pilotage se fait par KPI (taux de réponse, délai moyen, comparaison concurrentielle). Le back-office mesure désormais le délai réel de modération (updatedAt horodaté à chaque VALIDATE/REJECT). Warning Radix résolu. Reste recommandé : alertes « chute de note d'une station » (portail), export PDF réputation, widget comparaison sur carte réelle, taux de réponse intégré au calcul IVE (poids à arbitrer).
+   154→   328→
+   155→   329→---
+   156→   330→Task ID: 16
+   157→   331→Agent: orchestrator (Z.ai Code) — cron QA 15 min
+   158→   332→Task: QA de routine + « Surveillance des notes » (chutes de note par station) + export CSV des avis + fiches actionnables depuis la veille
+   159→   333→
+   160→   334→Work Log:
+   161→   335→- QA initial : serveur 200 (next-server ~1,9 Go RSS), 8 endpoints API 200, sweep navigateur (portail Avis & réputation avec réponses OK, back-office, mobile), 0 erreur console → phase stable, développement de nouvelles fonctionnalités.
+   162→   336→- Calibrage data-driven du détecteur : analyse réelle des 4 588 avis (groupés par ID de station) — les fenêtres « 3+3 avis » ne donnent AUCUNE station éligible (données éparses ~2,8 avis/station) ; règle retenue : ≥ 2 avis récents (≤ 90 j, moy ≤ 3,5) et chute ≥ 0,8 pt vs historique (≥ 1 avis antérieur) → Agil 7, Shell 3, Staroil 6, Ola 4, TotalEnergies 1 stations détectées.
+   163→   337→- API `/api/stats/reputation` : `own.watchlist[]` (id, code, nom, gouvernorat, previousRating, currentRating, delta, recentCount, lastLowReview {author, rating, comment, createdAt} = dernier avis ≤ 3★) ; select stations étendu à `id` pour les fiches.
+   164→   338→- Types : `ReputationStats.own.watchlist` (id inclus).
+   165→   339→- Portail (`portal-reviews.tsx`) :
+   166→   340→  - NOUVELLE carte « Surveillance des notes » (icône Radar, badge compteur coloré, description méthodologique) — grille 2 colonnes, cartes à bordure rouge (Δ ≥ 1, point pulsant) ou orange, transition « 5,0 → 3,5 » avec TrendingDown + badge « −1,5 pt », méta (gouvernorat · code · n avis récents), blockquote « Dernier avis défavorable » (filet orange, citation), état vide positif émeraude (CheckCircle2 « satisfaction stable »).
+   167→   341→  - Badge d'alerte dans la synthèse : « n stations en perte de vitesse » (orange, title explicatif) quand watchlist > 0.
+   168→   342→  - Bouton « Voir la fiche » sur chaque station surveillée → StationDetailDialog (importé, état watchFicheId) — l'enseigne passe directement de l'alerte au plan d'action (fiche complète : avis, concurrents proches, historique).
+   169→   343→  - Bouton « Exporter CSV » dans l'en-tête du flux d'avis : export du flux filtré courant (BOM UTF-8, séparateur « ; », 10 colonnes dont statut/texte/date de réponse) + toast contextuel.
+   170→   344→- Incidents résolus pendant le dev :
+   171→   345→  1. Build Error « the name `Radar` is defined multiple times » — collision import lucide `Radar` vs recharts `Radar` (radar chart) → alias `Radar as RadarIcon`.
+   172→   346→  2. Erreur React Compiler « Existing memoization could not be preserved » sur le useMemo reviewFlow (interaction avec la closure exportCsv) → calcul direct (le compilateur mémoïse automatiquement), même pattern validé.
+   173→   347→  3. Erreur de parsing eslint (guillemets imbriqués dans template literal du toast) → restructuration avec variable filterLabel intermédiaire.
+   174→   348→- QA E2E agent-browser : carte « Surveillance des notes 7 stations » (Agil : El Ouardia 2 5,0→3,5, Zahret Medien, Korba 2… avec blockquotes avis) ; bascule enseigne Ola → « 4 stations » recalculées propre ; clic « Voir la fiche » → dialog « Ola Energy Ghannouche 3 » complet (avis + concurrents proches) ; « Exporter CSV » → fichier avis-agil-2026-09-18.csv téléchargé (21 lignes, échappements corrects, réponses incluses) + toast « 20 avis exportés » ; mode sombre vérifié (VLM : hiérarchie visuelle et badges d'alerte « well-styled », contraste bon) ; 0 erreur console à chaque étape (console vidée pour écarter l'historique du Build Error corrigé).
+   175→   349→- `bun run lint` : 0 erreur. GET / : 200. Navigateur fermé (1,5 Go libres).
+   176→   350→
+   177→   351→Stage Summary:
+   178→   352→- La réputation devient pro-active : l'enseigne ne consulte plus seulement ses notes, elle est alertée sur les stations qui décrochent (détection data-driven calibrée sur les données réelles), accède en un clic à la fiche complète pour agir, et exporte ses avis (avec réponses) pour analyse externe. Reste recommandé : intégrer le taux de réponse dans l'IVE (poids à arbitrer), export PDF réputation, widget comparaison de stations sur la carte réelle, alertes email/programmées depuis la watchlist.
+   179→   353→
+   180→   354→---
+   181→   355→Task ID: 17
+   182→   356→Agent: orchestrator (Z.ai Code)
+   183→   357→Task: QA de routine + « Comparateur de stations sur la carte » (recommandé T10/T14/T15/T16) + IVE v2 avec taux de réponse (recommandé T15/T16)
+   184→   358→
+   185→   359→Work Log:
+   186→   360→- QA initial : serveur 200 (next-server ~2,1 Go RSS, mémoire 1,5 Go dispo), 6 endpoints API 200, sweep navigateur 4 modes (carte réelle Esri + popup clic marqueur + « Voir la fiche », portail Avis & réputation, back-office Modération/Stats plateforme, mobile B2C) — 0 erreur console → phase stable, développement de nouvelles fonctionnalités.
+   187→   361→- NOUVEAU « Comparateur de stations sur la carte interactive » :
+   188→   362→  - `station-compare-dialog.tsx` étendu : `MAX_COMPARE_STATIONS` exporté (3 → 4 stations), largeur de grille dynamique (`minWidth: max(520, 160+n*180)`), dialog élargi `sm:max-w-4xl`, prop `onLocate` optionnelle → bouton « Carte » (Crosshair) par colonne qui ferme le dialog et centre la carte (flyTo), boutons « Fiche »/« Carte » par station.
+   189→   363→  - `osm-map.tsx` : props `onCompare` + `compareCodes` ; popup StationMiniCard → badge « Comparateur » (Pin, émeraude) quand épinglée + bouton toggle « Comparer »/« Retirer » (GitCompareArrows, aria-pressed, bordure émeraude à l'état épinglé) à côté de « Voir la fiche » ; markerStyle `isPinned` → anneau/contour émeraude #059669 (weight 3, +1 rayon) sur tous les statuts (actif/rénovation/projet/fermé).
+   190→   364→  - `tunisia-map.tsx` : props `onCompare`/`compareCodes` passées à OSMMap ; mode schéma → anneau émeraude extérieur autour des marqueurs épinglés (tous statuts) + StationPopup → bouton « Comparer »/« Retirer du comparateur » (remplace « Itinéraire » quand onCompare fourni) ; memo deps + compareSet.
+   191→   365→  - `carte-interactive-tab.tsx` : état `compareCodes`/`compareOpen`, `toggleCompare` (toasts épinglée n/4 / retirée / comparateur plein, max 4), `compareStations` (ordre d'épinglage conservé), barre de comparaison sticky en bas de carte (glassmorphism : bg-background/92 backdrop-blur, bordure émeraude, ombre, chips avec pastille enseigne + X, compteur n/4, bouton « Comparer » disabled < 2, bouton vider Trash2, animation animate-in slide-in-from-bottom) + StationCompareDialog câblé (onOpenDetail → fiche, onLocate → focus carte).
+   192→   366→  - `stations-tab.tsx` (« Mes stations ») : MAX_COMPARE local remplacé par la constante partagée (3 → 4, cohérence plateforme).
+   193→   367→- BUG trouvé et corrigé pendant le QA : la barre en `absolute bottom-6` sortait du viewport sur écrans courts (viewport agent-browser 577px → tray à y=629, invisible) → passage en `sticky bottom-4 mt-[-72px]` : la barre reste visible en bas d'écran tant que la carte est à l'écran, chevauche le bas de la carte quand tout est visible. Vérifié : y=507, visible:true.
+   194→   368→- IVE v2 (Indice de Valeur d'Enseigne) — le taux de réponse est désormais une composante :
+   195→   369→  - `/api/stats/reputation` computeIVE v2 : Note client 35 pts (×40 avant) · Volume d'avis 15 pts (×20) · Expérience réseau 15 pts (×20) · Fraîcheur 15 pts (×20) · **Taux de réponse 20 pts (nouveau)** = 100. Justification : réactivité = levier d'image directement actionnable depuis le flux d'avis (C.2.6).
+   196→   370→  - `valueIndex.details` : 5e entrée « reponse » (hint méthodologique), max recalibrés.
+   197→   371→  - `portal-reviews.tsx` : icône MessageSquareReply pour la 5e ligne + méthodologie mise à jour.
+   198→   372→  - Nouveaux scores : Agil 57 (rang 6/6, réponse 25,1 % → 5,0/20), Shell 60 (1er), Staroil 59, Ola Energy 58, TotalEnergies 58 — le classement récompense désormais la réactivité (Shell 25,4 % et Staroil 30,8 % devant).
+   199→   373→- QA E2E agent-browser (comparateur) : popup réelle → « Comparer » → toast « épinglée (1/4) » + barre visible avec hint ; épingle 2ᵉ et 3ᵉ stations (Agil Hammam Lif, Station Le Bardo) → chips + compteur 2/4, bouton activé ; « Comparer » → dialog 2/4 avec table complète (badges numérotés couleur enseigne, Top par critère, score comparatif, « Meilleur profil », matrice Services différenciants, Fiche/Carte) ; VLM : rendu propre, pas de glitch, alignement parfait ; bouton « Carte » → dialog fermé + flyTo + barre conservée ; anneaux émeraude visibles sur les marqueurs épinglés (réel + schéma, 3 cercles #059669 vérifiés en SVG) ; popup mode schéma (Shell Mornag) → « Comparer » → épinglage OK ; 0 erreur console à chaque étape.
+   200→   374→- QA E2E (IVE) : portail Agil → carte IVE « Score composite 57/100 » avec 5 barres (Note client 27/35, Volume 12,3/15, Expérience 9,7/15, Fraîcheur 3,2/15, Taux de réponse 5/20) — API testée sur 5 enseignes, cohérente.
+   201→   375→- `bun run lint` : 0 erreur. `bunx tsc --noEmit` : aucune erreur nouvelle (4 préexistantes api/stations + serialize, 8 dans examples/seed — documentées). Navigateur fermé (1,3 Go libres).
+   202→   376→
+   203→   377→Stage Summary:
+   204→   378→- La comparaison de stations, auparavant cantonnée à l'onglet « Mes stations », est maintenant accessible directement depuis la carte interactive (réelle ET schéma) : épinglage depuis les popups, barre sticky de suivi, dialog enrichi 4 colonnes avec actions. L'IVE intègre la réactivité de l'enseigne (20 pts) — boucle C.2.6 complète : répondre aux avis améliore désormais mesurablement l'indice de valeur. Reste recommandé : export PDF réputation, alertes email/programmées depuis la watchlist, comparaison depuis la fiche détaillée (StationDetailDialog), étendre le comparateur au mode mobile B2C.
+   205→   379→
+   206→   380→---
+   207→   381→Task ID: 18
+   208→   382→Agent: orchestrator (Z.ai Code)
+   209→   383→Task: QA de routine + « Comparateur depuis la fiche détaillée » + « Comparateur mobile B2C » + « Rapport réputation imprimable » (recommandations T14/T15/T16/T17)
+   210→   384→
+   211→   385→Work Log:
+   212→   386→- QA initial : serveur 200 (next-server ~2,0 Go RSS), 7 endpoints API 200 (reputation?brand= requiert le paramètre — 400 sans, comportement attendu), sweep navigateur 4 modes (carte réelle Esri + marqueurs colorés par enseigne vérifiés VLM, portail Avis & réputation, mobile B2C, back-office) — 0 erreur console → phase stable, développement des 3 fonctionnalités recommandées.
+   213→   387→- F1 — Comparateur depuis la fiche détaillée (StationDetailDialog) :
+   214→   388→  - `station-detail-dialog.tsx` : nouvelles props optionnelles `onCompare?(s)` + `isStationPinned?(s)` (prédicat — adapté à la clé du parent, code OU id) ; bouton « Comparer »/« Retirer du comparateur » dans le footer (état épinglé : bordure/fond émeraude, aria-pressed) ; stations à proximité restructurées (div + bouton principal « localiser » + bouton d'épingle rond par voisin, aria-label « Comparer {nom} »/« Retirer {nom} du comparateur », état épinglé émeraude) ; hint « — épinglez pour comparer » dans le titre de section.
+   215→   389→  - Câblage : `carte-interactive-tab.tsx` (onCompare=toggleCompare, clé code) et `stations-tab.tsx` (clé id). Portail-reviews volontairement non câblé (pas d'infrastructure comparateur dans l'onglet).
+   216→   390→  - QA : fiche « Agil Soukra » → « Comparer » → état épinglé + compteur « Comparer (2/4) » après épingle d'un voisin (« Agil La Goulette ») ; 8 boutons d'épingle voisins détectés (aria-labels corrects) ; VLM : footer émeraude visible, épingles visibles, 0 glitch.
+   217→   391→- F2 — Comparateur mobile B2C (extension B.2.x consommateur) :
+   218→   392→  - `compare-store.ts` (NOUVEAU) : zustand persisté localStorage « carbuscope-compare », MAX_MOBILE_COMPARE=3, toggleCompare → "added"|"removed"|"full", merge assaini.
+   219→   393→  - `shared.tsx` : Screen « comparateur » + `openCompare()` dans AppApi.
+   220→   394→  - `compare-screen.tsx` (NOUVEAU, ~290 lignes) : grille défilable horizontalement (colonne libellés sticky left, colonnes stations min 148px), 6 critères CONSOMMATEUR (distance+trajet, note+avis, volume d'avis, horaires 24h/24-7j/7, services+liste, fraîcheur relative), badges Top (trophée) par critère, score wins/6 + « Meilleur profil » ambre, matrice services différenciants (pastilles vert/gris, point ambre), synthèse ambre, bouton « Voir la fiche » par colonne, vidage ; états vides (0 → CTA explorer ; 1 → invite ambre).
+   221→   395→  - `compare-bar.tsx` (NOUVEAU) : barre au-dessus de la tab bar (AnimatePresence slide-in, chips enseigne+distance+retrait, compteur n/3, bouton Comparer disabled <2, corbeille), montée sur écrans Carte ET Recherche.
+   222→   396→  - `station-screen.tsx` : bouton d'épingle en en-tête (GitCompareArrows, état émeraude, toasts FR localisés ajout/retrait/plein).
+   223→   397→  - `map-screen.tsx` : TunisiaMap reçoit onCompare/compareCodes (popup popup « Comparer » + anneaux émeraude sur marqueurs épinglés) — codes dérivés des ids du store (useMemo).
+   224→   398→  - `mobile-app.tsx` : écran comparateur dans le routeur, pushed (back → returnTo via openCompare), transition framer-motion.
+   225→   399→  - i18n : 37 clés « compare.* » ajoutées aux 5 dictionnaires (fr/en/it/es/ar, RTL inclus).
+   226→   400→  - QA E2E : fiche « Petro Mégrine 2 » → épingle (toast 1/3) ; 2ᵉ épingle « Petro El Menzah 3 » (2/3, localStorage vérifié) ; barre visible Carte ET Recherche (2 chips + compteur + bouton actif) ; écran comparateur : 2 colonnes, badges Top, matrice services, score 6/6 + Meilleur profil + synthèse ambre (VLM : propre, 0 glitch) ; 3ᵉ épingle depuis popup carte mobile (« Station-service Mabrouk », 3/3) ; 4ᵉ épingle refusée (toast « Comparateur plein — maximum 3 », store maintenu à 3) ; retour navigation OK ; arabe RTL : dir=rtl sur l'app, tableau inversé et lisible, barre « قارن » (VLM : 0 glitch) ; retour FR vérifié ; colonne 3 révélée par scroll horizontal (comportement attendu).
+   227→   401→- F3 — Rapport réputation imprimable (portail enseigne) :
+   228→   402→  - `portal-reviews.tsx` : bouton « Rapport PDF » (Printer) sous la boîte IVE de la synthèse ; PRINT_CSS (`@media print { body > *:not(#cs-reputation-print) { display:none } }` + @page A4 portrait 12mm + print-color-adjust sur .bar) ; rapport A4 rendu via createPortal(document.body) — enfant direct de <body>, `hidden` à l'écran, seul visible à l'impression : en-tête (logo Fuel + enseigne + date + IVE score/rang), synthèse narrative, 6 KPI, décomposition IVE (5 barres + score), comparaison concurrentielle (6 enseignes, ligne « (moi) » surlignée émeraude), distribution 1★-5★ moi vs marché, critères notés, Top 5 / Flop 5 stations, surveillance des notes (7 stations Agil avec écarts rouges), footer méthodologique.
+   229→   403→  - QA : bouton présent ; portail direct enfant body + display:none à l'écran ; window.print() stubbé → appelé ✓ ; assertions DOM : titre, 6 KPI, 6 lignes IVE, 6 lignes marché, 5 lignes distribution, 2 tableaux top/flop, 7 lignes surveillance, footer — tout présent ; VLM : rendu propre et professionnel.
+   230→   404→- `bun run lint` : 0 erreur. `bunx tsc --noEmit` : aucune erreur nouvelle (préexistantes documentées api/stations, serialize, seed/examples). Navigateur fermé. GET / : 200.
+   231→   405→
+   232→   406→Stage Summary:
+   233→   407→- La comparaison de stations est désormais accessible depuis TOUS les points d'entrée : popup carte (réel+schéma), barre « Mes stations », ET fiche détaillée (bouton footer + épingles des voisins) côté B2B, ET mobile B2C (fiche, popup carte, barre Carte/Recherche, écran comparateur dédié 6 critères consommateur, i18n 5 langues RTL inclus, persistance locale). L'enseigne exporte un rapport de réputation A4 complet (PDF via impression navigateur) pour ses comités/partenaires. Reste recommandé : alertes email/programmées depuis la watchlist, comparateur persisté multi-appareil (aujourd'hui localStorage), impression du rapport en mode sombre (déjà forcé clair), intégrer la distribution dans l'export CSV, étendre le rapport aux tendances mensuelles (graphique simple).
+   234→   408→

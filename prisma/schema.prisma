@@ -171,6 +171,22 @@ model ReportSchedule {
   createdAt DateTime @default(now())
 }
 
+// Veille automatisée des notes (C.2.6+) : alerte email programmée déclenchée
+// lorsqu'une station chute de seuil points (règle watchlist de /api/stats/reputation).
+model WatchlistAlert {
+  id              String    @id @default(cuid())
+  brandSlug       String
+  scope           String // "ALL" (toute la watchlist) ou code d'une station
+  stationLabel    String // libellé lisible (nom de la station ou « Toute la watchlist »)
+  thresholdPoints Float     @default(0.8)
+  frequency       String // IMMEDIATE | DAILY | WEEKLY
+  email           String
+  active          Boolean   @default(true)
+  triggerCount    Int       @default(0)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+}
+
 model SavedCalculation {
   id        String   @id @default(cuid())
   type      String
