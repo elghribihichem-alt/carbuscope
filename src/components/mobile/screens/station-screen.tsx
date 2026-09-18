@@ -2,23 +2,39 @@
 
 // CarbuScope Mobile — Fiche station (B.2.3)
 // Photo, identité, services, horaires, note + avis récents (lazy fetch),
-// actions Itinéraire / Signaler / Avis, stations à proximité.
+// actions Itinéraire / Signaler / Avis, favori (B.2.7), stations à proximité.
 
-import { BadgeCheck, Clock3, Flag, MapPin, Navigation, Share2, Star } from "lucide-react"
+import { BadgeCheck, Clock3, Flag, Heart, MapPin, Navigation, Share2, Star } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/shell/badges"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 import { SERVICE_LABELS } from "@/lib/types"
+import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
 import {
   BrandDot, ScreenHeader, SectionTitle, StarRating, dateFr, driveMinutes, fmtKm, fmtNote, relativeFr,
 } from "../shared"
+import { useFavoritesStore } from "../favorites-store"
 
 export function StationScreen({ api }: { api: AppApi }) {
   const s = api.selected
+  const isFav = useFavoritesStore(st => (s ? st.stationIds.includes(s.id) : false))
+  const toggleFavorite = useFavoritesStore(st => st.toggleFavorite)
   if (!s) return null
+
+  const onToggleFav = () => {
+    const next = !isFav
+    toggleFavorite(s.id)
+    if (next) {
+      toast.success("Station ajoutée aux favoris", {
+        description: "Retrouvez-la dans votre profil et filtrez-la depuis la recherche (B.2.7).",
+      })
+    } else {
+      toast.info("Station retirée des favoris")
+    }
+  }
 
   const reviews = (api.detail?.reviews ?? []).slice(0, 3)
   const nearbyChips = (api.detail?.nearby ?? []).slice(0, 6)
@@ -35,14 +51,28 @@ export function StationScreen({ api }: { api: AppApi }) {
         subtitle={s.brandName}
         onBack={api.back}
         right={
-          <button
-            type="button"
-            aria-label="Partager la fiche"
-            onClick={() => toast.success("Lien de la fiche copié (démo)")}
-            className="mr-1 flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
-          >
-            <Share2 className="h-[18px] w-[18px]" />
-          </button>
+          <span className="mr-1 flex items-center">
+            <button
+              type="button"
+              aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+              aria-pressed={isFav}
+              onClick={onToggleFav}
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-90",
+                isFav ? "bg-amber-50 text-amber-500" : "text-slate-500 hover:bg-slate-100"
+              )}
+            >
+              <Heart className={cn("h-[18px] w-[18px] transition-transform", isFav && "scale-110 fill-amber-400 text-amber-500")} />
+            </button>
+            <button
+              type="button"
+              aria-label="Partager la fiche"
+              onClick={() => toast.success("Lien de la fiche copié (démo)")}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
+            >
+              <Share2 className="h-[18px] w-[18px]" />
+            </button>
+          </span>
         }
       />
 

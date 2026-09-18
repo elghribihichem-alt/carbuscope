@@ -190,3 +190,21 @@ Work Log:
 
 Stage Summary:
 - Comparateur livré et vérifié de bout en bout. Conventions respectées (shadcn, palette sans bleu, français, responsive, accessibilité aria). Reste recommandé : i18n 5 langues (A.9/B.3.4), export PDF enrichi, widget comparaison sur carte.
+
+---
+Task ID: 9
+Agent: orchestrator (Z.ai Code) — cron QA 15 min
+Task: QA de routine + Module B.2.7 « Favoris stations » — favoris persistés (cœur), section profil, filtre recherche
+
+Work Log:
+- QA initial : serveur 200, mémoire 1,6 Go dispo. Sweep navigateur : onglets Concurrence/Veille/Rapports/Paramètres ✓, centre d'alertes (8 alertes) ✓, 0 erreur console. Régression tâches 7-8 : OK.
+- Nouveau fichier `mobile/favorites-store.ts` : zustand persist « carbuscope-favorites » — stationIds (favoris), favBrands, favServices (préférences du profil désormais persistées, étaient en useState local), toggle/remove, merge assainissant (défense localStorage corrompu, cf. leçon tâche 7).
+- `screens/station-screen.tsx` : bouton cœur à côté du partage dans ScreenHeader — aria-pressed, micro-interactions (fill amber + scale-110 actif, active:scale-90), toasts ajout/retrait, hooks appelés avant l'early-return (règle des hooks respectée).
+- `shared.tsx` StationRow : badge cœur (fill-amber-400, aria-label « Station favorite ») sur toute ligne de station favorite — visible carte/recherche/profil automatiquement (le composant lit le store).
+- `screens/profile-screen.tsx` : remplacement des Set locaux par le store persisté (favBrands/favServices) + NOUVELLE section « Mes stations favorites » (compteur badge ambre, liste avec BrandDot + cœur superposé, clic → fiche, bouton X retirer + toast, bordure ambre, état vide guide « appuyez sur le cœur ♥ »).
+- `screens/search-screen.tsx` : chip « Favoris » (cœur, ton ambre, badge compteur, active:scale-95) avant le bouton Filtres — filtre favOnly dans le useMemo results, inclus dans reset(), compteur Filtres ajusté (n'inclut pas favoris).
+- Vérifications agent-browser : fiche Petro Mégrine 2 → cœur cliqué → toast « Station ajoutée aux favoris » + bouton basculé « Retirer des favoris » ; profil → section « Mes stations favorites 1 » avec boutons Ouvrir/Retirer ; recherche → chip « Favoris 1 » → résultats filtrés (uniquement le favori, badge « Station favorite » sur la ligne) ; carte → cœur visible sur la ligne du favori ; rechargement complet page → localStorage persisté (stationIds + prefs), section profil toujours « 1 » ; 0 erreur console à chaque étape.
+- `bun run lint` complet : 0 erreur. GET / 200. Mémoire : 1,5 Go disponibles. Navigateur fermé.
+
+Stage Summary:
+- B.2.7 (préférences utilisateur) pleinement réalisé avec persistance réelle : stations favorites + enseignes + services. Styles : accents ambre cohérents sur toute la chaîne favoris (cœur, chip, section profil). Prochaines priorités recommandées : i18n 5 langues effectif (A.9/B.3.4 — la sélection de langue existe mais ne traduit pas encore), widget comparaison sur la carte (tâche 8 → carte), statistiques d'usage des favoris dans le portail enseigne (C.2.5).

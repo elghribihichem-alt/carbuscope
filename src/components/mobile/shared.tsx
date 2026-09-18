@@ -4,10 +4,11 @@
 // Toutes les couleurs respectent la charte : émeraude, ambre, rouge, prune, or, ardoise.
 
 import { useState } from "react"
-import { Camera, ChevronLeft, ChevronRight, Image as ImageIcon, Star, X } from "lucide-react"
+import { Camera, ChevronLeft, ChevronRight, Heart, Image as ImageIcon, Star, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SERVICE_LABELS, type BrandDTO, type StationDTO, type StationDetail } from "@/lib/types"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
+import { useFavoritesStore } from "./favorites-store"
 
 // ---------- Types ----------
 
@@ -148,8 +149,9 @@ export function ServicePill({ slug, className }: { slug: string; className?: str
   )
 }
 
-/** Ligne de résultat station (listes carte / recherche) */
+/** Ligne de résultat station (listes carte / recherche) — cœur si favorite */
 export function StationRow({ station, onClick }: { station: StationWithDist; onClick?: () => void }) {
+  const isFav = useFavoritesStore(st => st.stationIds.includes(station.id))
   return (
     <button
       type="button"
@@ -160,6 +162,9 @@ export function StationRow({ station, onClick }: { station: StationWithDist; onC
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[13px] font-semibold leading-tight text-slate-800">{station.name}</span>
+          {isFav && (
+            <Heart className="h-3 w-3 shrink-0 fill-amber-400 text-amber-500" aria-label="Station favorite" />
+          )}
           {station.open24 && (
             <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold text-emerald-700">24h/24</span>
           )}

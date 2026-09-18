@@ -5,7 +5,7 @@
 // résultats complets (les 1 500 fiches actives sont déjà chargées, filtrage local).
 
 import { useMemo, useState } from "react"
-import { ChevronDown, MapPin, RotateCcw, Search, SlidersHorizontal } from "lucide-react"
+import { ChevronDown, Heart, MapPin, RotateCcw, Search, SlidersHorizontal } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -14,6 +14,7 @@ import { SERVICE_LABELS } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
 import { StarRating, StationRow, toggleIn } from "../shared"
+import { useFavoritesStore } from "../favorites-store"
 
 const SERVICES = Object.keys(SERVICE_LABELS)
 const HOURS = [
@@ -28,8 +29,10 @@ export function SearchScreen({ api }: { api: AppApi }) {
   const [minRating, setMinRating] = useState(0)
   const [sort, setSort] = useState<"distance" | "rating">("distance")
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [favOnly, setFavOnly] = useState(false)
+  const favIds = useFavoritesStore(st => st.stationIds)
 
-  const activeFilters = brandSel.size + serviceSel.size + (hours ? 1 : 0) + (minRating > 0 ? 1 : 0)
+  const activeFilters = brandSel.size + serviceSel.size + (hours ? 1 : 0) + (minRating > 0 ? 1 : 0) + (favOnly ? 1 : 0)
 
   const results = useMemo(() => {
     const q = api.searchQuery.trim().toLowerCase()
@@ -38,6 +41,7 @@ export function SearchScreen({ api }: { api: AppApi }) {
         const haystack = [s.name, s.address, s.brandName, s.delegation, s.gouvernorat, s.code].join(" ").toLowerCase()
         if (!haystack.includes(q)) return false
       }
+      if (favOnly && !favIds.includes(s.id)) return false
       if (brandSel.size && !brandSel.has(s.brandSlug ?? "")) return false
       if (serviceSel.size && !Array.from(serviceSel).every(sv => s.services.includes(sv))) return false
       if (hours === "24h" && !s.open24) return false
@@ -46,13 +50,14 @@ export function SearchScreen({ api }: { api: AppApi }) {
       return true
     })
     return list.sort((a, b) => (sort === "rating" ? b.rating - a.rating : a.distanceKm - b.distanceKm))
-  }, [api.allStations, api.searchQuery, brandSel, serviceSel, hours, minRating, sort])
+  }, [api.allStations, api.searchQuery, brandSel, serviceSel, hours, minRating, sort, favOnly, favIds])
 
   const reset = () => {
     setBrandSel(new Set())
     setServiceSel(new Set())
     setHours(null)
     setMinRating(0)
+    setFavOnly(false)
     api.setSearchQuery("")
   }
 
@@ -74,18 +79,40 @@ export function SearchScreen({ api }: { api: AppApi }) {
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setFavOnly(v => !v)}
+            aria-pressed={favOnly}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold shadow-sm transition-all active:scale-95",
+              favOnly
+                ? "border-amber-300 bg-amber-50 text-amber-700"
+                : "border-slate-200 bg-white text-slate-600 hover:border-amber-200"
+            )}
+          >
+            <Heart className={cn("h-3.5 w-3.5", favOnly && "fill-amber-400 text-amber-500")} />
+            Favoris
+            {favIds.length > 0 && (
+              <span className={cn(
+                "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold",
+                favOnly ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-500"
+              )}>
+                {favIds.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
             onClick={() => setFiltersOpen(o => !o)}
             aria-expanded={filtersOpen}
             className={cn(
               "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold shadow-sm transition-colors",
-              activeFilters > 0 ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"
+              activeFilters > (favOnly ? 1 : 0) ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"
             )}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
             Filtres
-            {activeFilters > 0 && (
+            {activeFilters > (favOnly ? 1 : 0) && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white">
-                {activeFilters}
+                {activeFilters - (favOnly ? 1 : 0)}
               </span>
             )}
             <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 transition-transform", filtersOpen && "rotate-180")} />

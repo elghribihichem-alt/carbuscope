@@ -5,14 +5,15 @@
 // préférences (enseignes & services favoris), sélection de langue (5 langues).
 
 import { useState } from "react"
-import { Award, BadgeCheck, Camera, Crown, Globe, Languages, MapPin, Medal, Settings2, Star, ThumbsUp } from "lucide-react"
+import { Award, BadgeCheck, Camera, Crown, Globe, Heart, Languages, MapPin, Medal, Settings2, Star, ThumbsUp, X } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 import { SERVICE_LABELS } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
-import { BrandDot, ScreenHeader, SectionTitle, fmtNote, toggleIn } from "../shared"
+import { BrandDot, ScreenHeader, SectionTitle, fmtKm, fmtNote } from "../shared"
+import { useFavoritesStore } from "../favorites-store"
 
 const REPUTATION = { points: 348, next: 500, level: "Contributeur fiable", nextLevel: "Contributeur expert" }
 
@@ -34,9 +35,16 @@ const LANGS = [
 const FAV_SERVICES = ["lavage", "cafe", "recharge", "atm", "vidange"]
 
 export function ProfileScreen({ api }: { api: AppApi }) {
-  const [favBrands, setFavBrands] = useState<Set<string>>(new Set(["agil"]))
-  const [favServices, setFavServices] = useState<Set<string>>(new Set(["lavage", "cafe"]))
+  const favBrands = useFavoritesStore(st => st.favBrands)
+  const favServices = useFavoritesStore(st => st.favServices)
+  const stationIds = useFavoritesStore(st => st.stationIds)
+  const toggleFavBrand = useFavoritesStore(st => st.toggleFavBrand)
+  const toggleFavService = useFavoritesStore(st => st.toggleFavService)
+  const removeFavorite = useFavoritesStore(st => st.removeFavorite)
   const [lang, setLang] = useState("fr")
+
+  // Stations favorites résolues depuis les données chargées (persistées par id)
+  const favoriteStations = api.allStations.filter(s => stationIds.includes(s.id))
 
   const visited = api.nearby.slice(1, 4)
   const visitMeta = [
@@ -145,7 +153,63 @@ export function ProfileScreen({ api }: { api: AppApi }) {
           </div>
         </section>
 
-        {/* Préférences (B.2.7) */}
+        {/* Stations favorites (B.2.7) — persistées */}
+        <section className="mt-4">
+          <SectionTitle icon={Heart}>
+            Mes stations favorites
+            {favoriteStations.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-px text-[9.5px] font-bold text-amber-700">
+                {favoriteStations.length}
+              </span>
+            )}
+          </SectionTitle>
+          {favoriteStations.length > 0 ? (
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-amber-200/70 bg-white shadow-sm">
+              {favoriteStations.map(st => (
+                <div key={st.id} className="flex items-center gap-2.5 p-2.5 transition-colors hover:bg-amber-50/40">
+                  <button
+                    type="button"
+                    onClick={() => api.openStation(st)}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    aria-label={`Ouvrir la fiche de ${st.name}`}
+                  >
+                    <span className="relative">
+                      <BrandDot color={st.brandColor} className="h-8 w-8" />
+                      <Heart className="absolute -bottom-0.5 -right-0.5 h-3 w-3 fill-amber-400 text-amber-500 drop-shadow-sm" aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-semibold text-slate-800">{st.name}</span>
+                      <span className="block text-[10.5px] text-slate-400">
+                        {st.gouvernorat} · {fmtKm(st.distanceKm)} · {fmtNote(st.rating)}/5
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      removeFavorite(st.id)
+                      toast.info("Retirée des favoris", { description: st.name })
+                    }}
+                    aria-label={`Retirer ${st.name} des favoris`}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-3.5 text-center">
+              <Heart className="mx-auto h-5 w-5 text-slate-300" aria-hidden />
+              <p className="mt-1.5 text-[12px] font-semibold text-slate-600">Aucune station favorite</p>
+              <p className="mt-0.5 text-[10.5px] leading-snug text-slate-400">
+                Ouvrez une fiche station puis appuyez sur le cœur ♥ pour la retrouver ici et la filtrer dans la recherche.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* Préférences (B.2.7) — persistées */}
         <section className="mt-4">
           <SectionTitle icon={Settings2}>Préférences</SectionTitle>
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -153,12 +217,12 @@ export function ProfileScreen({ api }: { api: AppApi }) {
               <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Enseignes favorites</p>
               <div className="flex flex-wrap gap-1.5">
                 {api.brands.map(b => {
-                  const on = favBrands.has(b.slug)
+                  const on = favBrands.includes(b.slug)
                   return (
                     <button
                       key={b.slug}
                       type="button"
-                      onClick={() => setFavBrands(toggleIn(favBrands, b.slug))}
+                      onClick={() => toggleFavBrand(b.slug)}
                       aria-pressed={on}
                       className={cn(
                         "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition-colors",
@@ -177,12 +241,12 @@ export function ProfileScreen({ api }: { api: AppApi }) {
               <div className="flex flex-wrap gap-1.5">
                 {FAV_SERVICES.map(slug => {
                   const Icon = SERVICE_ICONS[slug]
-                  const on = favServices.has(slug)
+                  const on = favServices.includes(slug)
                   return (
                     <button
                       key={slug}
                       type="button"
-                      onClick={() => setFavServices(toggleIn(favServices, slug))}
+                      onClick={() => toggleFavService(slug)}
                       aria-pressed={on}
                       className={cn(
                         "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition-colors",
@@ -195,6 +259,9 @@ export function ProfileScreen({ api }: { api: AppApi }) {
                   )
                 })}
               </div>
+              <p className="mt-2 text-[9.5px] leading-snug text-slate-400">
+                Préférences conservées sur votre téléphone — utilisées par le tri « pertinence » et les alertes.
+              </p>
             </div>
           </div>
         </section>
