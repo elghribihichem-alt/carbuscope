@@ -1,0 +1,883 @@
+     1→'use client'
+     2→
+     3→// CarbuScope — Carte de Tunisie interactive (SVG multi-couches)
+     4→// Fonctionnalités : pan/zoom, couches (stations, routes, trafic, zones, projets, parc auto),
+     5→// fiche station au clic, outils : mesure de distance, rayon de chalandise, sélection polygone + export.
+     6→
+     7→import * as React from "react"
+     8→import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+     9→import {
+    10→  Store, Wind, DoorOpen, CreditCard, Coffee, Droplets, Wrench, Cog, Zap,
+    11→  MapPin, Navigation, X, Ruler, Hexagon, Circle as CircleIcon, Trash2, Plus, Minus,
+    12→  Maximize, Layers, FileDown, ChevronDown, ChevronRight, Star, Gauge, Clock, ShieldCheck, History,
+    13→} from "lucide-react"
+    14→import { Button } from "@/components/ui/button"
+    15→import { Badge } from "@/components/ui/badge"
+    16→import { Switch } from "@/components/ui/switch"
+    17→import { Slider } from "@/components/ui/slider"
+    18→import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+    19→import { ScrollArea } from "@/components/ui/scroll-area"
+    20→import { toast } from "sonner"
+    21→import type { StationDTO, StationDetail, RoadDTO, ProjectDTO, GovernoratRow, ServiceDTO } from "@/lib/types"
+    22→import { SERVICE_LABELS } from "@/lib/types"
+    23→import { MAP_W, MAP_H, project, unproject, haversineKm, kmToSvgUnits, svgUnitsToKm, pointInPolygon } from "@/lib/geo"
+    24→import { TUNISIA_BORDER, DJERBA, KERKENNAH, CITIES, GOV_CENTERS } from "./tunisia-geo"
+    25→
+    26→export const SERVICE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+    27→  boutique: Store, gonflage: Wind, toilettes: DoorOpen, atm: CreditCard, cafe: Coffee,
+    28→  lavage: Droplets, vidange: Wrench, atelier: Cog, recharge: Zap,
+    29→}
+    30→
+    31→export interface MapLayers {
+    32→  stations: boolean
+    33→  roads: boolean
+    34→  traffic: boolean
+    35→  zones: boolean
+    36→  projects: boolean
+    37→  fleet: boolean
+    38→}
+    39→
+    40→export interface TunisiaMapProps {
+    41→  stations: StationDTO[]
+    42→  ownBrandSlug?: string | null
+    43→  selectedCode?: string | null
+    44→  onSelect?: (s: StationDTO | null) => void
+    45→  onViewDetail?: (s: StationDTO) => void
+    46→  layers?: Partial<MapLayers>
+    47→  showLayerControl?: boolean
+    48→  tools?: boolean
+    49→  showLegend?: boolean
+    50→  className?: string
+    51→  focusCode?: string | null
+    52→  fitTo?: StationDTO[] | null
+    53→  autoFitOnLoad?: boolean
+    54→  govStationCounts?: Record<string, number> | null
+    55→}
+    56→
+    57→type Tool = "measure" | "radius" | "polygon" | null
+    58→
+    59→interface StaticLayers {
+    60→  roads: RoadDTO[]
+    61→  projects: ProjectDTO[]
+    62→  governorats: GovernoratRow[]
+    63→  services: ServiceDTO[]
+    64→}
+    65→
+    66→let staticPromise: Promise<StaticLayers> | null = null
+    67→function loadStatic(): Promise<StaticLayers> {
+    68→  if (!staticPromise) {
+    69→    staticPromise = (async () => {
+    70→      const safe = async (url: string, key: string) => {
+    71→        try {
+    72→          const r = await fetch(url)
+    73→          if (!r.ok) return []
+    74→          const j = await r.json()
+    75→          return j[key] ?? []
+    76→        } catch { return [] }
+    77→      }
+    78→      const [roads, projects, governorats, services] = await Promise.all([
+    79→        safe("/api/roads", "roads"),
+    80→        safe("/api/projects", "projects"),
+    81→        safe("/api/governorats", "governorats"),
+    82→        safe("/api/services", "services"),
+    83→      ])
+    84→      return { roads, projects, governorats, services }
+    85→    })()
+    86→  }
+    87→  return staticPromise
+    88→}
+    89→
+    90→const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+    91→
+    92→function borderToPath(pts: [number, number][]): string {
+    93→  return pts.map((p, i) => `${i === 0 ? "M" : "L"}${project(p[0], p[1]).x.toFixed(1)} ${project(p[0], p[1]).y.toFixed(1)}`).join(" ") + " Z"
+    94→}
+    95→
+    96→const DATE_FR = (d: string | Date) =>
+    97→  new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(d))
+    98→
+    99→export function TunisiaMap({
+   100→  stations, ownBrandSlug, selectedCode, onSelect, onViewDetail,
+   101→  layers, showLayerControl = true, tools = false, showLegend = true,
+   102→  className = "h-[560px]", focusCode, fitTo, autoFitOnLoad = false, govStationCounts,
+   103→}: TunisiaMapProps) {
+   104→  const wrapRef = useRef<HTMLDivElement>(null)
+   105→  const svgRef = useRef<SVGSVGElement>(null)
+   106→  const movedRef = useRef(0)
+   107→
+   108→  const [view, setView] = useState({ k: 1, x: 0, y: 0 })
+   109→  const [hoverCode, setHoverCode] = useState<string | null>(null)
+   110→  const [selCode, setSelCode] = useState<string | null>(selectedCode ?? null)
+   111→  const [layerState, setLayerState] = useState<MapLayers>({
+   112→    stations: true, roads: true, traffic: false, zones: false, projects: false, fleet: false,
+   113→    ...(layers ?? {}),
+   114→  })
+   115→  const [staticData, setStaticData] = useState<StaticLayers | null>(null)
+   116→  const [detail, setDetail] = useState<StationDetail | null>(null)
+   117→  const [detailCode, setDetailCode] = useState<string | null>(null)
+   118→  const [showHistory, setShowHistory] = useState(false)
+   119→
+   120→  // outils
+   121→  const [tool, setTool] = useState<Tool>(null)
+   122→  const [measurePts, setMeasurePts] = useState<[number, number][]>([])
+   123→  const [radiusCenter, setRadiusCenter] = useState<[number, number] | null>(null)
+   124→  const [radiusKm, setRadiusKm] = useState(10)
+   125→  const [polygonPts, setPolygonPts] = useState<[number, number][]>([])
+   126→  const [polygonClosed, setPolygonClosed] = useState(false)
+   127→
+   128→  useEffect(() => { loadStatic().then(setStaticData).catch(() => {}) }, [])
+   129→
+   130→  // ---------- Conversions écran ↔ SVG (letterbox-safe) ----------
+   131→  // métriques de conteneur suivies par ResizeObserver (accessibles au rendu)
+   132→  const [mstate, setMstate] = useState<{ scale: number; offX: number; offY: number; w: number; h: number }>({
+   133→    scale: 0.5, offX: 0, offY: 0, w: 520, h: 1000,
+   134→  })
+   135→
+   136→  useEffect(() => {
+   137→    const el = svgRef.current
+   138→    if (!el) return
+   139→    const update = () => {
+   140→      const r = el.getBoundingClientRect()
+   141→      const scale = Math.min(r.width / MAP_W, r.height / MAP_H) || 0.5
+   142→      setMstate({
+   143→        scale,
+   144→        offX: (r.width - MAP_W * scale) / 2,
+   145→        offY: (r.height - MAP_H * scale) / 2,
+   146→        w: r.width,
+   147→        h: r.height,
+   148→      })
+   149→    }
+   150→    const raf = requestAnimationFrame(update)
+   151→    const ro = new ResizeObserver(update)
+   152→    ro.observe(el)
+   153→    return () => { cancelAnimationFrame(raf); ro.disconnect() }
+   154→  }, [])
+   155→
+   156→  const metrics = useCallback(() => {
+   157→    const el = svgRef.current
+   158→    if (!el) return null
+   159→    const r = el.getBoundingClientRect()
+   160→    const scale = Math.min(r.width / MAP_W, r.height / MAP_H)
+   161→    const offX = (r.width - MAP_W * scale) / 2
+   162→    const offY = (r.height - MAP_H * scale) / 2
+   163→    return { scale, offX, offY, rect: r }
+   164→  }, [])
+   165→
+   166→  const svgPointFromEvent = useCallback((e: { clientX: number; clientY: number }): [number, number] | null => {
+   167→    const m = metrics()
+   168→    if (!m) return null
+   169→    const sx = (e.clientX - m.rect.left - m.offX) / m.scale
+   170→    const sy = (e.clientY - m.rect.top - m.offY) / m.scale
+   171→    return [sx, sy]
+   172→  }, [metrics])
+   173→
+   174→  const toScreen = useCallback((p: { x: number; y: number }) => ({
+   175→    left: mstate.offX + (p.x * view.k + view.x) * mstate.scale,
+   176→    top: mstate.offY + (p.y * view.k + view.y) * mstate.scale,
+   177→  }), [mstate, view])
+   178→
+   179→  // ---------- Zoom / pan ----------
+   180→  useEffect(() => {
+   181→    const el = svgRef.current
+   182→    if (!el) return
+   183→    const onWheel = (e: WheelEvent) => {
+   184→      e.preventDefault()
+   185→      const pt = svgPointFromEvent(e)
+   186→      if (!pt) return
+   187→      setView(v => {
+   188→        const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18
+   189→        const k = clamp(v.k * factor, 1, 14)
+   190→        const mx = (pt[0] - v.x) / v.k
+   191→        const my = (pt[1] - v.y) / v.k
+   192→        return { k, x: pt[0] - mx * k, y: pt[1] - my * k }
+   193→      })
+   194→    }
+   195→    el.addEventListener("wheel", onWheel, { passive: false })
+   196→    return () => el.removeEventListener("wheel", onWheel)
+   197→  }, [svgPointFromEvent])
+   198→
+   199→  const zoomBy = (factor: number) => setView(v => {
+   200→    const k = clamp(v.k * factor, 1, 14)
+   201→    const cx = MAP_W / 2, cy = MAP_H / 2
+   202→    const mx = (cx - v.x) / v.k, my = (cy - v.y) / v.k
+   203→    return { k, x: cx - mx * k, y: cy - my * k }
+   204→  })
+   205→
+   206→  const resetView = () => setView({ k: 1, x: 0, y: 0 })
+   207→
+   208→  const fitBounds = useCallback((sts: StationDTO[]) => {
+   209→    if (!sts.length) { resetView(); return }
+   210→    const pts = sts.map(s => project(s.lng, s.lat))
+   211→    const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
+   212→    const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
+   213→    const bw = Math.max(maxX - minX, 10), bh = Math.max(maxY - minY, 10)
+   214→    const k = clamp(Math.min((MAP_W - 80) / bw, (MAP_H - 80) / bh), 1, 6)
+   215→    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+   216→    setView({ k, x: MAP_W / 2 - cx * k, y: MAP_H / 2 - cy * k })
+   217→  }, [])
+   218→
+   219→  useEffect(() => {
+   220→    if (!(autoFitOnLoad && stations.length)) return
+   221→    const raf = requestAnimationFrame(() => fitBounds(stations))
+   222→    return () => cancelAnimationFrame(raf)
+   223→  }, [autoFitOnLoad, stations, fitBounds])
+   224→
+   225→  useEffect(() => {
+   226→    if (!fitTo) return
+   227→    const raf = requestAnimationFrame(() => fitBounds(fitTo))
+   228→    return () => cancelAnimationFrame(raf)
+   229→  }, [fitTo, fitBounds])
+   230→
+   231→  const selectStation = useCallback((s: StationDTO | null) => {
+   232→    setSelCode(s ? s.code : null)
+   233→    setShowHistory(false)
+   234→    onSelect?.(s)
+   235→  }, [onSelect])
+   236→
+   237→  // ---------- Focus « voir sur la carte » ----------
+   238→  useEffect(() => {
+   239→    if (!focusCode) return
+   240→    const raf = requestAnimationFrame(() => {
+   241→      const st = stations.find(s => s.code === focusCode)
+   242→      if (st) {
+   243→        selectStation(st)
+   244→        const p = project(st.lng, st.lat)
+   245→        setView({ k: 6, x: MAP_W / 2 - p.x * 6, y: MAP_H / 2 - p.y * 6 })
+   246→      }
+   247→    })
+   248→    return () => cancelAnimationFrame(raf)
+   249→  }, [focusCode, stations, selectStation])
+   250→
+   251→  // ---------- Détail fiche (dérivé : actif seulement si cohérent avec la sélection) ----------
+   252→  const activeDetail = selCode && detailCode === selCode ? detail : null
+   253→  useEffect(() => {
+   254→    if (!selCode) return
+   255→    const st = stations.find(s => s.code === selCode)
+   256→    if (!st) return
+   257→    if (detailCode === selCode) return
+   258→    const ctrl = new AbortController()
+   259→    fetch(`/api/stations/${st.id}`, { signal: ctrl.signal })
+   260→      .then(r => (r.ok ? r.json() : null))
+   261→      .then((d: StationDetail | null) => { if (d) { setDetail(d); setDetailCode(selCode) } })
+   262→      .catch(() => {})
+   263→    return () => ctrl.abort()
+   264→  }, [selCode, stations, detailCode])
+   265→
+   266→  // ---------- Drag pan ----------
+   267→  const dragRef = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null)
+   268→  const onPointerDown = (e: React.PointerEvent) => {
+   269→    if (e.button !== 0) return
+   270→    movedRef.current = 0
+   271→    dragRef.current = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }
+   272→    ;(e.target as Element).setPointerCapture?.(e.pointerId)
+   273→  }
+   274→  const onPointerMove = (e: React.PointerEvent) => {
+   275→    const d = dragRef.current
+   276→    if (!d) return
+   277→    const m = metrics()
+   278→    if (!m) return
+   279→    const dx = (e.clientX - d.sx) / m.scale
+   280→    const dy = (e.clientY - d.sy) / m.scale
+   281→    movedRef.current = Math.max(movedRef.current, Math.abs(dx) + Math.abs(dy))
+   282→    if (movedRef.current > 3) {
+   283→      setView(v => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
+   284→    }
+   285→  }
+   286→  const onPointerUp = () => { dragRef.current = null }
+   287→
+   288→  // ---------- Clic fond de carte ----------
+   289→  const onBackgroundClick = (e: React.MouseEvent) => {
+   290→    if (movedRef.current > 3) return
+   291→    const pt = svgPointFromEvent(e)
+   292→    if (!pt) return
+   293→    if (tool === "measure") { setMeasurePts(p => [...p, pt]); return }
+   294→    if (tool === "radius") { setRadiusCenter(pt); return }
+   295→    if (tool === "polygon" && !polygonClosed) { setPolygonPts(p => [...p, pt]); return }
+   296→    selectStation(null)
+   297→  }
+   298→
+   299→  const onDoubleClick = (e: React.MouseEvent) => {
+   300→    if (tool === "polygon" && polygonPts.length >= 3) { setPolygonClosed(true); return }
+   301→    const pt = svgPointFromEvent(e)
+   302→    if (!pt) return
+   303→    setView(v => {
+   304→      const k = clamp(v.k * 1.7, 1, 14)
+   305→      const mx = (pt[0] - v.x) / v.k, my = (pt[1] - v.y) / v.k
+   306→      return { k, x: pt[0] - mx * k, y: pt[1] - my * k }
+   307→    })
+   308→  }
+   309→
+   310→  // ---------- Sélections par outil ----------
+   311→  const insideRadius = useMemo(() => {
+   312→    if (!radiusCenter || tool !== "radius") return null
+   313→    const c = unproject(radiusCenter[0], radiusCenter[1])
+   314→    const set = new Set<string>()
+   315→    for (const s of stations) {
+   316→      if (haversineKm(c.lat, c.lng, s.lat, s.lng) <= radiusKm) set.add(s.code)
+   317→    }
+   318→    return set
+   319→  }, [radiusCenter, radiusKm, stations, tool])
+   320→
+   321→  const insidePolygon = useMemo(() => {
+   322→    if (tool !== "polygon" || polygonPts.length < 3 || !polygonClosed) return null
+   323→    const poly = polygonPts.map(p => { const u = unproject(p[0], p[1]); return [u.lng, u.lat] as [number, number] })
+   324→    const set = new Set<string>()
+   325→    for (const s of stations) if (pointInPolygon(s.lng, s.lat, poly)) set.add(s.code)
+   326→    return set
+   327→  }, [polygonPts, polygonClosed, stations, tool])
+   328→
+   329→  const exportSelection = (format: "csv" | "geojson") => {
+   330→    const set = tool === "polygon" ? insidePolygon : insideRadius
+   331→    if (!set) return
+   332→    const selected = stations.filter(s => set.has(s.code))
+   333→    if (!selected.length) { toast.info("Aucune station dans la sélection."); return }
+   334→    let blob: Blob
+   335→    let ext: string
+   336→    if (format === "csv") {
+   337→      const header = "code;nom;enseigne;gouvernorat;delegation;statut;trafic;lat;lng;services\n"
+   338→      const rows = selected.map(s =>
+   339→        [s.code, s.name, s.brandName, s.gouvernorat, s.delegation, s.status, s.traffic, s.lat, s.lng, s.services.join("|")].join(";")
+   340→      ).join("\n")
+   341→      blob = new Blob(["\ufeff" + header + rows], { type: "text/csv;charset=utf-8" })
+   342→      ext = "csv"
+   343→    } else {
+   344→      const fc = {
+   345→        type: "FeatureCollection",
+   346→        features: selected.map(s => ({
+   347→          type: "Feature",
+   348→          geometry: { type: "Point", coordinates: [s.lng, s.lat] },
+   349→          properties: { code: s.code, nom: s.name, enseigne: s.brandName, gouvernorat: s.gouvernorat, statut: s.status, trafic: s.traffic, services: s.services },
+   350→        })),
+   351→      }
+   352→      blob = new Blob([JSON.stringify(fc, null, 2)], { type: "application/geo+json" })
+   353→      ext = "geojson"
+   354→    }
+   355→    const a = document.createElement("a")
+   356→    a.href = URL.createObjectURL(blob)
+   357→    a.download = `carbuscope-selection.${ext}`
+   358→    a.click()
+   359→    URL.revokeObjectURL(a.href)
+   360→    toast.success(`${selected.length} stations exportées (${ext.toUpperCase()})`)
+   361→  }
+   362→
+   363→  const clearTools = () => {
+   364→    setTool(null); setMeasurePts([]); setRadiusCenter(null); setPolygonPts([]); setPolygonClosed(false)
+   365→  }
+   366→
+   367→  const measureTotal = useMemo(() => {
+   368→    if (measurePts.length < 2) return 0
+   369→    let t = 0
+   370→    for (let i = 1; i < measurePts.length; i++) {
+   371→      const a = unproject(measurePts[i - 1][0], measurePts[i - 1][1])
+   372→      const b = unproject(measurePts[i][0], measurePts[i][1])
+   373→      t += haversineKm(a.lat, a.lng, b.lat, b.lng)
+   374→    }
+   375→    return t
+   376→  }, [measurePts])
+   377→
+   378→  // ---------- Rendu stations (mémoïsé) ----------
+   379→  const stationNodes = useMemo(() => {
+   380→    return stations.map(s => {
+   381→      const p = project(s.lng, s.lat)
+   382→      const isOwn = ownBrandSlug && s.brandSlug === ownBrandSlug
+   383→      const isSel = s.code === selCode
+   384→      const isHover = s.code === hoverCode
+   385→      const inRad = insideRadius?.has(s.code)
+   386→      const inPoly = insidePolygon?.has(s.code)
+   387→      const highlighted = isOwn || isSel || isHover || inRad || inPoly
+   388→      const r = isOwn ? 3.6 : 2.7
+   389→      if (s.status === "CLOSED") {
+   390→        return (
+   391→          <g key={s.id} onClick={(e) => { e.stopPropagation(); if (movedRef.current <= 3) selectStation(s) }}
+   392→             onMouseEnter={() => setHoverCode(s.code)} onMouseLeave={() => setHoverCode(null)} className="cursor-pointer">
+   393→            <circle cx={p.x} cy={p.y} r={3.4} fill="#9ca3af" stroke="#6b7280" strokeWidth={1} />
+   394→            <line x1={p.x - 2} y1={p.y - 2} x2={p.x + 2} y2={p.y + 2} stroke="#f8fafc" strokeWidth={0.9} />
+   395→            <line x1={p.x - 2} y1={p.y + 2} x2={p.x + 2} y2={p.y - 2} stroke="#f8fafc" strokeWidth={0.9} />
+   396→          </g>
+   397→        )
+   398→      }
+   399→      return (
+   400→        <g key={s.id} onClick={(e) => { e.stopPropagation(); if (movedRef.current <= 3) selectStation(s) }}
+   401→           onMouseEnter={() => setHoverCode(s.code)} onMouseLeave={() => setHoverCode(null)} className="cursor-pointer">
+   402→          {isSel && <circle cx={p.x} cy={p.y} r={8} fill={s.brandColor} opacity={0.25} className="animate-ping-slow" />}
+   403→          {s.status === "PROJECT" ? (
+   404→            <circle cx={p.x} cy={p.y} r={r} fill="none" stroke={s.brandColor} strokeWidth={1.6} strokeDasharray="2 1.6" />
+   405→          ) : (
+   406→            <circle cx={p.x} cy={p.y} r={r} fill={s.brandColor} opacity={highlighted ? 1 : 0.72}
+   407→              stroke={s.status === "RENOVATION" ? "#d97706" : "white"} strokeWidth={s.status === "RENOVATION" ? 1.6 : isSel ? 1.8 : 0.7} />
+   408→          )}
+   409→        </g>
+   410→      )
+   411→    })
+   412→  }, [stations, ownBrandSlug, selCode, hoverCode, insideRadius, insidePolygon, selectStation])
+   413→
+   414→  // ---------- Popup position ----------
+   415→  const selectedStation = stations.find(s => s.code === selCode) ?? null
+   416→  const popupPos = useMemo(() => {
+   417→    if (!selectedStation) return null
+   418→    const p = project(selectedStation.lng, selectedStation.lat)
+   419→    return toScreen(p)
+   420→  }, [selectedStation, toScreen])
+   421→
+   422→  const roads = staticData?.roads ?? []
+   423→  const projects = staticData?.projects ?? []
+   424→  const governorats = staticData?.governorats ?? []
+   425→  const govCountFallback = useMemo(() => {
+   426→    const m: Record<string, number> = {}
+   427→    for (const s of stations) m[s.gouvernorat] = (m[s.gouvernorat] ?? 0) + 1
+   428→    return m
+   429→  }, [stations])
+   430→  const govCountMap = govStationCounts ?? govCountFallback
+   431→
+   432→  const transform = `translate(${view.x} ${view.y}) scale(${view.k})`
+   433→  const invK = 1 / view.k
+   434→
+   435→  return (
+   436→    <div ref={wrapRef} className={`relative overflow-hidden rounded-xl border bg-[radial-gradient(ellipse_at_center,var(--secondary)_0%,var(--background)_75%)] ${className}`}>
+   437→      <svg ref={svgRef} viewBox={`0 0 ${MAP_W} ${MAP_H}`} preserveAspectRatio="xMidYMid meet"
+   438→        className="h-full w-full touch-none select-none cursor-grab active:cursor-grabbing"
+   439→        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+   440→        onClick={onBackgroundClick} onDoubleClick={onDoubleClick}
+   441→        role="img" aria-label="Carte des stations-service de Tunisie">
+   442→
+   443→        <defs>
+   444→          <filter id="heat-blur" x="-60%" y="-60%" width="220%" height="220%">
+   445→            <feGaussianBlur stdDeviation="7" />
+   446→          </filter>
+   447→        </defs>
+   448→
+   449→        <g transform={transform}>
+   450→          {/* Pays */}
+   451→          <path d={borderToPath(TUNISIA_BORDER)} className="map-land" stroke="var(--border)" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+   452→          <path d={borderToPath(DJERBA)} className="map-land" stroke="var(--border)" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+   453→          <path d={borderToPath(KERKENNAH)} className="map-land" stroke="var(--border)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+   454→
+   455→          {/* Villes */}
+   456→          <g>
+   457→            {CITIES.map(([name, lng, lat, major]) => {
+   458→              const p = project(lng, lat)
+   459→              return (
+   460→                <g key={name} style={{ display: view.k > 1.35 || major ? undefined : "none" }}>
+   461→                  <circle cx={p.x} cy={p.y} r={major ? 2.4 : 1.6} className="map-city" />
+   462→                  <text x={p.x + 4} y={p.y + 3} fontSize={major ? 10 : 8.5} className="map-city-label" fontWeight={major ? 600 : 400}>{name}</text>
+   463→                </g>
+   464→              )
+   465→            })}
+   466→          </g>
+   467→
+   468→          {/* Couche : zones administratives */}
+   469→          {layerState.zones && (
+   470→            <g>
+   471→              {governorats.map(g => {
+   472→                const c = GOV_CENTERS[g.name]
+   473→                if (!c) return null
+   474→                const p = project(c[0], c[1])
+   475→                const n = govCountMap[g.name] ?? g.stations ?? 0
+   476→                const w = 8 + Math.max(g.name.length, String(n).length) * 4.6
+   477→                return (
+   478→                  <g key={g.name}>
+   479→                    <rect x={p.x - w / 2} y={p.y - 9} width={w} height={17} rx={8.5} className="map-zone-badge" />
+   480→                    <text x={p.x} y={p.y + 2.5} textAnchor="middle" fontSize={8.5} className="map-zone-label">{g.name} · {n}</text>
+   481→                  </g>
+   482→                )
+   483→              })}
+   484→            </g>
+   485→          )}
+   486→
+   487→          {/* Couche : densité parc automobile */}
+   488→          {layerState.fleet && (
+   489→            <g>
+   490→              {governorats.map(g => {
+   491→                const c = GOV_CENTERS[g.name]
+   492→                if (!c) return null
+   493→                const p = project(c[0], c[1])
+   494→                const r = Math.sqrt(g.vehicles) / 28
+   495→                return <circle key={g.name} cx={p.x} cy={p.y} r={r} fill="#d97706" opacity={0.14} stroke="#d97706" strokeWidth={0.6} strokeOpacity={0.4} />
+   496→              })}
+   497→            </g>
+   498→          )}
+   499→
+   500→          {/* Couche : axes routiers */}
+   501→          {layerState.roads && roads.map(rd => {
+   502→            const pts = rd.segments.map(s => project(s[0], s[1]))
+   503→            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")
+   504→            const mid = pts[Math.floor(pts.length / 2)]
+   505→            const color = rd.type === "AUTOROUTE" ? "#d97706" : rd.type === "RN" ? "#e07856" : "#9ca3af"
+   506→            const w = rd.type === "AUTOROUTE" ? 2.6 : rd.type === "RN" ? 1.7 : 1.2
+   507→            return (
+   508→              <g key={rd.id}>
+   509→                <path d={d} fill="none" stroke={color} strokeWidth={w} opacity={0.85} strokeLinecap="round" />
+   510→                <text x={mid.x + 3} y={mid.y - 3} fontSize={8.5} fontWeight={700} fill={color} opacity={0.95}>{rd.code}</text>
+   511→              </g>
+   512→            )
+   513→          })}
+   514→
+   515→          {/* Couche : heatmap trafic */}
+   516→          {layerState.traffic && roads.map(rd => {
+   517→            const circles: React.ReactNode[] = []
+   518→            rd.segments.slice(0, -1).forEach((s, i) => {
+   519→              const n = rd.segments[i + 1]
+   520→              for (let t = 0.25; t < 1; t += 0.25) {
+   521→                const lng = s[0] + (n[0] - s[0]) * t, lat = s[1] + (n[1] - s[1]) * t
+   522→                const p = project(lng, lat)
+   523→                circles.push(<circle key={`${rd.id}-${i}-${t}`} cx={p.x} cy={p.y} r={(rd.tmj / 1400) * 2.6} fill={rd.tmj > 15000 ? "#dc2626" : rd.tmj > 9000 ? "#ea580c" : "#d9a514"} opacity={0.3} filter="url(#heat-blur)" />)
+   524→              }
+   525→            })
+   526→            return <g key={`t-${rd.id}`}>{circles}</g>
+   527→          })}
+   528→
+   529→          {/* Couche : projets d'infrastructure */}
+   530→          {layerState.projects && projects.map(pr => {
+   531→            const p = project(pr.lng, pr.lat)
+   532→            const color = pr.status === "CONSTRUCTION" ? "#059669" : "#9333ea"
+   533→            return (
+   534→              <g key={pr.id} className="cursor-pointer">
+   535→                <rect x={p.x - 3.4} y={p.y - 3.4} width={6.8} height={6.8} transform={`rotate(45 ${p.x} ${p.y})`} fill={color} opacity={0.9} stroke="white" strokeWidth={0.7} />
+   536→                <title>{`${pr.name} — ${pr.status === "CONSTRUCTION" ? "En construction" : "Planifié"} — ${pr.budget} — horizon ${pr.targetDate}`}</title>
+   537→              </g>
+   538→            )
+   539→          })}
+   540→
+   541→          {/* Outil : rayon de chalandise */}
+   542→          {tool === "radius" && radiusCenter && (
+   543→            <g>
+   544→              <circle cx={radiusCenter[0]} cy={radiusCenter[1]} r={kmToSvgUnits(radiusKm)} fill="#d97706" opacity={0.07} stroke="#d97706" strokeWidth={1.4 / view.k} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+   545→              <circle cx={radiusCenter[0]} cy={radiusCenter[1]} r={3} fill="#d97706" />
+   546→              <text x={radiusCenter[0] + 5} y={radiusCenter[1] - 5} fontSize={11 * invK} fontWeight={600} fill="#d97706">
+   547→                {radiusKm} km
+   548→              </text>
+   549→            </g>
+   550→          )}
+   551→
+   552→          {/* Outil : mesure de distance */}
+   553→          {measurePts.length > 0 && (
+   554→            <g>
+   555→              <path d={measurePts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]} ${p[1]}`).join(" ")}
+   556→                fill="none" stroke="#dc2626" strokeWidth={1.4} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+   557→              {measurePts.map((p, i) => (
+   558→                <g key={i}>
+   559→                  <circle cx={p[0]} cy={p[1]} r={2.6} fill="#dc2626" stroke="white" strokeWidth={0.8} />
+   560→                  {i > 0 && (() => {
+   561→                    const a = unproject(measurePts[i - 1][0], measurePts[i - 1][1])
+   562→                    const b = unproject(p[0], p[1])
+   563→                    const km = haversineKm(a.lat, a.lng, b.lat, b.lng)
+   564→                    return (
+   565→                      <text x={(measurePts[i - 1][0] + p[0]) / 2 + 4 * invK} y={(measurePts[i - 1][1] + p[1]) / 2 - 4 * invK}
+   566→                        fontSize={9 * invK} fontWeight={600} fill="#dc2626" className="map-tool-label">
+   567→                        {km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`}
+   568→                      </text>
+   569→                    )
+   570→                  })()}
+   571→                </g>
+   572→              ))}
+   573→            </g>
+   574→          )}
+   575→
+   576→          {/* Outil : polygone */}
+   577→          {tool === "polygon" && polygonPts.length > 0 && (
+   578→            <g>
+   579→              <path d={polygonPts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]} ${p[1]}`).join(" ") + (polygonClosed ? " Z" : "")}
+   580→                fill={polygonClosed ? "#059669" : "none"} fillOpacity={0.08} stroke="#059669" strokeWidth={1.5}
+   581→                strokeDasharray={polygonClosed ? undefined : "5 4"} vectorEffect="non-scaling-stroke" />
+   582→              {polygonPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.6} fill="#059669" stroke="white" strokeWidth={0.8} />)}
+   583→            </g>
+   584→          )}
+   585→
+   586→          {/* Couche : stations */}
+   587→          {layerState.stations && <g>{stationNodes}</g>}
+   588→        </g>
+   589→      </svg>
+   590→
+   591→      {/* ---------- Overlays HTML ---------- */}
+   592→
+   593→      {/* Popup fiche station */}
+   594→      {selectedStation && popupPos && (
+   595→        <StationPopup
+   596→          station={selectedStation}
+   597→          detail={activeDetail}
+   598→          left={popupPos.left}
+   599→          top={popupPos.top}
+   600→          wrapW={mstate.w}
+   601→          onClose={() => selectStation(null)}
+   602→          onViewDetail={() => onViewDetail?.(selectedStation)}
+   603→          showHistory={showHistory}
+   604→          setShowHistory={setShowHistory}
+   605→        />
+   606→      )}
+   607→
+   608→      {/* Tooltip survol */}
+   609→      {hoverCode && hoverCode !== selCode && (() => {
+   610→        const st = stations.find(s => s.code === hoverCode)
+   611→        if (!st) return null
+   612→        const p = project(st.lng, st.lat)
+   613→        const sp = toScreen(p)
+   614→        return (
+   615→          <div className="pointer-events-none absolute z-20 -translate-y-full rounded-md border bg-popover px-2 py-1 text-[11px] font-medium text-popover-foreground shadow-lg"
+   616→            style={{ left: clamp(sp.left, 8, mstate.w - 180), top: Math.max(sp.top - 8, 18) }}>
+   617→            <span className="inline-flex items-center gap-1.5">
+   618→              <span className="inline-block h-2 w-2 rounded-full" style={{ background: st.brandColor }} />
+   619→              {st.name}
+   620→            </span>
+   621→            <span className="ml-2 text-muted-foreground">{st.traffic > 0 ? `${new Intl.NumberFormat("fr-FR").format(st.traffic)} véh/j` : st.status === "PROJECT" ? "Projet" : "—"}</span>
+   622→          </div>
+   623→        )
+   624→      })()}
+   625→
+   626→      {/* Contrôles zoom */}
+   627→      <div className="absolute right-2 top-2 z-10 flex flex-col gap-1">
+   628→        <div className="flex flex-col rounded-lg border bg-background/85 p-0.5 shadow-sm backdrop-blur">
+   629→          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1.35)} aria-label="Zoom avant"><Plus className="h-4 w-4" /></Button>
+   630→          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1 / 1.35)} aria-label="Zoom arrière"><Minus className="h-4 w-4" /></Button>
+   631→          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetView} aria-label="Réinitialiser la vue"><Maximize className="h-4 w-4" /></Button>
+   632→        </div>
+   633→        {showLayerControl && (
+   634→          <Popover>
+   635→            <PopoverTrigger asChild>
+   636→              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg shadow-sm" aria-label="Couches cartographiques"><Layers className="h-4 w-4" /></Button>
+   637→            </PopoverTrigger>
+   638→            <PopoverContent align="end" className="w-60 p-3">
+   639→              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Couches cartographiques</p>
+   640→              {([
+   641→                ["stations", "Stations-service"],
+   642→                ["roads", "Axes routiers (A1–A4, RN, GP)"],
+   643→                ["traffic", "Densité de trafic (heatmap)"],
+   644→                ["zones", "Zones administratives"],
+   645→                ["projects", "Projets d'infrastructure"],
+   646→                ["fleet", "Parc automobile par zone"],
+   647→              ] as [keyof MapLayers, string][]).map(([key, label]) => (
+   648→                <label key={key} className="flex cursor-pointer items-center justify-between rounded px-1 py-1.5 text-sm hover:bg-accent">
+   649→                  {label}
+   650→                  <Switch checked={layerState[key]} onCheckedChange={v => setLayerState(s => ({ ...s, [key]: v }))} />
+   651→                </label>
+   652→              ))}
+   653→            </PopoverContent>
+   654→          </Popover>
+   655→        )}
+   656→      </div>
+   657→
+   658→      {/* Barre d'outils d'analyse spatiale */}
+   659→      {tools && (
+   660→        <div className="absolute bottom-2 left-2 z-10 flex flex-col gap-1.5">
+   661→          <div className="flex gap-1 rounded-lg border bg-background/85 p-1 shadow-sm backdrop-blur">
+   662→            <Button variant={tool === "measure" ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Mesure de distance"
+   663→              onClick={() => { setTool(tool === "measure" ? null : "measure"); setMeasurePts([]) }} aria-label="Mesure de distance">
+   664→              <Ruler className="h-4 w-4" />
+   665→            </Button>
+   666→            <Button variant={tool === "radius" ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Rayon de chalandise"
+   667→              onClick={() => { setTool(tool === "radius" ? null : "radius"); setRadiusCenter(null) }} aria-label="Rayon de chalandise">
+   668→              <CircleIcon className="h-4 w-4" />
+   669→            </Button>
+   670→            <Button variant={tool === "polygon" ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Sélection par polygone"
+   671→              onClick={() => { setTool(tool === "polygon" ? null : "polygon"); setPolygonPts([]); setPolygonClosed(false) }} aria-label="Sélection par polygone">
+   672→              <Hexagon className="h-4 w-4" />
+   673→            </Button>
+   674→            <Button variant="ghost" size="icon" className="h-7 w-7" title="Effacer" onClick={clearTools} aria-label="Effacer les outils">
+   675→              <Trash2 className="h-4 w-4" />
+   676→            </Button>
+   677→          </div>
+   678→          {tool === "measure" && (
+   679→            <div className="rounded-lg border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
+   680→              <span className="font-medium">Cliquez pour ajouter des points</span>
+   681→              {measurePts.length >= 2 && <span className="ml-2 font-bold text-destructive">{measureTotal < 1 ? `${Math.round(measureTotal * 1000)} m` : `${measureTotal.toFixed(1)} km`}</span>}
+   682→            </div>
+   683→          )}
+   684→          {tool === "radius" && (
+   685→            <div className="flex items-center gap-2 rounded-lg border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
+   686→              <span className="font-medium whitespace-nowrap">Rayon {radiusKm} km</span>
+   687→              <Slider value={[radiusKm]} min={2} max={60} step={1} onValueChange={v => setRadiusKm(v[0])} className="w-28" />
+   688→              {insideRadius && <Badge variant="secondary">{insideRadius.size} st.</Badge>}
+   689→              {insideRadius && insideRadius.size > 0 && (
+   690→                <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => exportSelection("csv")}>
+   691→                  <FileDown className="mr-1 h-3 w-3" /> CSV
+   692→                </Button>
+   693→              )}
+   694→            </div>
+   695→          )}
+   696→          {tool === "polygon" && (
+   697→            <div className="flex items-center gap-2 rounded-lg border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
+   698→              {!polygonClosed ? (
+   699→                <>
+   700→                  <span className="font-medium">Cliquez les sommets, double-clic pour fermer</span>
+   701→                  {polygonPts.length >= 3 && (
+   702→                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => setPolygonClosed(true)}>Fermer</Button>
+   703→                  )}
+   704→                </>
+   705→              ) : (
+   706→                <>
+   707→                  <Badge variant="secondary">{insidePolygon?.size ?? 0} stations</Badge>
+   708→                  <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => exportSelection("csv")}><FileDown className="mr-1 h-3 w-3" />CSV</Button>
+   709→                  <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => exportSelection("geojson")}><FileDown className="mr-1 h-3 w-3" />GeoJSON</Button>
+   710→                </>
+   711→              )}
+   712→            </div>
+   713→          )}
+   714→        </div>
+   715→      )}
+   716→
+   717→      {/* Légende */}
+   718→      {showLegend && (
+   719→        <div className="absolute bottom-2 right-2 z-10 max-w-[180px] rounded-lg border bg-background/85 p-2 text-[10px] shadow-sm backdrop-blur">
+   720→          <p className="mb-1 font-semibold uppercase tracking-wide text-muted-foreground">Enseignes</p>
+   721→          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+   722→            {brandLegend(stations, ownBrandSlug).map(([name, color, count]) => (
+   723→              <span key={name} className="flex items-center gap-1 truncate">
+   724→                <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+   725→                <span className="truncate">{name}</span>
+   726→                <span className="ml-auto text-muted-foreground">{count}</span>
+   727→              </span>
+   728→            ))}
+   729→          </div>
+   730→          <div className="mt-1.5 space-y-0.5 border-t pt-1 text-muted-foreground">
+   731→            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full border border-amber-500 bg-transparent" /> Rénovation</span>
+   732→            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full border border-dashed" /> Projet</span>
+   733→            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-gray-400" /> Fermée</span>
+   734→          </div>
+   735→        </div>
+   736→      )}
+   737→    </div>
+   738→  )
+   739→}
+   740→
+   741→function brandLegend(stations: StationDTO[], ownSlug?: string | null): [string, string, number][] {
+   742→  const m = new Map<string, [string, number]>()
+   743→  for (const s of stations) {
+   744→    const cur = m.get(s.brandName)
+   745→    m.set(s.brandName, [s.brandColor, (cur?.[1] ?? 0) + 1])
+   746→  }
+   747→  return [...m.entries()]
+   748→    .sort((a, b) => b[1][1] - a[1][1])
+   749→    .slice(0, 8)
+   750→    .map(([name, [color, count]]) => [ownSlug && stations.find(s => s.brandName === name)?.brandSlug === ownSlug ? `${name} (moi)` : name, color, count])
+   751→}
+   752→
+   753→// ---------------- Popup fiche station (A.3.3) ----------------
+   754→
+   755→function StationPopup({
+   756→  station, detail, left, top, wrapW, onClose, onViewDetail, showHistory, setShowHistory,
+   757→}: {
+   758→  station: StationDTO
+   759→  detail: StationDetail | null
+   760→  left: number
+   761→  top: number
+   762→  wrapW: number
+   763→  onClose: () => void
+   764→  onViewDetail: () => void
+   765→  showHistory: boolean
+   766→  setShowHistory: (v: boolean) => void
+   767→}) {
+   768→  const W = 320
+   769→  const flip = left + W + 24 > wrapW
+   770→  const x = flip ? left - W - 16 : left + 16
+   771→  const y = clamp(top - 140, 8, 10000)
+   772→  const nearby = detail?.nearby?.slice(0, 3) ?? []
+   773→
+   774→  return (
+   775→    <div className="absolute z-30 max-h-[92%] w-80 overflow-hidden rounded-xl border bg-background shadow-2xl"
+   776→      style={{ left: x, top: y }} role="dialog" aria-label={`Fiche station ${station.name}`}>
+   777→      <div className="flex items-start justify-between gap-2 border-b bg-muted/40 px-3 py-2">
+   778→        <div className="min-w-0">
+   779→          <div className="flex items-center gap-1.5">
+   780→            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: station.brandColor }} />
+   781→            <p className="truncate text-sm font-semibold">{station.name}</p>
+   782→          </div>
+   783→          <p className="text-[11px] text-muted-foreground">{station.brandName} · {station.code}</p>
+   784→        </div>
+   785→        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onClose} aria-label="Fermer"><X className="h-3.5 w-3.5" /></Button>
+   786→      </div>
+   787→
+   788→      <ScrollArea className="max-h-[380px]">
+   789→        <div className="space-y-2.5 p-3">
+   790→          {station.photoUrl && (
+   791→            <img src={station.photoUrl} alt={`Photo ${station.name}`} className="h-28 w-full rounded-lg border object-cover" />
+   792→          )}
+   793→
+   794→          <div className="space-y-1 text-xs text-muted-foreground">
+   795→            <p className="flex items-start gap-1.5"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{station.address}</p>
+   796→            <p className="font-mono text-[10px]">GPS {station.lat.toFixed(4)}, {station.lng.toFixed(4)}</p>
+   797→            <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 shrink-0" />
+   798→              {station.open24 ? "Ouverte 24h/24" : station.open7j ? "7j/7" : "Horaires de jour"}
+   799→            </p>
+   800→          </div>
+   801→
+   802→          <div className="flex flex-wrap items-center gap-1.5">
+   803→            <Badge variant={station.status === "ACTIVE" ? "default" : station.status === "RENOVATION" ? "secondary" : "outline"}
+   804→              className={station.status === "RENOVATION" ? "border-amber-500 text-amber-600" : station.status === "PROJECT" ? "border-dashed" : ""}>
+   805→              {station.status === "ACTIVE" ? "Active" : station.status === "RENOVATION" ? "Rénovation" : station.status === "PROJECT" ? "Projet" : "Fermée"}
+   806→            </Badge>
+   807→            {station.traffic > 0 && (
+   808→              <Badge variant="outline" className="gap-1"><Gauge className="h-3 w-3" />{new Intl.NumberFormat("fr-FR").format(station.traffic)} véh/j</Badge>
+   809→            )}
+   810→            {station.rating > 0 && (
+   811→              <Badge variant="outline" className="gap-1"><Star className="h-3 w-3 fill-amber-500 text-amber-500" />{station.rating.toFixed(1)} ({station.reviewsCount})</Badge>
+   812→            )}
+   813→          </div>
+   814→
+   815→          <div>
+   816→            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Services</p>
+   817→            <div className="flex flex-wrap gap-1">
+   818→              {station.services.map(sl => {
+   819→                const Icon = SERVICE_ICONS[sl]
+   820→                return (
+   821→                  <span key={sl} title={SERVICE_LABELS[sl] ?? sl} className="inline-flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-[10px]">
+   822→                    {Icon && <Icon className="h-3 w-3" />}{SERVICE_LABELS[sl] ?? sl}
+   823→                  </span>
+   824→                )
+   825→              })}
+   826→            </div>
+   827→          </div>
+   828→
+   829→          <div className="rounded-lg border bg-muted/30 p-2 text-[11px]">
+   830→            <p className="flex items-center gap-1.5 font-medium"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+   831→              Dernière vérification : {DATE_FR(station.lastVerified)}
+   832→            </p>
+   833→            <p className="ml-5 text-muted-foreground">{station.verifiedBy} · {detail ? "fiche certifiée" : "source terrain"}</p>
+   834→          </div>
+   835→
+   836→          {detail && detail.nearby.length > 0 && (
+   837→            <div>
+   838→              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Concurrents proches</p>
+   839→              <div className="space-y-1">
+   840→                {nearby.map(n => (
+   841→                  <div key={n.id} className="flex items-center justify-between gap-2 text-xs">
+   842→                    <span className="flex min-w-0 items-center gap-1.5">
+   843→                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: n.brandColor }} />
+   844→                      <span className="truncate">{n.name}</span>
+   845→                    </span>
+   846→                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{n.distanceKm.toFixed(1)} km</span>
+   847→                  </div>
+   848→                ))}
+   849→              </div>
+   850→            </div>
+   851→          )}
+   852→
+   853→          {detail && detail.history.length > 0 && (
+   854→            <div className="rounded-lg border">
+   855→              <button className="flex w-full items-center justify-between px-2 py-1.5 text-xs font-medium" onClick={() => setShowHistory(!showHistory)}>
+   856→                <span className="flex items-center gap-1.5"><History className="h-3.5 w-3.5" />Historique ({detail.history.length})</span>
+   857→                {showHistory ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+   858→              </button>
+   859→              {showHistory && (
+   860→                <div className="max-h-28 space-y-1 overflow-y-auto border-t px-2 py-1.5 text-[10px]">
+   861→                  {detail.history.map(h => (
+   862→                    <p key={h.id} className="text-muted-foreground">
+   863→                      <span className="font-medium text-foreground">{h.field}</span> : {h.oldValue} → {h.newValue}
+   864→                      <span className="ml-1">({h.author}, {DATE_FR(h.createdAt)})</span>
+   865→                    </p>
+   866→                  ))}
+   867→                </div>
+   868→              )}
+   869→            </div>
+   870→          )}
+   871→        </div>
+   872→      </ScrollArea>
+   873→
+   874→      <div className="flex gap-2 border-t p-2">
+   875→        <Button size="sm" className="h-7 flex-1 text-xs" onClick={onViewDetail}>Fiche complète</Button>
+   876→        <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => toast.info("Itinéraire lancé (démo)", { description: "Intégration Google Maps / Waze sur l'app mobile B2C." })}>
+   877→          <Navigation className="mr-1 h-3 w-3" />Itinéraire
+   878→        </Button>
+   879→      </div>
+   880→    </div>
+   881→  )
+   882→}
+   883→

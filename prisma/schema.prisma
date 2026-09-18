@@ -1,8 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// CarbuScope — « Waze du Carburant » Tunisie
+// Schema de données : stations, enseignes, services, alertes, mouvements,
+// statistiques gouvernorats, axes routiers, projets d'infrastructure,
+// avis, contributions communautaires, rapports et calculs.
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +12,190 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Brand {
+  id             String    @id @default(cuid())
+  slug           String    @unique
+  name           String
+  color          String
+  isIndependents Boolean   @default(false)
+  stations       Station[]
+}
+
+model Station {
+  id           String            @id @default(cuid())
+  code         String            @unique
+  name         String
+  brandId      String?
+  brand        Brand?            @relation(fields: [brandId], references: [id])
+  gouvernorat  String
+  delegation   String
+  address      String
+  lat          Float
+  lng          Float
+  status       String            @default("ACTIVE") // ACTIVE | RENOVATION | PROJECT | CLOSED
+  traffic      Int               @default(0) // véhicules/jour captifs
+  open24       Boolean           @default(false)
+  open7j       Boolean           @default(false)
+  rating       Float             @default(0)
+  reviewsCount Int               @default(0)
+  photoUrl     String?
+  lastVerified DateTime          @default(now())
+  verifiedBy   String            @default("")
+  services     StationService[]
+  reviews      Review[]
+  history      StationHistory[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model Service {
+  id       String            @id @default(cuid())
+  slug     String            @unique
+  name     String
+  icon     String            @default("circle")
+  stations StationService[]
+}
+
+model StationService {
+  stationId String
+  serviceId String
+  station   Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([stationId, serviceId])
+}
+
+model StationHistory {
+  id        String   @id @default(cuid())
+  stationId String
+  station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  field     String
+  oldValue  String
+  newValue  String
+  author    String
+  source    String   @default("Enseigne") // Enseigne | Agent terrain | Utilisateur | Plateforme
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  stationId String
+  station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  author    String
+  rating    Int
+  comment   String
+  criteria  Json? // { propreté, accueil, rapidité, services }
+  createdAt DateTime @default(now())
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  type        String // OPENING | RENOVATION | REBRAND | INFRA | REGULATORY
+  severity    String // CRITICAL | MEDIUM | INFO
+  title       String
+  description String
+  brand       String
+  gouvernorat String
+  date        DateTime
+  impact      String // Fort | Moyen | Faible
+  stationCode String?
+  read        Boolean  @default(false)
+}
+
+model Movement {
+  id          String   @id @default(cuid())
+  date        DateTime
+  type        String // OPENING | RENOVATION | CLOSURE | REBRAND
+  brand       String
+  station     String
+  gouvernorat String
+  impact      String
+}
+
+model GovernoratStat {
+  id               String @id @default(cuid())
+  name             String @unique
+  population       Int
+  vehicles         Int
+  motorizationRate Float
+  avgFleetAge      Float
+  delegationCount  Int
+}
+
+model RoadAxis {
+  id              String @id @default(cuid())
+  code            String
+  name            String
+  type            String // AUTOROUTE | RN | GP
+  tmj             Int // trafic moyen journalier
+  heavyVehiclePct Float
+  segments        Json // [[lng, lat], ...]
+}
+
+model InfraProject {
+  id          String @id @default(cuid())
+  name        String
+  type        String // AUTOROUTE | ECHANGEUR | ZONE_INDUSTRIELLE | PORT | ROUTE
+  status      String // CONSTRUCTION | PLANIFIE
+  budget      String
+  targetDate  String
+  description String
+  lat         Float
+  lng         Float
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  name        String
+  type        String // CONCURRENCE | IMPLANTATION | PERFORMANCE | VEILLE
+  period      String
+  scope       String
+  format      String // PDF | Excel | PowerPoint
+  status      String   @default("GENERATED")
+  generatedBy String
+  sizeKb      Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model ReportSchedule {
+  id        String   @id @default(cuid())
+  name      String
+  type      String // WEEKLY | MONTHLY | REALTIME
+  target    String
+  channel   String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model SavedCalculation {
+  id        String   @id @default(cuid())
+  type      String
+  label     String
+  params    Json
+  result    Json
+  createdAt DateTime @default(now())
+}
+
+model Contribution {
+  id              String   @id @default(cuid())
+  stationCode     String?
+  type            String // CLOSED | SERVICE_UNAVAILABLE | PRICE_ABNORMAL | PUMP_BROKEN | QUEUE | CLEANLINESS
+  comment         String
+  photoUrl        String?
+  author          String
+  status          String   @default("PENDING") // PENDING | VALIDATED | REJECTED
+  validationCount Int      @default(0)
+  lat             Float?
+  lng             Float?
+  createdAt       DateTime @default(now())
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
-  name      String?
+  name      String
+  role      String   @default("VIEWER") // ADMIN | NETWORK | COMMERCIAL | EXPANSION | VIEWER
+  brandSlug String?
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }

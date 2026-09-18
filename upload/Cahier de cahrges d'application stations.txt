@@ -1,0 +1,682 @@
+Cahier de cahrges d'application " waze de carburant"
+
+Plateforme "Waze du Carburant" — Observatoire Web B2B + Application Mobile B2C + Portail Enseigne
+Version 2.0 — Document de référence fonctionnelle, technique et économique
+Périmètre : Tunisie, avec projection Maghreb à horizon 5 ans
+
+PARTIE 1 — CONTEXTE, VISION ET POSITIONNEMENT
+1.1 Contexte
+Le marché tunisien des stations-service compte 1 814 stations réparties sur l'ensemble du territoire. Les principaux opérateurs sont Agil (228), TotalEnergies (151), Staroil (120), Shell, Ola et une majorité d'indépendants. Le parc automobile a atteint 93 095 immatriculations en 2025 (+17,3 % vs 2024), contre 55 000 en 2015. Le réseau autoroutier s'étend sur 743 km avec un objectif de 1 320 km d'ici 2035.
+
+Malgré cette dynamique, aucun outil unifié ne permet :
+
+Aux automobilistes de trouver une station selon leurs besoins réels (services, horaires, disponibilité)
+
+Aux enseignes de piloter leur réseau avec une intelligence concurrentielle
+
+Aux stations de gagner en visibilité terrain
+
+Aux sponsors d'atteindre une audience captive qualifiée
+
+1.2 Vision
+Construire l'infrastructure de données de référence du secteur des stations-service en Tunisie, articulée autour de trois couches auto-alimentées :
+
+Couche	Acteur	Apport	Bénéfice
+1	Utilisateurs	Avis, signalements, photos	Utilité, reconnaissance
+2	Enseignes	Données officielles de leurs stations	Visibilité, image, contrôle
+3	Plateforme	Trafic, parc auto, démographie, projets	Légitimité, autorité, valeur ajoutée
+1.3 Positionnement
+"Le Waze du carburant" — mais un Waze qui ne se contente pas de guider : il certifie la donnée, analyse le marché et éclaire les décisions stratégiques.
+
+Trois produits, une seule base de données :
+
+Application Mobile (B2C) : pour les automobilistes
+
+Observatoire Web (B2B) : pour les directions d'enseignes
+
+Portail Enseigne (B2B2B) : pour l'auto-publication des données
+
+PARTIE 2 — PÉRIMÈTRE FONCTIONNEL
+MODULE A — OBSERVATOIRE WEB B2B
+A.1 Navigation et structure
+L'observatoire est organisé en 8 onglets principaux, accessibles selon le rôle de l'utilisateur.
+
+Onglet	Rôle principal	Accès
+Tableau de bord	Vue d'ensemble stratégique	Tous
+Carte interactive	Exploration spatiale multi-couches	Tous
+Mes stations	Gestion du parc propre	Direction Réseau
+Concurrence	Analyse concurrentielle	Direction Commerciale
+Calculateurs	Simulation et planification	Direction Expansion
+Veille	Alertes et mouvements	Tous
+Rapports	Génération et programmation	Tous
+Paramètres	Configuration du compte	Administrateur
+
+A.2 Onglet "Tableau de bord"
+Objectif : donner en 10 secondes une vision complète de la situation.
+
+Composants obligatoires :
+
+A.2.1 — 5 KPIs en en-tête
+
+Nombre de stations de l'enseigne
+
+Part de marché (% du total national)
+
+Stations à rénover ou sous tension
+
+Trafic captif moyen (véhicules/jour)
+
+Alertes actives (avec distinction critique/moyen/info)
+
+A.2.2 — Carte de l'empreinte territoriale
+
+Affichage des stations de l'enseigne + concurrents
+
+Filtrage par gouvernorat / délégation
+
+Zoom automatique sur le territoire couvert
+
+A.2.3 — Fil des dernières alertes
+
+5 alertes les plus récentes
+
+Tri par priorité (critique > moyen > info)
+
+Lien direct vers la fiche concernée
+
+A.2.4 — Graphiques
+
+Histogramme : répartition des stations par gouvernorat
+
+Courbe : évolution des services (lavage, café, borne) sur 5 ans
+
+Doughnut : part de marché par enseigne
+
+Barres empilées : mouvements concurrentiels sur 12 mois
+
+A.3 Onglet "Carte interactive"
+Objectif : explorer spatialement toutes les données du marché.
+
+A.3.1 — Couches cartographiques
+
+Couche	Contenu	Fréquence MAJ
+Stations	Toutes les stations, filtrables par enseigne, service, statut	Quotidienne
+Axes routiers	Autoroutes (A1, A2, A3), RN, GP avec TMJ	Annuelle
+Trafic	Heatmap de densité de trafic	Annuelle
+Zones administratives	Gouvernorats, délégations, municipalités	Statique
+Projets d'infrastructure	Autoroutes en construction, échangeurs, zones industrielles	Trimestrielle
+Parc automobile	Densité de véhicules par délégation	Semestrielle
+A.3.2 — Filtres rapides
+
+Enseigne (multi-sélection)
+
+Service (lavage, café, vidange, borne recharge, boutique, gonflage)
+
+Statut (ouverte, rénovation, projet, fermée)
+
+Horaires (24h/24, 7j/7, jour uniquement)
+
+A.3.3 — Fiche station (popup carte)
+
+Identifiant unique, nom, enseigne
+
+Adresse normalisée, coordonnées GPS
+
+Services disponibles (icônes)
+
+Horaires
+
+Photo (si disponible)
+
+Dernière vérification (date, auteur, source)
+
+Historique des modifications
+
+A.3.4 — Outils d'analyse spatiale
+
+Mesure de distance
+
+Rayon de chalandise (cercle ajustable)
+
+Sélection par polygone
+
+Export des points sélectionnés (CSV, GeoJSON)
+
+A.4 Onglet "Mes stations"
+Objectif : gérer le parc propre de l'enseigne.
+
+A.4.1 — Sous-onglets
+
+Toutes les stations
+
+Actives
+
+En rénovation
+
+En projet
+
+Sous tension (concurrence forte, baisse de trafic)
+
+A.4.2 — Tableau de données
+
+Colonne	Description
+ID	Identifiant unique
+Nom	Nom commercial
+Gouvernorat	Localisation administrative
+Services	Liste des services disponibles
+Trafic captif	Estimation véhicules/jour
+Statut	Active / Rénovation / Projet / Fermée
+Dernière vérification	Date + auteur
+A.4.3 — Actions
+
+Ajouter une station
+
+Modifier une fiche
+
+Exporter (CSV, Excel, PDF)
+
+Voir sur la carte
+
+A.5 Onglet "Concurrence"
+Objectif : analyser le positionnement concurrentiel.
+
+A.5.1 — KPIs
+
+Concurrents recensés (total marché)
+
+Concurrents dans ma zone (rayon paramétrable)
+
+Indice de saturation concurrentielle
+
+Zones sous-desservies détectées
+
+A.5.2 — Graphiques
+
+Part de marché par enseigne (doughnut)
+
+Densité de services concurrents (barres)
+
+Évolution des ouvertures concurrentes (courbe)
+
+A.5.3 — Tableau des concurrents proches
+
+Ma station
+
+Concurrent le plus proche
+
+Distance
+
+Services différenciants
+
+Statut (tension / à surveiller / OK)
+
+A.6 Onglet "Calculateurs"
+Objectif : simuler et planifier. C'est le cœur de la valeur ajoutée.
+
+A.6.1 — Calculateur de potentiel de trafic captif
+
+Paramètre	Source
+Localisation cible (lat/lng ou PK)	Saisie
+Axe routier le plus proche	Base SIG
+Trafic moyen journalier (TMJ)	Tunisie Autoroutes
+Taux de poids lourds	Données trafic
+Saisonnalité	JICA / OMMP
+Distance au péage	Base SIG
+Résultat : véhicules/jour captifs, décomposé VL/PL, courbe de saisonnalité.
+
+A.6.2 — Calculateur de couverture concurrentielle
+
+Paramètre	Source
+Rayon de chalandise	Saisie
+Stations concurrentes dans le rayon	Base interne
+Indice de saturation	Calcul
+Distance au concurrent le plus proche	Base interne
+Services différenciants	Base interne
+Résultat : indice de saturation, opportunité de différenciation.
+
+A.6.3 — Calculateur de parc automobile
+
+Paramètre	Source
+Gouvernorat / délégation	Saisie
+Nombre de véhicules immatriculés	INS
+Âge moyen du parc	INS
+Taux de motorisation	Calcul
+Évolution 2020-2026	Données historiques
+Résultat : demande potentielle en carburant, entretien, recharge.
+
+A.6.4 — Calculateur de rentabilité prévisionnelle
+
+Paramètre	Source
+Investissement estimé	Saisie
+Trafic captif	Calculateur A.6.1
+Panier moyen par type	Données marché
+Marge par litre / service	Données marché
+Charges d'exploitation	Saisie
+Taux de conversion	Paramétrable
+Résultat : seuil de rentabilité, RI, scénarios optimiste/médian/pessimiste, cash-flow 10 ans.
+
+A.6.5 — Calculateur multi-sites
+
+Comparaison de 2 à 10 sites candidats sur les mêmes critères, avec classement par score composite.
+
+A.6.6 — Calculateur de veille concurrentielle
+
+Paramètre	Source
+Enseigne cible	Saisie
+Période d'analyse	Saisie
+Mouvements enregistrés	Base veille
+Zones d'expansion	Analyse interne
+Investissements annoncés	Presse
+Résultat : cartographie des mouvements, axes stratégiques adverses, alertes.
+
+A.7 Onglet "Veille"
+Objectif : détecter et suivre les mouvements du marché.
+
+A.7.1 — Alertes actives
+
+Ouverture concurrente
+
+Rénovation
+
+Changement d'enseigne
+
+Projet d'infrastructure
+
+Évolution réglementaire
+
+A.7.2 — Graphique des mouvements (12 mois)
+
+Ouvertures
+
+Rénovations
+
+Fermetures
+
+A.7.3 — Historique des mouvements détectés
+
+Date
+
+Type
+
+Enseigne
+
+Localisation
+
+Impact estimé
+
+A.8 Onglet "Rapports"
+Objectif : générer et programmer des rapports.
+
+A.8.1 — Générateur
+
+Type de rapport (analyse concurrentielle, potentiel d'implantation, performance réseau, veille mensuelle)
+
+Période
+
+Périmètre géographique
+
+Format (PDF, Excel, PowerPoint)
+
+A.8.2 — Rapports récents
+
+Liste des rapports générés
+
+Téléchargement direct
+
+A.8.3 — Rapports programmés
+
+Veille hebdomadaire
+
+Synthèse mensuelle
+
+Alerte concurrentielle temps réel
+
+A.9 Onglet "Paramètres"
+Profil de l'enseigne
+
+Nombre de stations déclarées
+
+Gouvernorats d'implantation
+
+Contact référent
+
+Langue de l'interface (5 langues)
+
+Fréquence des alertes
+
+Canaux de notification
+
+Rayon de veille par défaut
+
+Gestion des utilisateurs (multi-comptes)
+
+API (clé, quotas, documentation)
+
+MODULE B — APPLICATION MOBILE B2C
+B.1 Vision
+"Waze du carburant" : l'application que tout automobiliste tunisien ouvre avant de prendre la route. Gratuite, simple, fiable.
+
+B.2 Écrans principaux
+B.2.1 — Écran d'accueil
+
+Carte centrée sur la position de l'utilisateur
+
+Stations les plus proches (tri par distance ou par pertinence)
+
+Barre de recherche (ville, station, enseigne)
+
+Bouton "Autour de moi"
+
+Bouton "Itinéraire"
+
+B.2.2 — Recherche
+
+Filtres : enseigne, service, horaires, note
+
+Tri : distance, note, prix des services
+
+Résultats en liste + carte
+
+B.2.3 — Fiche station
+
+Nom, enseigne, photo
+
+Adresse, distance, temps de trajet
+
+Services disponibles (icônes)
+
+Horaires
+
+Note moyenne et avis récents
+
+Bouton "Itinéraire"
+
+Bouton "Signaler un problème"
+
+Bouton "Laisser un avis"
+
+B.2.4 — Navigation
+
+Itinéraire intégré (Google Maps, Waze, ou natif)
+
+Instructions vocales (optionnel)
+
+Alternatives d'itinéraire
+
+B.2.5 — Signalement
+
+Station fermée
+
+Service indisponible
+
+Prix anormal
+
+Panne de pompe
+
+File d'attente longue
+
+Propreté
+
+Photo à l'appui
+
+B.2.6 — Avis
+
+Note (1-5 étoiles)
+
+Commentaire
+
+Photos
+
+Critères : propreté, accueil, rapidité, services
+
+B.2.7 — Profil utilisateur
+
+Historique des stations visitées
+
+Avis laissés
+
+Signalements
+
+Points de réputation
+
+Préférences (enseignes favorites, services préférés)
+
+B.2.8 — Fidélité
+
+Cartes de fidélité des enseignes (Agil, Total, etc.)
+
+Points cumulés
+
+Offres personnalisées
+
+B.2.9 — Promotions et sponsors
+
+Bannières sponsorisées
+
+Offres géolocalisées
+
+Contenus partenaires
+
+B.3 Fonctionnalités différenciantes
+B.3.1 — Alertes intelligentes
+
+"Une station Agil ouverte 24h/24 à 2 km"
+
+"Station de lavage disponible sur votre trajet"
+
+"Borne de recharge libre à 5 km"
+
+B.3.2 — Contribution communautaire
+
+Signalements validés par 3 utilisateurs
+
+Photos géolocalisées
+
+Système de réputation (badges, niveaux)
+
+B.3.3 — Mode hors ligne
+
+Carte téléchargée
+
+Fiches stations en cache
+
+Signalements synchronisés à la reconnexion
+
+B.3.4 — Multilingue
+
+Arabe (RTL), Français, Anglais, Italien, Espagnol
+
+Détection automatique de la langue du téléphone
+
+B.4 Modèle de monétisation
+Source	Description
+Sponsoring	Bannières, promotions géolocalisées, contenus sponsorisés
+Partenariats	Assurances, banques, télécoms, agroalimentaire
+Fidélité	Programme de points cross-enseignes
+Premium	Version sans publicité (optionnel)
+
+MODULE C — PORTAIL ENSEIGNE (Auto-publication)
+C.1 Vision
+Chaque enseigne dispose d'un espace sécurisé pour gérer ses propres données, sans attendre la plateforme.
+
+C.2 Fonctionnalités
+C.2.1 — Gestion des stations
+
+Ajouter une station
+
+Modifier une fiche
+
+Archiver une station (fermeture)
+
+Historique des modifications
+
+C.2.2 — Gestion des services
+
+Cocher/décocher les services disponibles
+
+Modifier les horaires
+
+Ajouter des photos officielles
+
+C.2.3 — Promotions
+
+Créer une promotion
+
+Définir la période
+
+Cibler une zone géographique
+
+C.2.4 — API de synchronisation
+
+Endpoint REST pour synchroniser automatiquement les données
+
+Authentification par clé API
+
+Documentation technique
+
+C.2.5 — Tableau de bord enseigne
+
+Nombre de stations publiées
+
+Taux de complétude des fiches
+
+Dernière synchronisation
+
+Alertes de modération
+
+C.3 Workflow de validation
+L'enseigne soumet une modification
+
+La plateforme vérifie la cohérence (pas de sabotage, pas d'erreur grossière)
+
+La modification est publiée
+
+Les utilisateurs peuvent contester
+
+La plateforme arbitre en cas de conflit
+
+MODULE D — BACK-OFFICE PLATEFORME
+D.1 Vision
+C'est le cœur opérationnel de la plateforme. C'est ici que se joue la qualité de la donnée.
+
+D.2 Fonctionnalités
+D.2.1 — Modération des contributions
+
+File d'attente des signalements utilisateurs
+
+Validation / rejet avec justification
+
+Détection de spam et d'abus
+
+Gestion des contestations
+
+D.2.2 — Gestion des données souveraines
+
+Injection des données de trafic
+
+Injection des données de parc auto
+
+Injection des données démographiques
+
+Injection des projets d'infrastructure
+
+D.2.3 — Suivi de la fraîcheur
+
+Tableau de bord des taux de fraîcheur par zone
+
+Alertes sur les fiches non vérifiées depuis X mois
+
+Planification des campagnes de vérification
+
+D.2.4 — Gestion des agents terrain
+
+Assignation des zones
+
+Suivi des vérifications
+
+Calcul des taux de validité par agent
+
+D.2.5 — Statistiques plateforme
+
+Nombre d'utilisateurs actifs
+
+Nombre de contributions
+
+Taux de couverture
+
+Taux de précision
+
+PARTIE 3 — MODÈLE DE DONNÉES ET GOUVERNANCE
+3.1 Les trois couches de données
+Couche 1 — Contributions utilisateurs
+Type	Poids	Validation
+Signalement isolé	Faible	À vérifier
+3 signalements concordants	Moyen	Alerte
+Confirmation par agent	Fort	Certitude
+Confirmation par enseigne	Fort	Certitude
+Règles :
+
+Un signalement isolé ne modifie jamais la base automatiquement
+
+Un utilisateur avec historique fiable a un poids plus fort
+
+Un utilisateur nouveau ou suspect a un poids faible
+
+Les signalements sont horodatés et géolocalisés
+
+Couche 2 — Données enseignes
+Type	Visibilité	Validation
+Localisation, services, horaires	Publique	Légère
+Photos officielles	Publique	Légère
+Promotions	Publique	Légère
+Fréquentation, incidents	Privée	Aucune (déclaratif)
+Règles :
+
+Une enseigne ne peut modifier que ses propres stations
+
+Les modifications sont tracées (auteur, date, IP)
+
+Les utilisateurs peuvent contester
+
+La plateforme arbitre
+
+Couche 3 — Données plateforme
+Type	Source	Fréquence
+Trafic routier	Tunisie Autoroutes, Ministère Équipement	Annuelle
+Parc automobile	INS, ATTT	Semestrielle
+Démographie	INS	Annuelle
+Projets d'infrastructure	Ministère Équipement	Trimestrielle
+Réglementation	Ministère Énergie	Trimestrielle
+Règles :
+
+Chaque donnée a une source, une date, une méthode
+
+La méthodologie est documentée et publique
+
+Les données sont versionnées
+
+3.2 Indicateurs de fraîcheur
+Indicateur	Définition	Cible
+Taux de fraîcheur	% fiches vérifiées < 12 mois	> 90 %
+Taux de précision	% fiches exactes (audit aléatoire)	> 95 %
+Délai de détection	Temps entre changement et détection	< 30 jours
+Délai de mise à jour	Temps entre détection et MAJ	< 7 jours
+Taux de couverture	% stations existantes présentes	> 95 %
+Taux de signalement	Signalements utilisateurs/mois	Croissant
+3.3 Cycle de vie d'une fiche
+Création : première saisie, source, date
+
+Validation initiale : terrain ou enseigne
+
+Mise en service : publication, compteur de fraîcheur
+
+Signal : événement détecté
+
+Re vérification : agent confirme ou infirme
+
+Mise à jour : modification tracée
+
+Archivage : fermeture documentée
+
+Règle d'or : on ne supprime jamais une fiche. On l'archive avec date et source.
+
