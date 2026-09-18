@@ -358,4 +358,19 @@ export const ar: Partial<Dict> = {
   "compare.available": "متوفرة",
   "compare.unavailable": "غير متوفرة",
   "compare.synthesis": "{name} يتفوق في {wins} من أصل {total} معايير — المسافة والتقييم والتقييمات وأوقات العمل والخدمات وحداثة البيانات.",
+  // ---------- Prix nationaux (T22) ----------
+  "prices.national": "الأسعار الوطنية",
+  "prices.essence": "بنزين",
+  "prices.gazole": "ديزل",
+  "prices.gpl": "غاز",
+  "prices.ariaBanner": "الأسعار الوطنية للوقود السارية — اضغط للتفاصيل",
+  "prices.nationalToast": "أسعار محددة بمرسوم وزاري",
+  "prices.nationalToastDesc": "مطابقة في جميع المحطات منذ {date}.",
+  "prices.stationTitle": "الأسعار عند المضخة",
+  "prices.stationNote": "أسعار وطنية محددة بمرسوم — مطابقة في جميع محطات تونس.",
+  "prices.perLitre": "دت/لتر",
+  "prices.perKg": "دت/كغ",
+  "prices.reportRef": "السعر المرجعي (المرسوم الساري)",
+  "prices.reportRefDesc": "قارن مع السعر المعروض عند المضخة قبل الإبلاغ — الأسعار وطنية.",
+
 }

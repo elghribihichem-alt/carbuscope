@@ -6,7 +6,7 @@
 import { useState } from "react"
 import { Camera, ChevronLeft, ChevronRight, Heart, Image as ImageIcon, Star, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { SERVICE_LABELS, type BrandDTO, type StationDTO, type StationDetail } from "@/lib/types"
+import { SERVICE_LABELS, type BrandDTO, type StationDTO, type StationDetail, type FuelPriceCurrent } from "@/lib/types"
 import { useI18n } from "@/lib/i18n"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 import { useFavoritesStore } from "./favorites-store"
@@ -26,6 +26,7 @@ export interface AppApi {
   brands: BrandDTO[]
   allStations: StationWithDist[]
   nearby: StationWithDist[]
+  prices: FuelPriceCurrent[] // prix nationaux en vigueur (T22)
   offline: boolean
   toggleOffline: () => void
   selected: StationWithDist | null

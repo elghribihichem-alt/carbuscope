@@ -4,7 +4,7 @@
 // Photo, identité, services, horaires, note + avis récents (lazy fetch),
 // actions Itinéraire / Signaler / Avis, favori (B.2.7), stations à proximité.
 
-import { BadgeCheck, Clock3, Flag, GitCompareArrows, Heart, MapPin, MessageSquareReply, Navigation, Share2, Star } from "lucide-react"
+import { BadgeCheck, Clock3, Cylinder, Flag, Flame, Fuel, GitCompareArrows, Heart, Landmark, MapPin, MessageSquareReply, Navigation, Share2, Star } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -155,6 +155,47 @@ export function StationScreen({ api }: { api: AppApi }) {
               {s.traffic > 0 ? t("station.trafficEst", { n: new Intl.NumberFormat(locale).format(s.traffic) }) : t("station.trafficNone")}
             </span>
           </div>
+
+          {/* Prix à la pompe (T22) — nationaux, fixés par décret */}
+          {api.prices.length > 0 && (
+            <section>
+              <SectionTitle icon={Landmark}>{t("prices.stationTitle")}</SectionTitle>
+              <div className="grid grid-cols-3 gap-1.5">
+                {api.prices.map(p => {
+                  const isEssence = p.fuelType === "ESSENCE"
+                  const isGazole = p.fuelType === "GAZOLE"
+                  const Icon = isEssence ? Fuel : isGazole ? Flame : Cylinder
+                  return (
+                    <div
+                      key={p.fuelType}
+                      className="flex flex-col items-center gap-1 rounded-xl border border-slate-100 bg-white p-2.5 shadow-sm transition-transform active:scale-95"
+                    >
+                      <span
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full",
+                          isEssence ? "bg-emerald-50 text-emerald-600" : isGazole ? "bg-amber-50 text-amber-600" : "bg-orange-50 text-orange-600",
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="text-[13px] font-extrabold tabular-nums leading-none text-slate-800">
+                        {(p.priceMillimes / 1000).toFixed(3).replace(".", ",")}
+                      </span>
+                      <span className="text-[9px] font-medium text-slate-400">
+                        {t(`prices.${p.fuelType.toLowerCase()}` as never)} · {p.fuelType === "GPL" ? t("prices.perKg") : t("prices.perLitre")}
+                      </span>
+                      {(p.deltaMillimes ?? 0) > 0 && (
+                        <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[8.5px] font-bold text-red-500">
+                          ▲ +{(p.deltaMillimes ?? 0)} m
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-slate-400">{t("prices.stationNote")}</p>
+            </section>
+          )}
 
           {/* Services (B.2.3) */}
           <section>

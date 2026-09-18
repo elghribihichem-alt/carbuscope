@@ -357,6 +357,21 @@ export const fr = {
   "compare.available": "Disponible",
   "compare.unavailable": "Non disponible",
   "compare.synthesis": "{name} domine {wins} critères sur {total} — distance, note, avis, horaires, services et fraîcheur de la donnée.",
+
+  // ---------- Prix nationaux (T22) ----------
+  "prices.national": "Prix nationaux",
+  "prices.essence": "ES",
+  "prices.gazole": "GA",
+  "prices.gpl": "GPL",
+  "prices.ariaBanner": "Prix nationaux du carburant en vigueur — toucher pour le détail",
+  "prices.nationalToast": "Prix fixés par décret ministériel",
+  "prices.nationalToastDesc": "Identiques dans toutes les stations depuis le {date}.",
+  "prices.stationTitle": "Prix à la pompe",
+  "prices.stationNote": "Prix nationaux fixés par décret — identiques dans toutes les stations de Tunisie.",
+  "prices.perLitre": "DT/L",
+  "prices.perKg": "DT/kg",
+  "prices.reportRef": "Prix de référence (décret en vigueur)",
+  "prices.reportRefDesc": "Comparez avec le prix affiché à la pompe avant de signaler — les prix sont nationaux.",
 } as const
 
 export type DictKey = keyof typeof fr

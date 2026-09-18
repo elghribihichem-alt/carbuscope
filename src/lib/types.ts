@@ -495,6 +495,43 @@ export type NotificationsResponse = {
   total: number
 }
 
+// ---- Observatoire des prix du carburant (T22, B2B + mobile B2C) ----
+
+export type FuelType = "ESSENCE" | "GAZOLE" | "GPL"
+
+export type FuelPriceDTO = {
+  id: string
+  fuelType: FuelType
+  priceMillimes: number // prix pompe (millimes/L, ou /kg pour le GPL)
+  marginMillimes: number // marge détaillant réglementée
+  effectiveAt: string
+  decreeNote: string | null
+}
+
+export type FuelPriceCurrent = {
+  fuelType: FuelType
+  priceMillimes: number
+  marginMillimes: number
+  effectiveAt: string
+  decreeNote: string | null
+  daysSince: number
+  // Variation vs décret précédent
+  prevPriceMillimes: number | null
+  deltaMillimes: number | null // +X millimes (négatif si baisse)
+  deltaPct: number | null
+}
+
+export type FuelPricesResponse = {
+  fetchedAt: string
+  current: FuelPriceCurrent[]
+  history: FuelPriceDTO[] // ordre chronologique, tous carburants
+  totals: {
+    decrees: number
+    lastChangeAt: string | null // décret le plus récent (tous carburants)
+    nextReviewLabel: string // « révision mensuelle — début du mois prochain »
+  }
+}
+
 // ---- Back-office : statistiques plateforme réelles (D.2.5 étendu) ----
 
 export type PlatformStats = {

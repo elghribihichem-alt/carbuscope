@@ -11,6 +11,7 @@ export type Tab =
   | "stations"
   | "competition"
   | "calculators"
+  | "prices"
   | "veille"
   | "reports"
   | "settings"
@@ -32,6 +33,7 @@ export const TAB_ACCESS: Record<Tab, Role[]> = {
   stations: ["ADMIN", "NETWORK"],
   competition: ["ADMIN", "COMMERCIAL"],
   calculators: ["ADMIN", "EXPANSION"],
+  prices: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
   veille: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
   reports: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
   settings: ["ADMIN"],

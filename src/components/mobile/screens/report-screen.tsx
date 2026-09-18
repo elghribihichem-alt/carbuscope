@@ -5,7 +5,7 @@
 // POST /api/contributions — validation communautaire par 3 concordances.
 
 import { useState } from "react"
-import { Banknote, DoorClosed, Fuel, Loader2, MapPin, Send, Sparkles, Users, Wrench } from "lucide-react"
+import { Banknote, Cylinder, DoorClosed, Flame, Fuel, Landmark, Loader2, MapPin, Send, Sparkles, Users, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -121,6 +121,38 @@ export function ReportScreen({ api }: { api: AppApi }) {
             className="min-h-[84px] rounded-xl border-slate-200 bg-white text-[13px] focus-visible:border-emerald-400 focus-visible:ring-emerald-500/30"
           />
         </section>
+
+        {/* Prix de référence quand le signalement concerne un prix anormal (T22) */}
+        {type === "PRICE_ABNORMAL" && api.prices.length > 0 && (
+          <section
+            className="mt-3 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-amber-50/40 p-3"
+            aria-live="polite"
+          >
+            <p className="flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-800">
+              <Banknote className="h-3.5 w-3.5" aria-hidden />
+              {t("prices.reportRef")}
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {api.prices.map(p => {
+                const isEssence = p.fuelType === "ESSENCE"
+                const isGazole = p.fuelType === "GAZOLE"
+                const Icon = isEssence ? Fuel : isGazole ? Flame : Cylinder
+                return (
+                  <div key={p.fuelType} className="flex flex-col items-center gap-0.5 rounded-lg border border-emerald-100 bg-white/90 px-1 py-2">
+                    <Icon className={isEssence ? "h-3.5 w-3.5 text-emerald-600" : isGazole ? "h-3.5 w-3.5 text-amber-600" : "h-3.5 w-3.5 text-orange-600"} aria-hidden />
+                    <span className="text-[12px] font-extrabold tabular-nums leading-none text-slate-800">
+                      {(p.priceMillimes / 1000).toFixed(3).replace(".", ",")}
+                    </span>
+                    <span className="text-[8.5px] font-medium text-slate-400">
+                      {t(`prices.${p.fuelType.toLowerCase()}` as never)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[10px] leading-snug text-emerald-800/70">{t("prices.reportRefDesc")}</p>
+          </section>
+        )}
 
         <section className="mt-3 space-y-2.5">
           <PhotoMock label={t("report.photo")} fileName="signalement_station.jpg" />

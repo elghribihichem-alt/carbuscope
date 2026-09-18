@@ -2,7 +2,7 @@
 
 // CarbuScope — « Le Waze du carburant » (cahier des charges v2.0)
 // Page orchestratrice : 4 produits partageant une même base de données.
-// Module A : Observatoire Web B2B (8 onglets) — Module B : Mobile B2C (aperçu)
+// Module A : Observatoire Web B2B (9 onglets) — Module B : Mobile B2C (aperçu)
 // Module C : Portail Enseigne — Module D : Back-office plateforme.
 
 import { useAppStore } from '@/store/app-store'
@@ -14,6 +14,7 @@ import { CarteInteractiveTab } from '@/components/map/carte-interactive-tab'
 import { StationsTab } from '@/components/stations/stations-tab'
 import { CompetitionTab } from '@/components/competition/competition-tab'
 import { CalculatorsTab } from '@/components/calculators/calculators-tab'
+import { PricesTab } from '@/components/prices/prices-tab'
 import { VeilleTab } from '@/components/veille/veille-tab'
 import { ReportsTab } from '@/components/reports/reports-tab'
 import { SettingsTab } from '@/components/settings/settings-tab'
@@ -37,6 +38,7 @@ export default function Home() {
             {tab === 'stations' && <StationsTab />}
             {tab === 'competition' && <CompetitionTab />}
             {tab === 'calculators' && <CalculatorsTab />}
+            {tab === 'prices' && <PricesTab />}
             {tab === 'veille' && <VeilleTab />}
             {tab === 'reports' && <ReportsTab />}
             {tab === 'settings' && <SettingsTab />}

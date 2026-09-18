@@ -358,4 +358,19 @@ export const en: Partial<Dict> = {
   "compare.available": "Available",
   "compare.unavailable": "Unavailable",
   "compare.synthesis": "{name} wins {wins} criteria out of {total} — distance, rating, reviews, hours, services and data freshness.",
+  // ---------- Prix nationaux (T22) ----------
+  "prices.national": "National prices",
+  "prices.essence": "PE",
+  "prices.gazole": "DIE",
+  "prices.gpl": "LPG",
+  "prices.ariaBanner": "Current national fuel prices — tap for details",
+  "prices.nationalToast": "Prices set by ministerial decree",
+  "prices.nationalToastDesc": "Identical at every station since {date}.",
+  "prices.stationTitle": "Pump prices",
+  "prices.stationNote": "National prices set by decree — identical at every station in Tunisia.",
+  "prices.perLitre": "TND/L",
+  "prices.perKg": "TND/kg",
+  "prices.reportRef": "Reference price (current decree)",
+  "prices.reportRefDesc": "Compare with the price shown at the pump before reporting — prices are national.",
+
 }

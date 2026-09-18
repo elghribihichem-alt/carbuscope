@@ -6,14 +6,21 @@
  *     déclenche POST /api/watchlist-alerts/run { mode: "SCHEDULED" } sur le
  *     serveur Next.js (localhost:3000) → la passe est tracée AlertRun avec le
  *     bon mode, les emails sont simulés et les notifications in-app partent ;
- *   - journalise chaque passe (succès/échec, alertes déclenchées, durée) ;
+ *   - journalise chaque passe (succès/échec, alertes déclenchées, durée) —
+ *     journal PERSISTANT (fichier journal.json à côté de index.ts, T22) qui
+ *     survit aux redémarrages du service ;
  *   - expose GET /status pour le badge « Planificateur » du back-office
  *     (via la passerelle : /status?XTransformPort=3035) ;
  *   - GET /run force une passe SCHEDULED à la demande (débogage/opération).
  *
  * Anti-doublon : une seule passe par jour calendaire tunisien, même si le tick
- * de 30 s retombe plusieurs fois dans la fenêtre 08:00.
+ * de 30 s retombe plusieurs fois dans la fenêtre 08:00 — le dernier jour traité
+ * est également persisté (reprise après redémarrage dans la même journée).
  */
+
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { join, dirname } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const PORT = 3035
 const APP_URL = "http://localhost:3000"
@@ -22,6 +29,9 @@ const SCHEDULE_HOUR = 8 // 08:00 Tunis
 const TZ = "Africa/Tunis"
 const TICK_MS = 30_000
 const JOURNAL_MAX = 20
+
+// Fichier d'état persistant (journal + dernier jour traité).
+const STATE_FILE = join(dirname(fileURLToPath(import.meta.url)), "state.json")
 
 type JournalEntry = {
   at: string // ISO
@@ -37,8 +47,37 @@ type JournalEntry = {
 }
 
 const startedAt = Date.now()
-const journal: JournalEntry[] = []
-let lastFireDayKey: string | null = null // « 2026-09-19 » en heure Tunis
+
+// ---------- État persistant (T22) ----------
+// Journal des passes + dernier jour calendaire traité — relus au démarrage,
+// réécrits (atomiquement) après chaque passe : un redémarrage du service ne
+// perd plus l'historique ni l'anti-doublon du jour.
+type PersistentState = { journal: JournalEntry[]; lastFireDayKey: string | null }
+
+function loadState(): PersistentState {
+  try {
+    if (!existsSync(STATE_FILE)) return { journal: [], lastFireDayKey: null }
+    const raw = JSON.parse(readFileSync(STATE_FILE, "utf-8")) as PersistentState
+    return {
+      journal: Array.isArray(raw.journal) ? raw.journal.slice(0, JOURNAL_MAX) : [],
+      lastFireDayKey: typeof raw.lastFireDayKey === "string" ? raw.lastFireDayKey : null,
+    }
+  } catch {
+    return { journal: [], lastFireDayKey: null }
+  }
+}
+
+function saveState() {
+  try {
+    writeFileSync(STATE_FILE, JSON.stringify({ journal, lastFireDayKey }, null, 2), "utf-8")
+  } catch (err) {
+    console.error("[veil-scheduler] Écriture state.json impossible —", err)
+  }
+}
+
+const initial = loadState()
+const journal: JournalEntry[] = initial.journal
+let lastFireDayKey: string | null = initial.lastFireDayKey // « 2026-09-19 » en heure Tunis
 let firing = false
 
 /** Clé du jour calendaire courant en heure de Tunis (UTC+1 fixe). */
@@ -104,6 +143,7 @@ async function runEngine(mode: "SCHEDULED" | "FORCED"): Promise<JournalEntry> {
   }
   journal.unshift(entry)
   if (journal.length > JOURNAL_MAX) journal.length = JOURNAL_MAX
+  saveState() // persistance immédiate (T22)
   return entry
 }
 

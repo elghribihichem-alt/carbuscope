@@ -14,6 +14,7 @@ import type { BrandDTO, StationDTO, StationDetail } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import type { AppApi, Screen, StationWithDist, UserStats } from "./shared"
 import { USER_POS } from "./shared"
+import type { FuelPricesResponse } from "@/lib/types"
 import { MapScreen } from "./screens/map-screen"
 import { SearchScreen } from "./screens/search-screen"
 import { StationScreen } from "./screens/station-screen"
@@ -104,6 +105,7 @@ export function MobileApp() {
   const [selected, setSelected] = useState<StationWithDist | null>(null)
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [allStations, setAllStations] = useState<StationDTO[]>([])
+  const [prices, setPrices] = useState<FuelPricesResponse["current"]>([])
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState<StationDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -118,11 +120,13 @@ export function MobileApp() {
     Promise.all([
       fetchJson<{ brands: BrandDTO[] }>("/api/brands"),
       fetchJson<{ stations: StationDTO[] }>("/api/stations?status=ACTIVE&limit=1500"),
+      fetchJson<FuelPricesResponse>("/api/prices"),
       splash,
-    ]).then(([b, s]) => {
+    ]).then(([b, s, p]) => {
       if (!alive) return
       if (b?.brands?.length) setBrands(b.brands)
       if (s?.stations?.length) setAllStations(s.stations)
+      if (p?.current?.length) setPrices(p.current)
       setLoading(false)
     })
     return () => {
@@ -226,6 +230,7 @@ export function MobileApp() {
     brands,
     allStations: allWithDist,
     nearby,
+    prices,
     offline,
     toggleOffline,
     selected,

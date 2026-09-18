@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { LayoutDashboard, Map, Fuel, Crosshair, Calculator, Radar, FileText, Settings, Lock } from "lucide-react"
+import { LayoutDashboard, Map, Fuel, Crosshair, Calculator, Banknote, Radar, FileText, Settings, Lock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAppStore, TAB_ACCESS, type Tab } from "@/store/app-store"
 
@@ -11,6 +11,7 @@ const TABS: { value: Tab; label: string; icon: React.ComponentType<{ className?:
   { value: "stations", label: "Mes stations", icon: Fuel },
   { value: "competition", label: "Concurrence", icon: Crosshair },
   { value: "calculators", label: "Calculateurs", icon: Calculator },
+  { value: "prices", label: "Prix & marges", icon: Banknote },
   { value: "veille", label: "Veille", icon: Radar },
   { value: "reports", label: "Rapports", icon: FileText },
   { value: "settings", label: "Paramètres", icon: Settings },

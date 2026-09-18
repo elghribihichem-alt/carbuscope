@@ -220,6 +220,23 @@ model Notification {
   createdAt    DateTime @default(now())
 }
 
+// Observatoire des prix du carburant (T22) : en Tunisie les prix pompe sont
+// fixés par décret ministériel, identiques sur tout le territoire — la série
+// historique trace chaque décret (prix pompe + marge détaillant réglementée).
+// Alimente l'onglet B2B « Prix & marges », la bannière mobile B2C et la
+// référence du signalement « Prix anormal » (B.2.5).
+model FuelPrice {
+  id            String   @id @default(cuid())
+  fuelType      String // ESSENCE | GAZOLE | GPL
+  priceMillimes Int // prix pompe, millimes/L (ou /kg pour GPL)
+  marginMillimes Int // marge détaillant réglementée, millimes/L
+  effectiveAt   DateTime // date d'application du décret
+  decreeNote    String? // référence / contexte (ex. « Revision trimestrielle »)
+  createdAt     DateTime @default(now())
+
+  @@index([fuelType, effectiveAt])
+}
+
 model SavedCalculation {
   id        String   @id @default(cuid())
   type      String

@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Bell, CloudOff, LocateFixed, Navigation, Search, SlidersHorizontal } from "lucide-react"
+import { Bell, CloudOff, Fuel, Flame, Cylinder, Landmark, LocateFixed, Navigation, Search, SlidersHorizontal } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -50,6 +50,14 @@ export function MapScreen({ api }: { api: AppApi }) {
   const safeIdx = alerts.length ? Math.min(alertIdx, alerts.length - 1) : 0
   const current = alerts[safeIdx]
   const AlertIcon = current?.icon
+
+  // Prix nationaux en vigueur (T22) — bandeau sous la recherche
+  const priceIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+    ESSENCE: Fuel, GAZOLE: Flame, GPL: Cylinder,
+  }
+  const priceByFuel = Object.fromEntries(api.prices.map(p => [p.fuelType, p]))
+  const latestPrice = api.prices[0]
+  const fmtP = (m: number) => (m / 1000).toFixed(3).replace(".", ",")
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -132,6 +140,44 @@ export function MapScreen({ api }: { api: AppApi }) {
           </Tooltip>
         </div>
       </div>
+
+      {/* Bandeau prix nationaux en vigueur (T22) — prix fixés par décret, identiques partout */}
+      {api.prices.length > 0 && (
+        <button
+          type="button"
+          onClick={() => latestPrice && toast.info(t("prices.nationalToast"), {
+            description: t("prices.nationalToastDesc", {
+              date: new Date(latestPrice.effectiveAt).toLocaleDateString(lang === "ar" ? "ar-TN" : lang, {
+                day: "2-digit", month: "long", year: "numeric",
+              }),
+            }),
+          })}
+          className="z-10 flex shrink-0 items-stretch gap-2 border-b border-slate-200/70 bg-gradient-to-r from-emerald-50/90 to-amber-50/50 px-3 py-1.5 text-start transition-colors hover:from-emerald-100/80 active:scale-[0.99]"
+          aria-label={t("prices.ariaBanner")}
+        >
+          <span className="flex items-center gap-1 self-center rounded-full bg-emerald-600/10 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-emerald-700">
+            <Landmark className="h-3 w-3" aria-hidden />
+            {t("prices.national")}
+          </span>
+          <span className="flex flex-1 items-center justify-around gap-1">
+            {(["ESSENCE", "GAZOLE", "GPL"] as const).map(f => {
+              const p = priceByFuel[f]
+              if (!p) return null
+              const Icon = priceIcons[f]
+              return (
+                <span key={f} className="flex items-center gap-1 whitespace-nowrap">
+                  <Icon className={f === "ESSENCE" ? "h-3.5 w-3.5 text-emerald-600" : f === "GAZOLE" ? "h-3.5 w-3.5 text-amber-600" : "h-3.5 w-3.5 text-orange-600"} aria-hidden />
+                  <span className="text-[11px] font-medium text-slate-500">{t(`prices.${f.toLowerCase()}` as never)}</span>
+                  <span className="text-[12.5px] font-extrabold tabular-nums text-slate-800">{fmtP(p.priceMillimes)}</span>
+                  {(p.deltaMillimes ?? 0) > 0 && (
+                    <span className="text-[9px] font-bold text-red-500">▲</span>
+                  )}
+                </span>
+              )
+            })}
+          </span>
+        </button>
+      )}
 
       {/* Contenu défilant : carte + alertes + liste */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
