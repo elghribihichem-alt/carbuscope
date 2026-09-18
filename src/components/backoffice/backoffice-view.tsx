@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
-  ServerCog, ShieldAlert, Database, TimerReset, UserCog, BarChart3, MapPin, Inbox,
+  ServerCog, ShieldAlert, Database, TimerReset, UserCog, BarChart3, MapPin, Inbox, Radar,
 } from "lucide-react"
 import type { ContributionDTO } from "@/lib/types"
 import { BoModeration } from "./bo-moderation"
@@ -15,6 +15,7 @@ import { BoSovereign } from "./bo-sovereign"
 import { BoFreshness } from "./bo-freshness"
 import { BoAgents } from "./bo-agents"
 import { BoStats } from "./bo-stats"
+import { BoAlerts } from "./bo-alerts"
 
 export function BackofficeView() {
   // File de modération partagée : badge d'onglet + onglet Modération
@@ -44,10 +45,10 @@ export function BackofficeView() {
   return (
     <div className="space-y-4 p-4 md:p-6">
       {/* Bandeau d'accueil du back-office */}
-      <Card className="border-slate-300 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/50">
+      <Card className="group overflow-hidden border-slate-300 bg-gradient-to-br from-slate-50 via-white to-emerald-50/50 dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/25">
         <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-100 dark:bg-slate-200 dark:text-slate-900">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-100 shadow-sm transition-transform group-hover:scale-105 dark:bg-slate-200 dark:text-slate-900">
               <ServerCog className="h-5.5 w-5.5" aria-hidden />
             </div>
             <div className="min-w-0">
@@ -79,9 +80,9 @@ export function BackofficeView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne (5 onglets) */}
+      {/* Navigation interne (6 onglets) */}
       <Tabs defaultValue="moderation" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <TabsTrigger value="moderation" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <ShieldAlert className="h-4 w-4" aria-hidden /> Modération
             <Badge
@@ -99,6 +100,9 @@ export function BackofficeView() {
           </TabsTrigger>
           <TabsTrigger value="agents" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <UserCog className="h-4 w-4" aria-hidden /> Agents terrain
+          </TabsTrigger>
+          <TabsTrigger value="alerts" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <Radar className="h-4 w-4" aria-hidden /> Veille & alertes
           </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <BarChart3 className="h-4 w-4" aria-hidden /> Stats plateforme
@@ -121,6 +125,9 @@ export function BackofficeView() {
         </TabsContent>
         <TabsContent value="agents" className="mt-0 space-y-4">
           <BoAgents />
+        </TabsContent>
+        <TabsContent value="alerts" className="mt-0 space-y-4">
+          <BoAlerts />
         </TabsContent>
         <TabsContent value="stats" className="mt-0 space-y-4">
           <BoStats />

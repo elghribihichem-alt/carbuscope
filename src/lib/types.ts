@@ -403,6 +403,77 @@ export type WatchlistAlertsResponse = {
   alerts: WatchlistAlertDTO[]
 }
 
+// ---- Veille : moteur périodique d'évaluation des alertes (C.2.6+, back-office) ----
+
+export type AlertRunExample = {
+  name: string
+  gouvernorat: string
+  previousRating: number
+  currentRating: number
+  delta: number
+}
+
+export type AlertRunDetail = {
+  alertId: string
+  brandSlug: string
+  brandName: string
+  brandColor: string
+  stationLabel: string
+  thresholdPoints: number
+  frequency: string // IMMEDIATE | DAILY | WEEKLY
+  email: string
+  status: "TRIGGERED" | "STABLE" | "SKIPPED"
+  exceedCount: number
+  examples: AlertRunExample[]
+  subject: string | null
+  preview: string | null
+}
+
+export type AlertRunDTO = {
+  id: string
+  ranAt: string
+  mode: string // MANUAL | SCHEDULED
+  brandsCovered: number
+  evaluatedAlerts: number
+  triggeredAlerts: number
+  skippedAlerts: number
+  stationsFlagged: number
+  emailsQueued: number
+  durationMs: number
+  details: AlertRunDetail[]
+}
+
+export type BrandAlertsRow = {
+  slug: string
+  name: string
+  color: string
+  alertsTotal: number
+  alertsActive: number
+  watchlistCount: number
+  worstDropName: string | null
+  worstDropDelta: number | null
+  immediate: number
+  daily: number
+  weekly: number
+  totalTriggers: number
+  lastTriggeredAt: string | null
+  activeEmails: number
+}
+
+export type WatchlistOverviewResponse = {
+  totals: {
+    alertsTotal: number
+    alertsActive: number
+    brandsCovered: number
+    totalTriggers: number
+    emailsQueuedLastRun: number
+    lastRunAt: string | null
+    nextScheduledAt: string | null
+  }
+  brands: BrandAlertsRow[]
+  runs: AlertRunDTO[]
+}
+
 // ---- Back-office : statistiques plateforme réelles (D.2.5 étendu) ----
 
 export type PlatformStats = {

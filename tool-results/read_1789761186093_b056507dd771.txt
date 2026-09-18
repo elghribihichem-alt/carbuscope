@@ -1,0 +1,590 @@
+     1→'use client'
+     2→
+     3→// D.2.5 — Statistiques plateforme (enrichies, données réelles) :
+     4→// KPIs réelles, qualité des fiches, part de marché, contributions,
+     5→// modération, activité communauté, alertes, comptes et rapports.
+     6→
+     7→import { useEffect, useMemo, useState } from "react"
+     8→import {
+     9→  Users, MessageSquarePlus, Target, CheckCircle2, Store, PieChart as PieIcon, BarChart3,
+    10→  ShieldAlert, TimerReset, FileBarChart2, Gauge, Quote, Clock,
+    11→} from "lucide-react"
+    12→import {
+    13→  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis,
+    14→  CartesianGrid, Line, ComposedChart, Area,
+    15→} from "recharts"
+    16→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+    17→import { Skeleton } from "@/components/ui/skeleton"
+    18→import { Badge } from "@/components/ui/badge"
+    19→import { Progress } from "@/components/ui/progress"
+    20→import { KpiCard } from "@/components/shell/kpi-card"
+    21→import { CHART_PALETTE, AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
+    22→import {
+    23→  CONTRIBUTION_TYPE_LABELS, ALERT_TYPE_LABELS,
+    24→  type ContributionDTO, type MarketShareRow, type PlatformStats,
+    25→} from "@/lib/types"
+    26→import { num, pct } from "@/components/settings/settings-shared"
+    27→
+    28→const TYPE_SHORT: Record<string, string> = {
+    29→  CLOSED: "Fermée",
+    30→  SERVICE_UNAVAILABLE: "Service",
+    31→  PRICE_ABNORMAL: "Prix",
+    32→  PUMP_BROKEN: "Pompe",
+    33→  QUEUE: "File",
+    34→  CLEANLINESS: "Propreté",
+    35→}
+    36→
+    37→const SEVERITY_META: Record<string, { label: string; color: string; cls: string }> = {
+    38→  CRITICAL: { label: "Critique", color: "#dc2626", cls: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" },
+    39→  MEDIUM: { label: "Moyenne", color: "#d97706", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400" },
+    40→  INFO: { label: "Info", color: "#64748b", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+    41→}
+    42→
+    43→const ROLE_LABELS: Record<string, string> = {
+    44→  ADMIN: "Administrateur",
+    45→  NETWORK: "Réseau",
+    46→  COMMERCIAL: "Commercial",
+    47→  EXPANSION: "Expansion",
+    48→  VIEWER: "Lecture seule",
+    49→}
+    50→
+    51→const STATUS_LABELS: Record<string, string> = {
+    52→  PENDING: "En attente",
+    53→  VALIDATED: "Validées",
+    54→  REJECTED: "Rejetées",
+    55→}
+    56→
+    57→export function BoStats() {
+    58→  const [contributions, setContributions] = useState<ContributionDTO[] | null>(null)
+    59→  const [marketShare, setMarketShare] = useState<MarketShareRow[] | null>(null)
+    60→  const [platform, setPlatform] = useState<PlatformStats | null>(null)
+    61→
+    62→  useEffect(() => {
+    63→    const ac = new AbortController()
+    64→    fetch("/api/contributions?limit=100", { signal: ac.signal })
+    65→      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    66→      .then((j: { contributions?: ContributionDTO[] }) => { setContributions(j.contributions ?? []) })
+    67→      .catch(() => {})
+    68→    return () => ac.abort()
+    69→  }, [])
+    70→
+    71→  useEffect(() => {
+    72→    const ac = new AbortController()
+    73→    fetch("/api/stats/market-share", { signal: ac.signal })
+    74→      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    75→      .then((j: { data?: MarketShareRow[] }) => { setMarketShare(j.data ?? []) })
+    76→      .catch(() => {})
+    77→    return () => ac.abort()
+    78→  }, [])
+    79→
+    80→  useEffect(() => {
+    81→    const ac = new AbortController()
+    82→    fetch("/api/stats/platform", { signal: ac.signal })
+    83→      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    84→      .then((j: PlatformStats) => { setPlatform(j) })
+    85→      .catch(() => {})
+    86→    return () => ac.abort()
+    87→  }, [])
+    88→
+    89→  // Contributions reçues + répartition par type
+    90→  const byType = useMemo(() => {
+    91→    const counts = new Map<string, number>()
+    92→    for (const c of contributions ?? []) counts.set(c.type, (counts.get(c.type) ?? 0) + 1)
+    93→    return [...counts.entries()].map(([type, value]) => ({
+    94→      type,
+    95→      label: TYPE_SHORT[type] ?? type,
+    96→      value,
+    97→    }))
+    98→  }, [contributions])
+    99→
+   100→  const stationsSuivies = useMemo(
+   101→    () => (marketShare ?? []).reduce((acc, r) => acc + (r.stations || 0), 0),
+   102→    [marketShare]
+   103→  )
+   104→
+   105→  const loading = contributions === null || marketShare === null
+   106→  const p = platform
+   107→
+   108→  // Données dérivées qualité (pourcentages)
+   109→  const qualityRows = useMemo(() => {
+   110→    if (!p) return []
+   111→    const t = p.stations.total || 1
+   112→    return [
+   113→      { label: "Adresses renseignées", value: (p.stations.withAddress / t) * 100, hint: `${num(p.stations.withAddress)} / ${num(p.stations.total)} fiches` },
+   114→      { label: "Stations notées", value: (p.stations.rated / t) * 100, hint: `${num(p.stations.rated)} fiches avec avis` },
+   115→      { label: "Notoriété ≥ 3 avis", value: (p.stations.wellRated / t) * 100, hint: `${num(p.stations.wellRated)} fiches significatives` },
+   116→      { label: "Vérifiées < 90 jours", value: (p.stations.fresh / t) * 100, hint: `${num(p.stations.fresh)} fiches fraîches` },
+   117→      { label: "Ouvertes 24h/24 ou 7j/7", value: (p.stations.h24 / t) * 100, hint: `${num(p.stations.h24)} stations` },
+   118→    ]
+   119→  }, [p])
+   120→
+   121→  // Entonnoir modération
+   122→  const moderationRows = useMemo(() => {
+   123→    if (!p) return []
+   124→    return (["PENDING", "VALIDATED", "REJECTED"] as const).map(status => ({
+   125→      status,
+   126→      label: STATUS_LABELS[status] ?? status,
+   127→      count: p.moderation.byStatus[status] ?? 0,
+   128→    }))
+   129→  }, [p])
+   130→
+   131→  // Alertes par type (libellés)
+   132→  const alertsByType = useMemo(() => {
+   133→    if (!p) return []
+   134→    return p.alerts.byType.map(a => ({ ...a, label: ALERT_TYPE_LABELS[a.type] ?? a.type }))
+   135→  }, [p])
+   136→
+   137→  return (
+   138→    <div className="space-y-4">
+   139→      {/* ---------- KPIs plateforme (données réelles) ---------- */}
+   140→      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+   141→        <KpiCard
+   142→          label="Stations suivies"
+   143→          value={stationsSuivies > 0 ? num(stationsSuivies) : p ? num(p.stations.total) : "…"}
+   144→          icon={Store}
+   145→          tone="default"
+   146→          sub={p ? `${p.stations.avgServicesPerStation.toString().replace(".", ",")} services/fiche en moyenne` : undefined}
+   147→        />
+   148→        <KpiCard
+   149→          label="Avis clients"
+   150→          value={p ? num(p.reviews.total) : "…"}
+   151→          icon={Quote}
+   152→          tone="info"
+   153→          sub={p ? `Note moyenne plateforme : ${p.reviews.avgRating.toString().replace(".", ",")}/5` : undefined}
+   154→        />
+   155→        <KpiCard
+   156→          label="Contributeurs actifs"
+   157→          value={p ? num(p.reviews.distinctAuthors) : "…"}
+   158→          icon={Users}
+   159→          tone="default"
+   160→          sub={p ? `${num(p.moderation.total)} signalements déposés` : undefined}
+   161→        />
+   162→        <KpiCard
+   163→          label="Contributions"
+   164→          value={contributions ? num(contributions.length) : p ? num(p.moderation.total) : "…"}
+   165→          icon={MessageSquarePlus}
+   166→          tone="warning"
+   167→          sub={p ? `${p.moderation.byStatus.PENDING ?? 0} en attente de modération` : undefined}
+   168→        />
+   169→        <KpiCard
+   170→          label="Indice qualité données"
+   171→          value={p ? `${p.stations.qualityScore}/100` : "…"}
+   172→          icon={Target}
+   173→          tone="success"
+   174→          sub="Complétude · notoriété · fraîcheur"
+   175→        />
+   176→      </div>
+   177→
+   178→      <div className="grid gap-4 lg:grid-cols-2">
+   179→        {/* Part de marché — doughnut */}
+   180→        <Card>
+   181→          <CardHeader>
+   182→            <CardTitle className="flex items-center gap-2 text-base">
+   183→              <PieIcon className="h-4 w-4 text-emerald-600" aria-hidden /> Part de marché par enseigne
+   184→            </CardTitle>
+   185→            <CardDescription>Répartition des stations actives (1 814 fiches, 6 enseignes + indépendants).</CardDescription>
+   186→          </CardHeader>
+   187→          <CardContent>
+   188→            {loading || !marketShare ? (
+   189→              <Skeleton className="h-72 w-full rounded-xl" />
+   190→            ) : (
+   191→              <div className="h-72">
+   192→                <ResponsiveContainer width="100%" height="100%">
+   193→                  <PieChart>
+   194→                    <Pie
+   195→                      data={marketShare}
+   196→                      dataKey="sharePct"
+   197→                      nameKey="brand"
+   198→                      innerRadius="52%"
+   199→                      outerRadius="78%"
+   200→                      paddingAngle={2}
+   201→                      stroke="var(--background)"
+   202→                      strokeWidth={2}
+   203→                    >
+   204→                      {marketShare.map(row => (
+   205→                        <Cell key={row.slug} fill={row.color || CHART_PALETTE[0]} />
+   206→                      ))}
+   207→                    </Pie>
+   208→                    <Tooltip
+   209→                      contentStyle={tooltipStyle()}
+   210→                      formatter={(value: number, name: string, entry: { payload?: MarketShareRow }) => [
+   211→                        `${pct(value)} · ${entry?.payload?.stations ?? 0} stations`,
+   212→                        name,
+   213→                      ]}
+   214→                    />
+   215→                    <Legend
+   216→                      formatter={(value: string) => <span className="text-xs text-muted-foreground">{value}</span>}
+   217→                      iconType="circle"
+   218→                      iconSize={8}
+   219→                    />
+   220→                  </PieChart>
+   221→                </ResponsiveContainer>
+   222→              </div>
+   223→            )}
+   224→          </CardContent>
+   225→        </Card>
+   226→
+   227→        {/* Contributions par type — bar chart */}
+   228→        <Card>
+   229→          <CardHeader>
+   230→            <CardTitle className="flex items-center gap-2 text-base">
+   231→              <BarChart3 className="h-4 w-4 text-amber-600" aria-hidden /> Contributions par type
+   232→            </CardTitle>
+   233→            <CardDescription>
+   234→              {contributions ? `${contributions.length} signalements` : "Chargement…"} — tous statuts confondus.
+   235→            </CardDescription>
+   236→          </CardHeader>
+   237→          <CardContent>
+   238→            {loading ? (
+   239→              <Skeleton className="h-72 w-full rounded-xl" />
+   240→            ) : byType.length === 0 ? (
+   241→              <p className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+   242→                Aucune contribution enregistrée.
+   243→              </p>
+   244→            ) : (
+   245→              <div className="h-72">
+   246→                <ResponsiveContainer width="100%" height="100%">
+   247→                  <BarChart data={byType} margin={{ top: 8, right: 8, bottom: 4, left: -18 }}>
+   248→                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+   249→                    <XAxis
+   250→                      dataKey="label"
+   251→                      tick={AXIS_STYLE.tick}
+   252→                      stroke={AXIS_STYLE.stroke}
+   253→                      interval={0}
+   254→                      angle={-22}
+   255→                      textAnchor="end"
+   256→                      height={44}
+   257→                    />
+   258→                    <YAxis tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} allowDecimals={false} />
+   259→                    <Tooltip
+   260→                      contentStyle={tooltipStyle()}
+   261→                      cursor={{ fill: "var(--muted)", opacity: 0.6 }}
+   262→                      formatter={(value: number, _name: string, entry: { payload?: { type: string } }) => [
+   263→                        `${value} signalement(s)`,
+   264→                        CONTRIBUTION_TYPE_LABELS[entry?.payload?.type ?? ""] ?? "Type",
+   265→                      ]}
+   266→                    />
+   267→                    <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
+   268→                      {byType.map((_, i) => (
+   269→                        <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+   270→                      ))}
+   271→                    </Bar>
+   272→                  </BarChart>
+   273→                </ResponsiveContainer>
+   274→              </div>
+   275→            )}
+   276→          </CardContent>
+   277→        </Card>
+   278→      </div>
+   279→
+   280→      {/* ---------- Qualité des données ---------- */}
+   281→      <Card>
+   282→        <CardHeader>
+   283→          <CardTitle className="flex items-center gap-2 text-base">
+   284→            <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden /> Qualité des données du référentiel
+   285→          </CardTitle>
+   286→          <CardDescription>
+   287→            {p
+   288→              ? `Indice global ${p.stations.qualityScore}/100 — ${num(p.stations.servicesTotal)} services référencés sur ${num(p.stations.total)} fiches.`
+   289→              : "Chargement des indicateurs qualité…"}
+   290→          </CardDescription>
+   291→        </CardHeader>
+   292→        <CardContent>
+   293→          {!p ? (
+   294→            <Skeleton className="h-40 w-full rounded-xl" />
+   295→          ) : (
+   296→            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+   297→              {/* Jauge qualité */}
+   298→              <div className="flex flex-col items-center justify-center gap-2">
+   299→                <div className="relative h-36 w-36">
+   300→                  <ResponsiveContainer width="100%" height="100%">
+   301→                    <PieChart>
+   302→                      <Pie
+   303→                        data={[{ name: "Qualité", value: p.stations.qualityScore }, { name: "Reste", value: 100 - p.stations.qualityScore }]}
+   304→                        dataKey="value"
+   305→                        innerRadius="66%"
+   306→                        outerRadius="88%"
+   307→                        startAngle={90}
+   308→                        endAngle={-270}
+   309→                        stroke="none"
+   310→                      >
+   311→                        <Cell fill="#059669" />
+   312→                        <Cell fill="var(--muted)" fillOpacity={0.35} />
+   313→                      </Pie>
+   314→                    </PieChart>
+   315→                  </ResponsiveContainer>
+   316→                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+   317→                    <span className="text-3xl font-black tabular-nums text-emerald-600 dark:text-emerald-400">
+   318→                      {p.stations.qualityScore}
+   319→                    </span>
+   320→                    <span className="text-[11px] text-muted-foreground">/ 100</span>
+   321→                  </div>
+   322→                </div>
+   323→                <p className="text-center text-xs text-muted-foreground">
+   324→                  Complétude 30 pts · notoriété 25 pts<br />fraîcheur 25 pts · services 20 pts
+   325→                </p>
+   326→              </div>
+   327→              {/* Barres de progression */}
+   328→              <div className="space-y-3.5">
+   329→                {qualityRows.map(row => (
+   330→                  <div key={row.label}>
+   331→                    <div className="mb-1 flex items-center justify-between text-xs">
+   332→                      <span className="font-medium">{row.label}</span>
+   333→                      <span className="tabular-nums text-muted-foreground">
+   334→                        <span className="font-bold text-foreground">{Math.round(row.value * 10) / 10} %</span>
+   335→                        <span className="ms-1.5 hidden sm:inline">· {row.hint}</span>
+   336→                      </span>
+   337→                    </div>
+   338→                    <Progress value={row.value} className="h-2" aria-label={`${row.label} : ${Math.round(row.value)} %`} />
+   339→                  </div>
+   340→                ))}
+   341→              </div>
+   342→            </div>
+   343→          )}
+   344→        </CardContent>
+   345→      </Card>
+   346→
+   347→      {/* ---------- Modération + activité communauté ---------- */}
+   348→      <div className="grid gap-4 lg:grid-cols-2">
+   349→        <Card>
+   350→          <CardHeader>
+   351→            <CardTitle className="flex items-center gap-2 text-base">
+   352→              <ShieldAlert className="h-4 w-4 text-amber-600" aria-hidden /> Entonnoir de modération
+   353→            </CardTitle>
+   354→            <CardDescription>
+   355→              {p
+   356→                ? `${num(p.moderation.total)} contributions traitées ou en cours — taux de résolution ${p.moderation.resolutionRate.toString().replace(".", ",")} %.`
+   357→                : "Chargement…"}
+   358→            </CardDescription>
+   359→          </CardHeader>
+   360→          <CardContent className="space-y-4">
+   361→            {!p ? (
+   362→              <Skeleton className="h-48 w-full rounded-xl" />
+   363→            ) : (
+   364→              <>
+   365→                <div className="space-y-2.5">
+   366→                  {moderationRows.map(row => {
+   367→                    const total = Math.max(1, p.moderation.total)
+   368→                    const share = (row.count / total) * 100
+   369→                    const color = row.status === "PENDING" ? "#d97706" : row.status === "VALIDATED" ? "#059669" : "#dc2626"
+   370→                    return (
+   371→                      <div key={row.status}>
+   372→                        <div className="mb-1 flex items-center justify-between text-xs">
+   373→                          <span className="font-medium">{row.label}</span>
+   374→                          <span className="tabular-nums text-muted-foreground">
+   375→                            <span className="font-bold text-foreground">{row.count}</span> ({Math.round(share)} %)
+   376→                          </span>
+   377→                        </div>
+   378→                        <div
+   379→                          className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
+   380→                          role="progressbar"
+   381→                          aria-label={`${row.label} : ${row.count}`}
+   382→                          aria-valuenow={Math.round(share)}
+   383→                          aria-valuemin={0}
+   384→                          aria-valuemax={100}>
+   385→                          <div className="h-full rounded-full transition-all" style={{ width: `${share}%`, background: color }} />
+   386→                        </div>
+   387→                      </div>
+   388→                    )
+   389→                  })}
+   390→                </div>
+   391→                <div className="border-t pt-3">
+   392→                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   393→                    <span>Top contributeurs (signalements)</span>
+   394→                    {p.moderation.avgDelayHours != null && (
+   395→                      <span
+   396→                        className="ms-auto flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+   397→                        title="Délai moyen entre le dépôt d’une contribution et sa résolution (validation ou rejet)"
+   398→                      >
+   399→                        <Clock className="h-3 w-3" aria-hidden />
+   400→                        Délai moyen : {p.moderation.avgDelayHours >= 48
+   401→                          ? `${Math.round(p.moderation.avgDelayHours / 24)} j`
+   402→                          : `${p.moderation.avgDelayHours.toString().replace(".", ",")} h`}
+   403→                        <span className="font-normal text-emerald-700/70 dark:text-emerald-400/70">({p.moderation.resolvedCount} traitées)</span>
+   404→                      </span>
+   405→                    )}
+   406→                  </div>
+   407→                  <div className="space-y-1.5">
+   408→                    {p.moderation.topContributors.map((c, i) => (
+   409→                      <div key={c.author} className="flex items-center gap-2.5 rounded-lg border bg-muted/20 p-2">
+   410→                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+   411→                          {i + 1}
+   412→                        </span>
+   413→                        <span className="flex-1 truncate text-sm font-medium">{c.author}</span>
+   414→                        <Badge variant="secondary" className="tabular-nums">{c.count}</Badge>
+   415→                      </div>
+   416→                    ))}
+   417→                  </div>
+   418→                </div>
+   419→              </>
+   420→            )}
+   421→          </CardContent>
+   422→        </Card>
+   423→
+   424→        <Card>
+   425→          <CardHeader>
+   426→            <CardTitle className="flex items-center gap-2 text-base">
+   427→              <Users className="h-4 w-4 text-emerald-600" aria-hidden /> Activité de la communauté
+   428→            </CardTitle>
+   429→            <CardDescription>
+   430→              {p
+   431→                ? `${num(p.reviews.total)} avis publiés par ${num(p.reviews.distinctAuthors)} contributeurs — note moyenne ${p.reviews.avgRating.toString().replace(".", ",")}/5.`
+   432→                : "Chargement…"}
+   433→            </CardDescription>
+   434→          </CardHeader>
+   435→          <CardContent>
+   436→            {!p ? (
+   437→              <Skeleton className="h-64 w-full rounded-xl" />
+   438→            ) : (
+   439→              <>
+   440→                <div className="h-52">
+   441→                  <ResponsiveContainer width="100%" height="100%">
+   442→                    <ComposedChart data={p.reviews.trend} margin={{ top: 8, right: 8, bottom: 4, left: -18 }}>
+   443→                      <defs>
+   444→                        <linearGradient id="boReviewsFill" x1="0" y1="0" x2="0" y2="1">
+   445→                          <stop offset="0%" stopColor="#059669" stopOpacity={0.35} />
+   446→                          <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
+   447→                        </linearGradient>
+   448→                      </defs>
+   449→                      <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+   450→                      <XAxis dataKey="month" tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} />
+   451→                      <YAxis yAxisId="left" tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} allowDecimals={false} />
+   452→                      <YAxis yAxisId="right" orientation="right" tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} allowDecimals={false} />
+   453→                      <Tooltip
+   454→                        contentStyle={tooltipStyle()}
+   455→                        cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+   456→                        formatter={(value: number, name: string) => [num(value), name === "reviews" ? "Avis" : "Auteurs actifs"]}
+   457→                      />
+   458→                      <Area yAxisId="left" type="monotone" dataKey="reviews" name="reviews" stroke="#059669" strokeWidth={2} fill="url(#boReviewsFill)" />
+   459→                      <Line yAxisId="right" type="monotone" dataKey="authors" name="authors" stroke="#d97706" strokeWidth={2} dot={{ r: 3, fill: "#d97706" }} />
+   460→                    </ComposedChart>
+   461→                  </ResponsiveContainer>
+   462→                </div>
+   463→                <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+   464→                  <span className="inline-flex items-center gap-1.5">
+   465→                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-600" aria-hidden /> Avis publiés (mois)
+   466→                  </span>
+   467→                  <span className="inline-flex items-center gap-1.5">
+   468→                    <span className="h-2.5 w-2.5 rounded-full bg-amber-600" aria-hidden /> Auteurs actifs
+   469→                  </span>
+   470→                </div>
+   471→              </>
+   472→            )}
+   473→          </CardContent>
+   474→        </Card>
+   475→      </div>
+   476→
+   477→      {/* ---------- Alertes + comptes & rapports ---------- */}
+   478→      <div className="grid gap-4 lg:grid-cols-2">
+   479→        <Card>
+   480→          <CardHeader>
+   481→            <CardTitle className="flex items-center gap-2 text-base">
+   482→              <Gauge className="h-4 w-4 text-red-600" aria-hidden /> Alertes stratégiques actives
+   483→            </CardTitle>
+   484→            <CardDescription>
+   485→              {p ? `${num(p.alerts.total)} alertes suivies — répartition par gravité et par type.` : "Chargement…"}
+   486→            </CardDescription>
+   487→          </CardHeader>
+   488→          <CardContent>
+   489→            {!p ? (
+   490→              <Skeleton className="h-48 w-full rounded-xl" />
+   491→            ) : (
+   492→              <div className="space-y-4">
+   493→                <div className="flex flex-wrap gap-2">
+   494→                  {(["CRITICAL", "MEDIUM", "INFO"] as const).map(sev => {
+   495→                    const meta = SEVERITY_META[sev]
+   496→                    const count = p.alerts.bySeverity[sev] ?? 0
+   497→                    return (
+   498→                      <Badge key={sev} variant="outline" className={`gap-1.5 px-2.5 py-1 ${meta.cls}`}>
+   499→                        <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} aria-hidden />
+   500→                        {meta.label} : <span className="font-bold tabular-nums">{count}</span>
+   501→                      </Badge>
+   502→                    )
+   503→                  })}
+   504→                </div>
+   505→                <div className="h-40">
+   506→                  <ResponsiveContainer width="100%" height="100%">
+   507→                    <BarChart data={alertsByType} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 42 }}>
+   508→                      <CartesianGrid horizontal={false} stroke={GRID_STROKE} strokeDasharray="3 3" />
+   509→                      <XAxis type="number" allowDecimals={false} tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} axisLine={false} tickLine={false} />
+   510→                      <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+   511→                      <Tooltip
+   512→                        contentStyle={tooltipStyle()}
+   513→                        cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+   514→                        formatter={(value: number) => [`${value} alerte(s)`, ""]}
+   515→                      />
+   516→                      <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={13}>
+   517→                        {alertsByType.map((_, i) => (
+   518→                          <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+   519→                        ))}
+   520→                      </Bar>
+   521→                    </BarChart>
+   522→                  </ResponsiveContainer>
+   523→                </div>
+   524→              </div>
+   525→            )}
+   526→          </CardContent>
+   527→        </Card>
+   528→
+   529→        <Card>
+   530→          <CardHeader>
+   531→            <CardTitle className="flex items-center gap-2 text-base">
+   532→              <FileBarChart2 className="h-4 w-4 text-purple-600 dark:text-purple-400" aria-hidden /> Comptes plateforme &amp; rapports
+   533→            </CardTitle>
+   534→            <CardDescription>
+   535→              {p
+   536→                ? `${num(p.users.total)} comptes (${num(p.users.active)} actifs) — ${num(p.reports.total)} rapports générés.`
+   537→                : "Chargement…"}
+   538→            </CardDescription>
+   539→          </CardHeader>
+   540→          <CardContent className="space-y-4">
+   541→            {!p ? (
+   542→              <Skeleton className="h-48 w-full rounded-xl" />
+   543→            ) : (
+   544→              <>
+   545→                <div className="space-y-1.5">
+   546→                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Comptes par rôle</p>
+   547→                  <div className="flex flex-wrap gap-2">
+   548→                    {p.users.byRole.map(u => (
+   549→                      <Badge key={u.role} variant="secondary" className="gap-1.5 px-2.5 py-1">
+   550→                        {ROLE_LABELS[u.role] ?? u.role} : <span className="font-bold tabular-nums">{u.count}</span>
+   551→                      </Badge>
+   552→                    ))}
+   553→                  </div>
+   554→                </div>
+   555→                <div className="space-y-1.5">
+   556→                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rapports</p>
+   557→                  <div className="flex flex-wrap gap-2">
+   558→                    {p.reports.byStatus.map(r => (
+   559→                      <Badge key={r.status} variant="outline" className="gap-1.5 px-2.5 py-1">
+   560→                        {r.status === "GENERATED" ? "Générés" : r.status} : <span className="font-bold tabular-nums">{r.count}</span>
+   561→                      </Badge>
+   562→                    ))}
+   563→                  </div>
+   564→                </div>
+   565→                <div className="grid grid-cols-3 gap-2 border-t pt-3 text-center">
+   566→                  <div className="rounded-lg border bg-muted/20 p-2.5">
+   567→                    <TimerReset className="mx-auto h-4 w-4 text-amber-600" aria-hidden />
+   568→                    <p className="mt-1 text-lg font-bold tabular-nums leading-none">{p.moderation.byStatus.PENDING ?? 0}</p>
+   569→                    <p className="text-[11px] text-muted-foreground">modérations en attente</p>
+   570→                  </div>
+   571→                  <div className="rounded-lg border bg-muted/20 p-2.5">
+   572→                    <MessageSquarePlus className="mx-auto h-4 w-4 text-purple-600 dark:text-purple-400" aria-hidden />
+   573→                    <p className="mt-1 text-lg font-bold tabular-nums leading-none">{num(p.stations.servicesTotal)}</p>
+   574→                    <p className="text-[11px] text-muted-foreground">services référencés</p>
+   575→                  </div>
+   576→                  <div className="rounded-lg border bg-muted/20 p-2.5">
+   577→                    <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-600" aria-hidden />
+   578→                    <p className="mt-1 text-lg font-bold tabular-nums leading-none">{Math.round((p.stations.wellRated / (p.stations.total || 1)) * 100)} %</p>
+   579→                    <p className="text-[11px] text-muted-foreground">fiches ≥ 3 avis</p>
+   580→                  </div>
+   581→                </div>
+   582→              </>
+   583→            )}
+   584→          </CardContent>
+   585→        </Card>
+   586→      </div>
+   587→    </div>
+   588→  )
+   589→}
+   590→

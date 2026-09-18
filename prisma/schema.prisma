@@ -187,6 +187,23 @@ model WatchlistAlert {
   createdAt       DateTime  @default(now())
 }
 
+// Moteur périodique de veille (C.2.6+) : trace chaque passe d'évaluation des
+// alertes programmées. En production : cron planifié ; en démo : passe
+// déclenchable manuellement depuis le back-office + historique seedé.
+model AlertRun {
+  id              String   @id @default(cuid())
+  ranAt           DateTime @default(now())
+  mode            String   @default("MANUAL") // MANUAL | SCHEDULED
+  brandsCovered   Int      @default(0)
+  evaluatedAlerts Int      @default(0) // alertes dues évaluées contre la watchlist
+  triggeredAlerts Int      @default(0) // alertes ayant déclenché un email
+  skippedAlerts   Int      @default(0) // alertes non dues (fréquence déjà honorée)
+  stationsFlagged Int      @default(0) // stations signalées, cumul des alertes déclenchées
+  emailsQueued    Int      @default(0) // emails simulés mis en file
+  durationMs      Int      @default(0)
+  details         Json? // détail par alerte (statut, exemples, email tel qu'envoyé)
+}
+
 model SavedCalculation {
   id        String   @id @default(cuid())
   type      String
