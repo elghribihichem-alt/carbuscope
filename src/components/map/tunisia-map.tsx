@@ -833,14 +833,17 @@ export function TunisiaMap({
 
       {/* Légende */}
       {showLegend && (
-        <div className="absolute bottom-2 right-2 z-10 max-w-[180px] rounded-lg border bg-background/85 p-2 text-[10px] shadow-sm backdrop-blur">
-          <p className="mb-1 font-semibold uppercase tracking-wide text-muted-foreground">Enseignes</p>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+        <div className="absolute bottom-3 right-3 z-10 w-[196px] rounded-lg border bg-background/90 p-2.5 text-[10px] shadow-md backdrop-blur">
+          <div className="mb-1.5 flex items-center justify-between gap-2 border-b pb-1">
+            <p className="font-semibold uppercase tracking-wide text-muted-foreground">Enseignes</p>
+            <p className="shrink-0 tabular-nums text-muted-foreground">{new Intl.NumberFormat("fr-FR").format(stations.length)} st.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-x-2 gap-y-0.5">
             {brandLegend(stations, ownBrandSlug).map(([name, color, count]) => (
-              <span key={name} className="flex items-center gap-1 truncate">
+              <span key={name} className="flex items-center gap-1.5">
                 <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
-                <span className="truncate">{name}</span>
-                <span className="ml-auto text-muted-foreground">{count}</span>
+                <span className="min-w-0 flex-1 truncate">{name}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
               </span>
             ))}
           </div>

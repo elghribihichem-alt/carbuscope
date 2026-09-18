@@ -2,13 +2,17 @@
 
 // D.2.6 — Veille & alertes (vue consolidée back-office) :
 // toutes les alertes email programmées de toutes les enseignes, moteur
-// périodique d'évaluation déclenchable (cron simulé — passe à 08:00 en
-// production), rapport détaillé par passe, historique et tableau par enseigne.
+// périodique d'évaluation (planificateur réel mini-services/veil-scheduler,
+// passe SCHEDULED quotidienne 08:00 Tunis — état de santé live), rapport
+// détaillé par passe (filtrable par enseigne, imprimable), historique,
+// agrégats et tableau par enseigne.
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   BellRing, Play, Radar, Mail, Clock, PauseCircle, Eye, ChevronDown,
   Zap, Store, TrendingDown, RefreshCw, History, Inbox, CalendarClock, Loader2, Download,
+  Printer, ServerCog, Activity, Gauge, PlugZap,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -23,6 +27,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { KpiCard } from "@/components/shell/kpi-card"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
 import type { AlertRunDTO, AlertRunDetail, WatchlistOverviewResponse } from "@/lib/types"
 import { fmtDateTime, relDays } from "@/components/settings/settings-shared"
@@ -53,6 +60,39 @@ const STATUS_META: Record<string, { label: string; dot: string; cls: string }> =
 }
 
 const fr1 = (n: number) => n.toFixed(1).replace(".", ",")
+
+// ---------- Planificateur (mini-service veil-scheduler, port 3035) ----------
+// État de santé live interrogé via la passerelle (XTransformPort). Repli
+// statique gracieux si le service ne répond pas.
+type SchedulerStatus = {
+  service: string
+  ok: boolean
+  timezone: string
+  scheduleHour: number
+  nextRunAt: string
+  nextRunInMin: number
+  nextRunLabel: string
+  uptimeSec: number
+  journal?: { at: string; ok: boolean; mode: string; triggeredAlerts?: number; error?: string }[]
+}
+
+function fmtCountdown(min: number): string {
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m > 0 ? `${h} h ${m.toString().padStart(2, "0")}` : `${h} h`
+}
+
+// Feuille d'impression du rapport de passe : seul le nœud portail
+// #cs-run-print reste visible à l'impression.
+const RUN_PRINT_CSS = `
+@media print {
+  body > *:not(#cs-run-print) { display: none !important; }
+  #cs-run-print { display: block !important; }
+  #cs-run-print .bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+@page { size: A4 portrait; margin: 12mm; }
+`
 
 // Export CSV de l'inventaire consolidé des alertes (BOM UTF-8, « ; »).
 function exportAlertsCsv(data: WatchlistOverviewResponse) {
@@ -112,6 +152,10 @@ export function BoAlerts() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [previewAlertId, setPreviewAlertId] = useState<string | null>(null)
   const [justRanId, setJustRanId] = useState<string | null>(null)
+  const [scheduler, setScheduler] = useState<SchedulerStatus | null>(null)
+  const [schedulerUp, setSchedulerUp] = useState<boolean | null>(null)
+  const [brandFilter, setBrandFilter] = useState<string>("ALL")
+  const [printOpen, setPrintOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -131,11 +175,62 @@ export function BoAlerts() {
     return () => ac.abort()
   }, [load])
 
+  // État de santé du planificateur réel (mini-service veil-scheduler:3035,
+  // via la passerelle). Repli silencieux si le service est arrêté.
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const r = await fetch("/status?XTransformPort=3035", { cache: "no-store", signal: AbortSignal.timeout(4000) })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const j = (await r.json()) as SchedulerStatus
+        if (!cancelled) { setScheduler(j); setSchedulerUp(true) }
+      } catch {
+        if (!cancelled) setSchedulerUp(false)
+      }
+    }
+    void poll()
+    const id = setInterval(() => void poll(), 60_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
+
   // Passe sélectionnée : run explicite, sinon la plus récente.
   const selectedRun: AlertRunDTO | null = useMemo(
     () => data?.runs.find(r => r.id === selectedRunId) ?? data?.runs[0] ?? null,
     [data, selectedRunId],
   )
+
+  // Détails de la passe filtrés par enseigne (T20 — filtre historique).
+  const filteredDetails = useMemo(
+    () => selectedRun
+      ? selectedRun.details.filter(d => brandFilter === "ALL" || d.brandSlug === brandFilter)
+      : [],
+    [selectedRun, brandFilter],
+  )
+
+  // Agrégats plateforme sur l'historique des passes (T20 — moyennes).
+  const aggregates = useMemo(() => {
+    if (!data || data.runs.length === 0) return null
+    const n = data.runs.length
+    const avgStations = data.runs.reduce((a, r) => a + r.stationsFlagged, 0) / n
+    const evaluated = data.runs.reduce((a, r) => a + r.evaluatedAlerts, 0)
+    const triggered = data.runs.reduce((a, r) => a + r.triggeredAlerts, 0)
+    return {
+      avgStations: Math.round(avgStations * 10) / 10,
+      triggerRate: evaluated > 0 ? Math.round((triggered / evaluated) * 100) : 0,
+      passes: n,
+    }
+  }, [data])
+
+  // Impression du rapport de passe : rendu du portail puis fenêtre d'impression.
+  const printReport = useCallback(() => {
+    if (!selectedRun) return
+    setPrintOpen(true)
+    window.setTimeout(() => {
+      window.print()
+      setPrintOpen(false)
+    }, 600)
+  }, [selectedRun])
 
   // Série temporelle pour le mini graphique (oldest → newest).
   const chartData = useMemo(() => {
@@ -176,8 +271,8 @@ export function BoAlerts() {
 
   return (
     <div className="space-y-4">
-      {/* ---------- KPIs consolidés ---------- */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {/* ---------- KPIs consolidés + agrégats ---------- */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Alertes actives"
           value={t ? `${t.alertsActive}/${t.alertsTotal}` : "…"}
@@ -190,21 +285,39 @@ export function BoAlerts() {
           value={t ? t.totalTriggers : "…"}
           icon={Zap}
           tone="warning"
-          sub="depuis la mise en service de la veille"
+          sub="depuis la mise en service"
         />
         <KpiCard
           label="Emails en file"
           value={t ? t.emailsQueuedLastRun : "…"}
           icon={Mail}
           tone="info"
-          sub={t?.lastRunAt ? `dernière passe : ${relDays(t.lastRunAt)}` : "aucune passe tracée"}
+          sub={t?.lastRunAt ? `dernière passe : ${relDays(t.lastRunAt)}` : "aucune passe"}
         />
         <KpiCard
           label="Prochaine passe"
-          value={t?.nextScheduledAt ? fmtNextPass(t.nextScheduledAt) : "—"}
+          value={scheduler
+            ? scheduler.nextRunLabel
+            : t?.nextScheduledAt ? fmtNextPass(t.nextScheduledAt) : "—"}
           icon={CalendarClock}
           tone="success"
-          sub="tâche planifiée quotidienne 08:00"
+          sub={scheduler
+            ? `dans ${fmtCountdown(scheduler.nextRunInMin)} — planificateur live`
+            : "planifiée chaque jour à 08:00"}
+        />
+        <KpiCard
+          label="Volume moyen / passe"
+          value={aggregates ? fr1(aggregates.avgStations) : "…"}
+          icon={Gauge}
+          tone="default"
+          sub={aggregates ? `${aggregates.passes} passes tracées` : undefined}
+        />
+        <KpiCard
+          label="Taux de déclenchement"
+          value={aggregates ? `${aggregates.triggerRate} %` : "…"}
+          icon={Activity}
+          tone={aggregates && aggregates.triggerRate >= 50 ? "warning" : "default"}
+          sub={aggregates ? "alertes déclenchées / évaluées" : undefined}
         />
       </div>
 
@@ -248,8 +361,57 @@ export function BoAlerts() {
                   Chaque passe parcourt les <strong className="text-foreground">{t?.alertsActive ?? 0} alertes actives</strong> des{" "}
                   <strong className="text-foreground">{t?.brandsCovered ?? 0} enseignes</strong>, recalcule la watchlist
                   (chutes ≥ 0,8 pt sur avis ≤ 90 j), honore les fréquences (les digests déjà envoyés ne sont pas
-                  re-notifiés) et met les emails en file. En production : tâche cron quotidienne à 08:00.
+                  re-notifiés) et met les emails en file — puis laisse une notification in-app à chaque enseigne
+                  concernée (cloche du portail).
                 </p>
+
+                {/* État de santé du planificateur réel (mini-service) */}
+                <div
+                  className={cn(
+                    "flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2.5",
+                    schedulerUp
+                      ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/40"
+                      : "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/40",
+                  )}
+                  aria-live="polite"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md",
+                      schedulerUp
+                        ? "bg-emerald-600 text-white"
+                        : "bg-amber-500 text-white",
+                    )} aria-hidden>
+                      {schedulerUp ? <PlugZap className="h-3.5 w-3.5" /> : <ServerCog className="h-3.5 w-3.5" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold">
+                        {schedulerUp ? "Planificateur actif" : "Planificateur injoignable"}
+                        {schedulerUp && (
+                          <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                        {scheduler
+                          ? <>Passe <strong className="text-foreground">SCHEDULED</strong> quotidienne à 08:00 ({scheduler.timezone.split("/")[1]}) · dans {fmtCountdown(scheduler.nextRunInMin)} · en ligne depuis {scheduler.uptimeSec < 3600 ? `${Math.max(1, Math.round(scheduler.uptimeSec / 60))} min` : `${Math.round(scheduler.uptimeSec / 3600)} h`}</>
+                          : "Service veil-scheduler:3035 — repli sur l’heure calculée côté application."}
+                      </p>
+                    </div>
+                  </div>
+                  {scheduler?.journal && scheduler.journal.length > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="h-5 gap-1 border-border/70 bg-background/80 px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground"
+                    >
+                      <Activity className="h-3 w-3" aria-hidden />
+                      {scheduler.journal.length} passe{scheduler.journal.length > 1 ? "s" : ""} service
+                    </Badge>
+                  )}
+                </div>
+
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     onClick={() => void runEngine()}
@@ -269,24 +431,44 @@ export function BoAlerts() {
                   >
                     <RefreshCw className="h-4 w-4" aria-hidden />
                   </Button>
-                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" aria-live="polite">
-                    <span className="relative flex h-2 w-2" aria-hidden>
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                    </span>
-                    {t?.nextScheduledAt
-                      ? `Prochaine passe planifiée : ${fmtNextPass(t.nextScheduledAt)}`
-                      : "Aucune passe planifiée"}
-                  </span>
                 </div>
 
-                {/* Historique : timeline verticale */}
+                {/* Historique : timeline verticale + filtre par enseigne */}
                 <div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <History className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Historique des passes
-                    </p>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <History className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Historique des passes
+                      </p>
+                    </div>
+                    <Select
+                      value={brandFilter}
+                      onValueChange={setBrandFilter}
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="h-7 w-auto min-w-36 gap-1 border-border/70 bg-background/80 text-[11px]"
+                        aria-label="Filtrer le rapport de passe par enseigne"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL" className="text-xs">Toutes les enseignes</SelectItem>
+                        {data.brands.map(b => (
+                          <SelectItem key={b.slug} value={b.slug} className="text-xs">
+                            <span className="flex items-center gap-1.5">
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ backgroundColor: b.color }}
+                                aria-hidden
+                              />
+                              {b.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <ScrollArea className="h-[22rem] rounded-lg border bg-background/60 pr-2">
                     <div className="space-y-1 p-2">
@@ -297,6 +479,16 @@ export function BoAlerts() {
                       )}
                       {data.runs.map(run => {
                         const isSelected = selectedRun?.id === run.id
+                        // Compteurs filtrés par enseigne si un filtre est actif.
+                        const brandDetails = brandFilter === "ALL"
+                          ? null
+                          : run.details.filter(d => d.brandSlug === brandFilter)
+                        const shownTriggered = brandDetails
+                          ? brandDetails.filter(d => d.status === "TRIGGERED").length
+                          : run.triggeredAlerts
+                        const shownFlagged = brandDetails
+                          ? brandDetails.reduce((a, d) => a + (d.status === "TRIGGERED" ? d.exceedCount : 0), 0)
+                          : run.stationsFlagged
                         return (
                           <button
                             key={run.id}
@@ -344,17 +536,24 @@ export function BoAlerts() {
                                 </div>
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                   <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950 dark:text-red-400">
-                                    <Mail className="h-3 w-3" aria-hidden /> {run.triggeredAlerts} email{run.triggeredAlerts > 1 ? "s" : ""}
+                                    <Mail className="h-3 w-3" aria-hidden /> {shownTriggered} email{shownTriggered > 1 ? "s" : ""}
                                   </span>
                                   <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-                                    <TrendingDown className="h-3 w-3" aria-hidden /> {run.stationsFlagged} station{run.stationsFlagged > 1 ? "s" : ""}
+                                    <TrendingDown className="h-3 w-3" aria-hidden /> {shownFlagged} station{shownFlagged > 1 ? "s" : ""}
                                   </span>
-                                  <span className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
-                                    <Clock className="h-3 w-3" aria-hidden /> {run.durationMs} ms
-                                  </span>
-                                  {run.skippedAlerts > 0 && (
+                                  {brandFilter === "ALL" && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
+                                      <Clock className="h-3 w-3" aria-hidden /> {run.durationMs} ms
+                                    </span>
+                                  )}
+                                  {brandFilter === "ALL" && run.skippedAlerts > 0 && (
                                     <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                                       <PauseCircle className="h-3 w-3" aria-hidden /> {run.skippedAlerts} non due{run.skippedAlerts > 1 ? "s" : ""}
+                                    </span>
+                                  )}
+                                  {brandDetails && (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                                      périmètre filtré
                                     </span>
                                   )}
                                 </div>
@@ -383,13 +582,21 @@ export function BoAlerts() {
                       <CardTitle className="text-base leading-tight">Rapport de passe</CardTitle>
                       <CardDescription className="mt-0.5 text-xs">
                         {selectedRun
-                          ? `${fmtDateTime(selectedRun.ranAt)} — ${selectedRun.mode === "SCHEDULED" ? "passe planifiée" : "passe manuelle"}`
+                          ? `${fmtDateTime(selectedRun.ranAt)} — ${selectedRun.mode === "SCHEDULED" ? "passe planifiée" : "passe manuelle"}${brandFilter !== "ALL" ? " · enseigne filtrée" : ""}`
                           : "Aucune passe sélectionnée"}
                       </CardDescription>
                     </div>
                   </div>
                   {selectedRun && (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {brandFilter !== "ALL" && (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                        >
+                          {data.brands.find(b => b.slug === brandFilter)?.name ?? brandFilter} · {filteredDetails.length} ligne{filteredDetails.length > 1 ? "s" : ""}
+                        </Badge>
+                      )}
                       <Badge variant="outline" className="gap-1 tabular-nums">
                         <Store className="h-3 w-3" aria-hidden /> {selectedRun.brandsCovered} enseignes
                       </Badge>
@@ -402,6 +609,16 @@ export function BoAlerts() {
                       <Badge variant="outline" className="gap-1 tabular-nums">
                         <Clock className="h-3 w-3" aria-hidden /> {selectedRun.durationMs} ms
                       </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={printReport}
+                        disabled={printOpen}
+                        className="h-7 gap-1.5 px-2 text-[11px] transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:border-emerald-800 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
+                        aria-label="Imprimer le rapport de passe (PDF via impression navigateur)"
+                      >
+                        <Printer className="h-3 w-3" aria-hidden /> Rapport PDF
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -412,12 +629,14 @@ export function BoAlerts() {
                     Sélectionnez une passe dans l&apos;historique ou exécutez le moteur.
                   </p>
                 )}
-                {selectedRun && selectedRun.details.length === 0 && (
+                {selectedRun && filteredDetails.length === 0 && (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Aucune alerte active lors de cette passe.
+                    {brandFilter === "ALL"
+                      ? "Aucune alerte active lors de cette passe."
+                      : "Aucune alerte pour l’enseigne filtrée lors de cette passe."}
                   </p>
                 )}
-                {selectedRun?.details.map(d => (
+                {filteredDetails.map(d => (
                   <RunDetailRow
                     key={d.alertId}
                     detail={d}
@@ -583,6 +802,114 @@ export function BoAlerts() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ---------- Rapport de passe imprimable (T20 — PDF navigateur) ---------- */}
+      {typeof document !== "undefined" && selectedRun && createPortal(
+        <div id="cs-run-print" className="hidden bg-white text-slate-900">
+          <style>{RUN_PRINT_CSS}</style>
+          <div className="mx-auto max-w-[720px] px-2 py-6 font-sans text-[11px] leading-relaxed">
+            {/* En-tête */}
+            <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-lg font-black text-white">
+                  C
+                </div>
+                <div>
+                  <p className="text-base font-black tracking-tight">CarbuScope — Rapport de passe de veille</p>
+                  <p className="text-[10px] text-slate-500">
+                    Back-office plateforme · Moteur de veille des notes (C.2.6+)
+                  </p>
+                </div>
+              </div>
+              <div className="text-right text-[10px] text-slate-500">
+                <p className="font-semibold text-slate-800">{fmtDateTime(selectedRun.ranAt)}</p>
+                <p>{selectedRun.mode === "SCHEDULED" ? "Passe planifiée (08:00 Tunis)" : "Passe manuelle"}</p>
+              </div>
+            </div>
+
+            {/* Synthèse chiffrée */}
+            <div className="mt-4 grid grid-cols-5 gap-2">
+              {[
+                { k: "Enseignes couvertes", v: selectedRun.brandsCovered },
+                { k: "Alertes évaluées", v: selectedRun.evaluatedAlerts },
+                { k: "Alertes déclenchées", v: selectedRun.triggeredAlerts },
+                { k: "Stations signalées", v: selectedRun.stationsFlagged },
+                { k: "Durée", v: `${selectedRun.durationMs} ms` },
+              ].map(c => (
+                <div key={c.k} className="rounded-md border border-slate-200 bg-slate-50 p-2 text-center">
+                  <p className="text-base font-black tabular-nums text-slate-900">{c.v}</p>
+                  <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-500">{c.k}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Tableau par alerte */}
+            <p className="mt-5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Détail par alerte {brandFilter !== "ALL" && `— périmètre : ${data?.brands.find(b => b.slug === brandFilter)?.name ?? brandFilter}`}
+            </p>
+            <table className="mt-1.5 w-full border-collapse text-[10px]">
+              <thead>
+                <tr className="border-b border-slate-300 bg-slate-100 text-left">
+                  <th className="px-2 py-1.5 font-bold">Enseigne</th>
+                  <th className="px-2 py-1.5 font-bold">Périmètre</th>
+                  <th className="px-2 py-1.5 font-bold">Fréquence</th>
+                  <th className="px-2 py-1.5 font-bold">Statut</th>
+                  <th className="px-2 py-1.5 text-right font-bold">Stations</th>
+                  <th className="px-2 py-1.5 font-bold">Exemples de chutes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDetails.map(d => (
+                  <tr key={d.alertId} className="border-b border-slate-200 align-top">
+                    <td className="px-2 py-1.5">
+                      <span className="font-semibold" style={{ color: d.brandColor }}>{d.brandName}</span>
+                    </td>
+                    <td className="px-2 py-1.5">{d.stationLabel}</td>
+                    <td className="px-2 py-1.5">{FREQ_META[d.frequency]?.label ?? d.frequency}</td>
+                    <td className="px-2 py-1.5">
+                      <span
+                        className="rounded px-1.5 py-0.5 font-semibold"
+                        style={{
+                          backgroundColor: d.status === "TRIGGERED" ? "#fee2e2" : d.status === "STABLE" ? "#d1fae5" : "#f1f5f9",
+                          color: d.status === "TRIGGERED" ? "#b91c1c" : d.status === "STABLE" ? "#047857" : "#475569",
+                        }}
+                      >
+                        {STATUS_META[d.status]?.label ?? d.status}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-bold tabular-nums">
+                      {d.status === "TRIGGERED" ? d.exceedCount : "—"}
+                    </td>
+                    <td className="px-2 py-1.5 text-slate-600">
+                      {d.examples.length > 0
+                        ? d.examples.map(ex => `${ex.name} (${ex.gouvernorat}) : ${fr1(ex.previousRating)} → ${fr1(ex.currentRating)} (−${fr1(ex.delta)} pt)`).join(" ; ")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {filteredDetails.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-2 py-4 text-center text-slate-500">
+                      Aucune alerte {brandFilter !== "ALL" ? "pour l'enseigne filtrée " : ""}lors de cette passe.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* Pied méthodologique */}
+            <div className="mt-6 border-t border-slate-300 pt-2.5 text-[9px] leading-relaxed text-slate-500">
+              <p>
+                Méthodologie : la passe évalue chaque alerte active contre la watchlist recalculée (chute ≥ seuil
+                sur avis ≤ 90 j). Les fréquences sont honorées — un digest déjà envoyé n&apos;est pas re-notifié.
+                Chaque alerte déclenchée met un email en file et laisse une notification in-app à l&apos;enseigne.
+                Document généré depuis le back-office CarbuScope — données de démonstration.
+              </p>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

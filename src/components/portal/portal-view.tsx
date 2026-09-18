@@ -15,6 +15,7 @@ import { PortalStations } from "./portal-stations"
 import { PortalPromotions } from "./portal-promotions"
 import { PortalApi } from "./portal-api"
 import { PortalReviews } from "./portal-reviews"
+import { NotificationsCenter } from "./notifications-center"
 
 export function PortalView() {
   const brandSlug = useAppStore(s => s.brandSlug)
@@ -59,17 +60,21 @@ export function PortalView() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
-            <span
-              className="h-3 w-3 shrink-0 rounded-full border border-black/10 dark:border-white/20"
-              style={{ backgroundColor: brand?.color ?? "#059669" }}
-              aria-hidden
-            />
-            <div className="text-sm">
-              <p className="font-semibold leading-none">{stationCount !== null ? `${num(stationCount)} stations` : "Réseau national"}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Référentiel de l&apos;enseigne</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+              <span
+                className="h-3 w-3 shrink-0 rounded-full border border-black/10 dark:border-white/20"
+                style={{ backgroundColor: brand?.color ?? "#059669" }}
+                aria-hidden
+              />
+              <div className="text-sm">
+                <p className="font-semibold leading-none">{stationCount !== null ? `${num(stationCount)} stations` : "Réseau national"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Référentiel de l&apos;enseigne</p>
+              </div>
+              <Building2 className="ml-2 h-4 w-4 text-muted-foreground" aria-hidden />
             </div>
-            <Building2 className="ml-2 h-4 w-4 text-muted-foreground" aria-hidden />
+            {/* Cloche de notifications : veille des notes + vie de la plateforme */}
+            <NotificationsCenter key={brandSlug} brandSlug={brandSlug} />
           </div>
         </CardContent>
       </Card>

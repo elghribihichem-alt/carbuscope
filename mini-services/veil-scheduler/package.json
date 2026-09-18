@@ -1,0 +1,10 @@
+{
+  "name": "veil-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Planificateur quotidien du moteur de veille CarbuScope — déclenche la passe SCHEDULED à 08:00 (Tunis) et expose son état de santé.",
+  "scripts": {
+    "dev": "bun --hot index.ts",
+    "start": "bun index.ts"
+  }
+}

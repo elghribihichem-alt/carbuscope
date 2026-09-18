@@ -5,7 +5,7 @@
 // Rendu canvas (preferCanvas) pour rester fluide avec 2 200 marqueurs.
 // Fond commutable : Plan OSM / Clair (Positron) / Nuit (Dark Matter) / Automatique (thème).
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import * as L from "leaflet"
 import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, useMap } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
@@ -73,6 +73,41 @@ const TILES: Record<Exclude<OsmBackground, "auto">, { url: string; attribution: 
 }
 
 const NUM = new Intl.NumberFormat("fr-FR")
+
+// ---------- Décluttering : grappes aux zooms pays/région (T21) ----------
+// Comme Waze / Google Maps : aux zooms 6-8, les stations voisines s'agrègent
+// en un marqueur de grappe (taille ∝ effectif, couleur de l'enseigne dominante) ;
+// un clic zoome vers la grappe ; dès le zoom 9 les stations individuelles
+// reviennent. Désactivé sous 60 stations (inutile) et pour les fonds clairs/pays.
+const CLUSTER_MAX_ZOOM = 8
+const CLUSTER_MIN_STATIONS = 60
+
+function clusterStations(stations: StationDTO[], cellDeg: number) {
+  const cells = new Map<string, StationDTO[]>()
+  for (const s of stations) {
+    const key = `${Math.floor(s.lng / cellDeg)}:${Math.floor(s.lat / cellDeg)}`
+    const arr = cells.get(key)
+    if (arr) arr.push(s)
+    else cells.set(key, [s])
+  }
+  const out: {
+    lat: number; lng: number; count: number
+    dominantName: string; dominantColor: string; dominantCount: number
+  }[] = []
+  for (const group of cells.values()) {
+    const lat = group.reduce((a, s) => a + s.lat, 0) / group.length
+    const lng = group.reduce((a, s) => a + s.lng, 0) / group.length
+    const byBrand = new Map<string, { count: number; color: string }>()
+    for (const s of group) {
+      const cur = byBrand.get(s.brandName)
+      if (cur) cur.count++
+      else byBrand.set(s.brandName, { count: 1, color: s.brandColor })
+    }
+    const [dominantName, dom] = [...byBrand.entries()].sort((a, b) => b[1].count - a[1].count)[0]
+    out.push({ lat, lng, count: group.length, dominantName, dominantColor: dom.color, dominantCount: dom.count })
+  }
+  return out
+}
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Ouverte", RENOVATION: "En rénovation", PROJECT: "Projet", CLOSED: "Fermée",
@@ -154,6 +189,89 @@ function MapEffects({ fitTo, focusStation, selectedStation, onSelect }: {
   }, [map, onSelect])
 
   return null
+}
+
+/** Stations avec décluttering progressif : grappes aux zooms 6-8, marqueurs individuels dès le zoom 9 */
+function DeclutteredStations({
+  stations, ownBrandSlug, selectedCode, onSelect, compareCodes,
+}: {
+  stations: StationDTO[]
+  ownBrandSlug?: string | null
+  selectedCode?: string | null
+  onSelect?: (s: StationDTO | null) => void
+  compareCodes: string[]
+}) {
+  const map = useMap()
+  const [zoom, setZoom] = useState(map.getZoom())
+  useEffect(() => {
+    const onZoom = () => setZoom(map.getZoom())
+    map.on("zoomend", onZoom)
+    return () => { map.off("zoomend", onZoom) }
+  }, [map])
+
+  const clusterMode = zoom <= CLUSTER_MAX_ZOOM && stations.length >= CLUSTER_MIN_STATIONS
+
+  // Taille de cellule adaptée au zoom : grossière au niveau pays, fine avant le seuil.
+  const clusters = useMemo(() => {
+    if (!clusterMode) return []
+    const cellDeg = 0.36 / Math.pow(2, zoom - 6)
+    return clusterStations(stations, cellDeg)
+  }, [clusterMode, zoom, stations])
+
+  if (clusterMode) {
+    return (
+      <>
+        {clusters.map(c => (
+          <CircleMarker
+            key={`${c.lat.toFixed(3)}:${c.lng.toFixed(3)}`}
+            center={[c.lat, c.lng]}
+            radius={6 + Math.min(13, Math.sqrt(c.count) * 1.35)}
+            bubblingMouseEvents={false}
+            pathOptions={{
+              color: "#ffffff", weight: 1.6,
+              fillColor: c.dominantColor, fillOpacity: 0.88,
+            }}
+            eventHandlers={{
+              click: () => map.flyTo([c.lat, c.lng], Math.min(CLUSTER_MAX_ZOOM + 2, zoom + 2), { duration: 0.6 }),
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -6]} opacity={1}>
+              <span className="text-xs font-semibold">{c.count} station{c.count > 1 ? "s" : ""}</span>
+              <span className="ml-1 text-xs opacity-80">
+                — surtout {c.dominantName} ({c.dominantCount}) · zoomer pour détailler
+              </span>
+            </Tooltip>
+          </CircleMarker>
+        ))}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {stations.map(s => {
+        const isOwn = !!ownBrandSlug && s.brandSlug === ownBrandSlug
+        const isSel = s.code === selectedCode
+        const isPinned = compareCodes.includes(s.code)
+        return (
+          <CircleMarker
+            key={s.id}
+            center={[s.lat, s.lng]}
+            bubblingMouseEvents={false}
+            {...markerStyle(s, { isOwn, isSel, isPinned })}
+            eventHandlers={{ click: () => onSelect?.(s.code === selectedCode ? null : s) }}
+          >
+            <Tooltip direction="top" offset={[0, -6]} opacity={1}>
+              <span className="text-xs font-semibold">{s.name}</span>
+              <span className="ml-1 text-xs opacity-80">
+                — {s.traffic > 0 ? `${NUM.format(s.traffic)} véh/j` : s.status === "PROJECT" ? "Projet" : "—"}
+              </span>
+            </Tooltip>
+          </CircleMarker>
+        )
+      })}
+    </>
+  )
 }
 
 /** Mini-fiche station rendue dans la popup Leaflet */
@@ -347,29 +465,18 @@ export function OSMMap({
           </CircleMarker>
         ))}
 
-        {/* Stations — bubblingMouseEvents:false évite que le clic marqueur
-            déclenche ensuite le clic carte (qui désélectionnerait la station) */}
-        {layers.stations && stations.map(s => {
-          const isOwn = !!ownBrandSlug && s.brandSlug === ownBrandSlug
-          const isSel = s.code === selectedCode
-          const isPinned = compareCodes.includes(s.code)
-          return (
-            <CircleMarker
-              key={s.id}
-              center={[s.lat, s.lng]}
-              bubblingMouseEvents={false}
-              {...markerStyle(s, { isOwn, isSel, isPinned })}
-              eventHandlers={{ click: () => onSelect?.(s.code === selectedCode ? null : s) }}
-            >
-              <Tooltip direction="top" offset={[0, -6]} opacity={1}>
-                <span className="text-xs font-semibold">{s.name}</span>
-                <span className="ml-1 text-xs opacity-80">
-                  — {s.traffic > 0 ? `${NUM.format(s.traffic)} véh/j` : s.status === "PROJECT" ? "Projet" : "—"}
-                </span>
-              </Tooltip>
-            </CircleMarker>
-          )
-        })}
+        {/* Stations — décluttering progressif : grappes aux zooms pays/région
+            (comme Waze), marqueurs individuels dès le zoom 9 ; le clic marqueur
+            ne propage pas le clic carte (pas de désélection parasite) */}
+        {layers.stations && (
+          <DeclutteredStations
+            stations={stations}
+            ownBrandSlug={ownBrandSlug}
+            selectedCode={selectedCode}
+            onSelect={onSelect}
+            compareCodes={compareCodes}
+          />
+        )}
 
         {/* Fiche popup de la station sélectionnée */}
         {selected && (

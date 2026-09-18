@@ -47,7 +47,14 @@ export function KpiCard({ label, value, icon: Icon, sub, trend, tone = "default"
               </span>
             )}
           </div>
-          {sub && <p className={cn("mt-1 truncate text-xs text-muted-foreground", TONES[tone].chip)}>{sub}</p>}
+          {sub && (
+            <p
+              className={cn("mt-1 line-clamp-2 break-words text-xs leading-snug text-muted-foreground", TONES[tone].chip)}
+              title={typeof sub === "string" ? sub : undefined}
+            >
+              {sub}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

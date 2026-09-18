@@ -474,6 +474,27 @@ export type WatchlistOverviewResponse = {
   runs: AlertRunDTO[]
 }
 
+// ---- Notifications in-app enseigne (C.2.6+, portail) ----
+
+export type NotificationDTO = {
+  id: string
+  brandSlug: string
+  kind: string // WATCHLIST | SYSTEM
+  title: string
+  body: string
+  stationLabel: string | null
+  deltaPoints: number | null
+  alertRunId: string | null
+  read: boolean
+  createdAt: string
+}
+
+export type NotificationsResponse = {
+  notifications: NotificationDTO[]
+  unread: number
+  total: number
+}
+
 // ---- Back-office : statistiques plateforme réelles (D.2.5 étendu) ----
 
 export type PlatformStats = {

@@ -118,6 +118,13 @@ export async function runAlertEngine(mode: "MANUAL" | "SCHEDULED" = "MANUAL"): P
   }
 
   const details: AlertRunDetail[] = []
+  const triggeredNotifications: {
+    brandSlug: string
+    title: string
+    body: string
+    stationLabel: string
+    deltaPoints: number | null
+  }[] = []
   let triggeredAlerts = 0
   let skippedAlerts = 0
   let stationsFlagged = 0
@@ -164,7 +171,8 @@ export async function runAlertEngine(mode: "MANUAL" | "SCHEDULED" = "MANUAL"): P
       continue
     }
 
-    // Déclenchement : compteur + horodatage + email simulé en file.
+    // Déclenchement : compteur + horodatage + email simulé en file
+    // + notification in-app enseigne (badge portail, boucle de fermeture).
     triggeredAlerts++
     stationsFlagged += exceeded.length
     const { subject, preview } = buildAlertEmail(brandName, alert, exceeded)
@@ -173,6 +181,16 @@ export async function runAlertEngine(mode: "MANUAL" | "SCHEDULED" = "MANUAL"): P
       data: { triggerCount: { increment: 1 }, lastTriggeredAt: now },
     })
     details.push({ ...base, status: "TRIGGERED", subject, preview })
+    triggeredNotifications.push({
+      brandSlug: alert.brandSlug,
+      title: exceeded.length === 1
+        ? `Veille des notes : ${exceeded[0].name} en perte de vitesse`
+        : `Veille des notes : ${exceeded.length} stations en perte de vitesse`,
+      body: exceeded.slice(0, 3).map(w =>
+        `${w.name} (${w.gouvernorat}) — chute de ${fr1(w.previousRating)} à ${fr1(w.currentRating)} (−${fr1(w.delta)} pt)`).join("\n"),
+      stationLabel: exceeded.length === 1 ? exceeded[0].name : alert.stationLabel,
+      deltaPoints: exceeded.length > 0 ? Math.round(exceeded[0].delta * 10) / 10 : null,
+    })
   }
 
   const evaluatedAlerts = alerts.length - skippedAlerts
@@ -192,6 +210,13 @@ export async function runAlertEngine(mode: "MANUAL" | "SCHEDULED" = "MANUAL"): P
       details,
     },
   })
+
+  // Écriture des notifications in-app après la trace de passe (runId disponible).
+  if (triggeredNotifications.length > 0) {
+    await db.notification.createMany({
+      data: triggeredNotifications.map(n => ({ ...n, alertRunId: run.id, kind: "WATCHLIST" })),
+    })
+  }
 
   return { ...run, details }
 }

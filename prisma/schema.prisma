@@ -204,6 +204,22 @@ model AlertRun {
   details         Json? // détail par alerte (statut, exemples, email tel qu'envoyé)
 }
 
+// Notifications in-app enseigne (C.2.6+) : écrites par le moteur de veille au
+// moment où un email part, consultées depuis le portail (cloche + centre de
+// notifications). Boucle de fermeture : email simulé + badge portail.
+model Notification {
+  id           String   @id @default(cuid())
+  brandSlug    String
+  kind         String   @default("WATCHLIST") // WATCHLIST | SYSTEM
+  title        String
+  body         String
+  stationLabel String? // station ou périmètre concerné
+  deltaPoints  Float? // chute constatée (pt)
+  alertRunId   String? // passe du moteur à l'origine
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
 model SavedCalculation {
   id        String   @id @default(cuid())
   type      String
