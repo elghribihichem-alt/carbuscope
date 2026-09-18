@@ -2,67 +2,31 @@
 
 // CarbuScope Mobile — Écran Carte (B.2.1 / B.3.1 / B.3.3)
 // Recherche, « Autour de moi », carte des stations proches,
-// alertes intelligentes rotatives (une visible à la fois, 4 s), mode hors ligne.
+// alertes intelligentes personnalisées (une visible à la fois, 4 s), accès au
+// centre d'alertes via la cloche, mode hors ligne.
 
 import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Clock3, CloudOff, Droplets, LocateFixed, Navigation, Search, Zap } from "lucide-react"
+import { Bell, CloudOff, LocateFixed, Navigation, Search, SlidersHorizontal } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TunisiaMap } from "@/components/map/tunisia-map"
 import { cn } from "@/lib/utils"
-import type { AppApi, StationWithDist } from "../shared"
-import { SectionTitle, StationRow, fmtKm } from "../shared"
-
-type SmartAlert = {
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  sub: string
-  tint: string
-}
-
-/** Alertes intelligentes (B.3.1) construites à partir des stations réellement proches */
-function buildAlerts(nearby: StationWithDist[]): SmartAlert[] {
-  const alerts: SmartAlert[] = []
-  const open24 = nearby.find(s => s.open24 && s.brandSlug === "agil") ?? nearby.find(s => s.open24)
-  if (open24) {
-    alerts.push({
-      icon: Clock3,
-      title: `Station ${open24.brandName} ouverte 24h/24 à ${fmtKm(open24.distanceKm)}`,
-      sub: `${open24.name} — ${open24.delegation}`,
-      tint: "bg-emerald-50 text-emerald-600",
-    })
-  }
-  const lavage = nearby.find(s => s.services.includes("lavage"))
-  if (lavage) {
-    alerts.push({
-      icon: Droplets,
-      title: `Lavage disponible sur votre trajet à ${fmtKm(lavage.distanceKm)}`,
-      sub: `${lavage.name} — file estimée courte`,
-      tint: "bg-amber-50 text-amber-600",
-    })
-  }
-  const recharge = nearby.find(s => s.services.includes("recharge"))
-  if (recharge) {
-    alerts.push({
-      icon: Zap,
-      title: `Borne de recharge libre à ${fmtKm(recharge.distanceKm)}`,
-      sub: `${recharge.name} — type 2 · 22 kW`,
-      tint: "bg-purple-50 text-purple-600",
-    })
-  }
-  if (!alerts.length) {
-    alerts.push({ icon: Zap, title: "Borne de recharge libre à 5 km", sub: "Alerte CarbuScope", tint: "bg-emerald-50 text-emerald-600" })
-  }
-  return alerts
-}
+import type { AppApi } from "../shared"
+import { SectionTitle, StationRow } from "../shared"
+import { useAlertsStore } from "../alerts-store"
+import { computeSmartAlerts } from "../smart-alerts"
 
 export function MapScreen({ api }: { api: AppApi }) {
   const [query, setQuery] = useState("")
   const [alertIdx, setAlertIdx] = useState(0)
-  const alerts = useMemo(() => buildAlerts(api.nearby), [api.nearby])
+  const prefs = useAlertsStore()
+
+  // Alertes personnalisées (B.3.1) — recalculées selon les préférences persistées
+  const allAlerts = useMemo(() => computeSmartAlerts(api.allStations, prefs), [api.allStations, prefs])
+  const alerts = useMemo(() => allAlerts.slice(0, 5), [allAlerts])
 
   // Rotation automatique des alertes toutes les 4 s (une seule visible)
   useEffect(() => {
@@ -72,8 +36,9 @@ export function MapScreen({ api }: { api: AppApi }) {
   }, [alerts.length])
 
   const nearest = api.nearby.slice(0, 5)
-  const current = alerts[Math.min(alertIdx, alerts.length - 1)]
-  const AlertIcon = current.icon
+  const safeIdx = alerts.length ? Math.min(alertIdx, alerts.length - 1) : 0
+  const current = alerts[safeIdx]
+  const AlertIcon = current?.icon
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -115,13 +80,28 @@ export function MapScreen({ api }: { api: AppApi }) {
             Itinéraire
           </button>
 
+          {/* Centre d'alertes intelligentes (B.3.1) */}
+          <button
+            type="button"
+            onClick={() => api.go("alertes")}
+            aria-label={`${allAlerts.length} alertes intelligentes — ouvrir le centre d'alertes`}
+            className="relative ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border border-red-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 shadow-sm transition-colors hover:border-red-300 hover:text-red-600"
+          >
+            <Bell className="h-3.5 w-3.5 text-red-500" />
+            {allAlerts.length > 0 && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                {allAlerts.length > 9 ? "9+" : allAlerts.length}
+              </span>
+            )}
+          </button>
+
           {/* Mode hors ligne (B.3.3) */}
           <Tooltip>
             <TooltipTrigger asChild>
               <span
                 role="status"
                 className={cn(
-                  "ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-semibold shadow-sm transition-colors",
+                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-semibold shadow-sm transition-colors",
                   api.offline ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 bg-white text-slate-500"
                 )}
               >
@@ -166,46 +146,62 @@ export function MapScreen({ api }: { api: AppApi }) {
           </span>
         </div>
 
-        {/* Alertes intelligentes (B.3.1) */}
+        {/* Alertes intelligentes (B.3.1) — rotation, clic = centre d'alertes */}
         <div className="shrink-0 px-3 pt-3">
-          <button
-            type="button"
-            onClick={() => setAlertIdx(i => (i + 1) % alerts.length)}
-            aria-live="polite"
-            aria-label="Alerte intelligente — appuyez pour voir la suivante"
-            className="relative block w-full overflow-hidden rounded-2xl border border-emerald-200/80 bg-white p-2.5 text-left shadow-sm transition-shadow hover:shadow-md"
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={alertIdx}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-                className="flex items-center gap-2.5 pr-16"
-              >
-                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", current.tint)}>
-                  <AlertIcon className="h-[18px] w-[18px]" />
+          {current ? (
+            <button
+              type="button"
+              onClick={() => api.go("alertes")}
+              aria-live="polite"
+              aria-label="Alerte intelligente — ouvrir le centre d'alertes"
+              className="relative block w-full overflow-hidden rounded-2xl border border-emerald-200/80 bg-white p-2.5 text-left shadow-sm transition-shadow hover:shadow-md"
+            >
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={safeIdx}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className="flex items-center gap-2.5 pr-16"
+                >
+                  <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", current.tint)}>
+                    {AlertIcon ? <AlertIcon className="h-[18px] w-[18px]" /> : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-semibold text-slate-800">{current.title}</span>
+                    <span className="block truncate text-[11px] text-slate-400">{current.sub}</span>
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+              <span className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded-full bg-red-50 px-2 py-[3px]">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] font-semibold text-slate-800">{current.title}</span>
-                  <span className="block truncate text-[11px] text-slate-400">{current.sub}</span>
-                </span>
-              </motion.div>
-            </AnimatePresence>
-            <span className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded-full bg-red-50 px-2 py-[3px]">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+                <span className="text-[9px] font-bold uppercase tracking-wide text-red-600">En direct</span>
               </span>
-              <span className="text-[9px] font-bold uppercase tracking-wide text-red-600">En direct</span>
-            </span>
-            <span className="absolute bottom-1.5 right-3 flex gap-1">
-              {alerts.map((_, i) => (
-                <span key={i} className={cn("h-1 w-1 rounded-full transition-colors", i === alertIdx ? "bg-emerald-500" : "bg-slate-200")} />
-              ))}
-            </span>
-          </button>
+              <span className="absolute bottom-1.5 right-3 flex gap-1">
+                {alerts.map((_, i) => (
+                  <span key={i} className={cn("h-1 w-1 rounded-full transition-colors", i === safeIdx ? "bg-emerald-500" : "bg-slate-200")} />
+                ))}
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => api.go("alertes")}
+              className="flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-slate-300 bg-white p-2.5 text-left shadow-sm transition-colors hover:border-emerald-400"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                <SlidersHorizontal className="h-[18px] w-[18px]" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-semibold text-slate-700">Aucune alerte active</span>
+                <span className="block truncate text-[11px] text-slate-400">Personnalisez vos alertes intelligentes</span>
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Stations les plus proches (B.2.1) */}

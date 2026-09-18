@@ -154,3 +154,39 @@ Work Log:
 
 Stage Summary:
 - AUCUNE perte de données : le « tout a disparu » n'était que le serveur OOM-tué. Serveur relancé (PID bun + next-server), app revalidée de bout en bout sur les 4 modes. Risque résiduel : Turbopack peut regonfler en mémoire (limite ~4 Go conteneur) — prévoir surveillance via cron webDevReview toutes les 15 min et redémarrage `(setsid bun run dev > dev.log 2>&1 < /dev/null &)` si nécessaire.
+
+---
+Task ID: 7
+Agent: orchestrator (Z.ai Code)
+Task: QA complet + Module B.3.1 étendu — Centre d'alertes intelligentes mobile avec préférences persistantes
+
+Work Log:
+- QA initial : `bun run lint` 0 erreur ; 10 endpoints API supplémentaires testés (reviews, contributions, reports, calculations, alerts, movements, competition, roads, projects, governorats) → tous 200.
+- Audit de couverture du cahier des charges : tous les modules A/B/C/D implémentés (stations 1 709 lignes, competition 687, settings 815, mobile 794 + 9 écrans, portal 1 314, backoffice 1 562 — agents 5-b/5-d/5-e avaient livré sans journaliser).
+- Nouveaux fichiers (exclusif dossier mobile) :
+  - `smart-alerts.ts` : moteur de calcul d'alertes (4 types : open24/service/rating/fresh) 100 % client, filtres rayon/statut/24h, priorité enseignes favorites, dédup, tri distance, plafond 14.
+  - `alerts-store.ts` : zustand persist « carbuscope-alerts » (favBrands, watchedServices, radiusKm 2-20, open24Only) + merge assainissant (défense état localStorage corrompu).
+  - `screens/alerts-screen.tsx` : centre d'alertes — bandeau « en direct » (compteur + heure de calcul), panneau préférences repliable (chips enseignes colorées, chips services avec icônes, slider rayon, switch 24h/24, réinitialisation + toast), fil de cartes animées (framer-motion stagger, badge type, distance/temps/enseigne, clic → fiche), état vide avec CTA.
+- Modifications : `shared.tsx` (Screen + « alertes »), `mobile-app.tsx` (routeur : écran enregistré, écran poussé, retour → carte, returnTo préservé), `screens/map-screen.tsx` (rotation des alertes désormais personnalisée via prefs ; bouton cloche avec badge de compte ; carte rotative cliquable → centre ; état vide invitatif ; suppression de l'ancien buildAlerts codé en dur).
+- Bug trouvé et corrigé pendant la vérification navigateur : `prefs.favBrands.includes is not a function` — le `toggleIn` de shared.tsx est dédié aux Set (retournait un Set pour un champ tableau). Correctif : `toggleInArray` local + merge assainissant du persist.
+- Vérifications agent-browser : bascule mode Mobile → cloche « 8 alertes intelligentes » ; centre ouvert (8 alertes réelles : « Station Indépendants ouverte 24h/24 à 1,8 km », « Lavage disponible à 1,8 km »…) ; bascule enseigne favorite Agil → recalcul instantané 9 alertes dont « Station Agil ouverte 24h/24 à 1,8 km — Agil Tunis Centre » (exemple exact du cahier §B.3.1) + El Ouardia + Ettadhamen ; clic carte → fiche station « Agil Tunis Centre » ; retours empilés OK ; localStorage persisté propre (tableaux). Rechargement + nettoyage du localStorage corrompu du bug validés.
+- `bun run lint` final : 0 erreur. GET / 200. Navigateur de test fermé (1,8 Go libres).
+
+Stage Summary:
+- B.3.1 pleinement réalisé : alertes personnalisées, persistantes, recalcul instantané, navigation complète. Aucun appel serveur ajouté (calcul client). Prochaine étape recommandée : comparateur de stations (observatoire), export PDF (A.4.3/A.8), ou i18n 5 langues (A.9/B.3.4).
+
+---
+Task ID: 8
+Agent: orchestrator (Z.ai Code)
+Task: Comparateur de stations (extension A.4) — comparaison côte à côte de 2-3 stations dans l'onglet « Mes stations »
+
+Work Log:
+- Nouveau fichier `stations/station-compare-dialog.tsx` : Dialog large (ScrollArea max-h-70vh, défilement horizontal mobile) — grille comparative (colonnes = stations, lignes = statut, localisation, trafic captif + barre relative, note + étoiles, horaires 24h/24-7j/7, services, fraîcheur, score) ; badges « Top » (Trophy) sur les meilleurs scores par critère ; matrice des services différenciants (check émeraude / tiret, point ambre = différenciant, cf. A.5.3) ; score comparatif {wins}/4 + « Meilleur profil » ; synthèse ambre avec recommandation ; bouton « Voir la fiche » par colonne (ouvre StationDetailDialog).
+- `stations/stations-tab.tsx` : état compareIds/compareOpen + sélection par Checkbox (colonne desktop + cartes mobile), toast limite 3, bouton « Comparer (n/3) » (désactivé < 2) dans la barre d'actions, dialog rendu avec compareSelection.
+- ⚠️ Incident de debug majeur (à retenir) : variable locale nommée `compareStations` entrait en collision avec la FONCTION module-level `compareStations(a, b, sort)` (comparateur de tri) utilisée DANS le useMemo `filtered` → le compilateur React résolvait le symbole vers la variable locale (« inferred dependency was compareStations ») → « Could not preserve existing memoization » → saut de l'optimisation du composant entier + 2 erreurs eslint react-hooks/preserve-manual-memoization. Bissection complète (git stash, retraits incrémentaux) pour isoler la cause. Correctif : renommage en `compareSelection`. LEÇON : ne jamais nommer une variable locale comme une fonction module-level référencée dans un callback/mémo du même composant.
+- Bissection supplémentaire : `.at(-1)` remplacé par index classique (prudence compilateur) ; toast sorti du setState updater (StrictMode) ; useCallback dépend de [compareIds, stations].
+- Vérifications agent-browser : onglet Mes stations → cases à cocher présentes (desktop + cartes) → 2 stations cochées → bouton « Comparer (2/3) » actif → dialog « Comparateur de stations 2/3 » avec Agil Soukra vs Agil Beni Khiar 3, badges TOP, services différenciants, synthèse « Agil Soukra domine 4 critères sur 4 (7 796 véh./j, note 4,7/5, 5 services, vérifiée le 05 janv. 2026) » → « Voir la fiche » → StationDetailDialog + API 200.
+- `bun run lint` complet : 0 erreur. GET / 200. Mémoire : 1,6 Go disponibles.
+
+Stage Summary:
+- Comparateur livré et vérifié de bout en bout. Conventions respectées (shadcn, palette sans bleu, français, responsive, accessibilité aria). Reste recommandé : i18n 5 langues (A.9/B.3.4), export PDF enrichi, widget comparaison sur carte.

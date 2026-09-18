@@ -13,7 +13,7 @@ import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 
 export type Screen =
   | "map" | "search" | "promos" | "fidelite" | "profil"
-  | "fiche" | "signalement" | "avis"
+  | "fiche" | "signalement" | "avis" | "alertes"
 
 export type StationWithDist = StationDTO & { distanceKm: number }
 

@@ -21,6 +21,7 @@ import { ReviewScreen } from "./screens/review-screen"
 import { PromosScreen } from "./screens/promos-screen"
 import { LoyaltyScreen } from "./screens/loyalty-screen"
 import { ProfileScreen } from "./screens/profile-screen"
+import { AlertsScreen } from "./screens/alerts-screen"
 
 const TABS: { id: Screen; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
   { id: "map", label: "Carte", icon: Map },
@@ -171,6 +172,8 @@ export function MobileApp() {
       setDetail(null)
     } else if (screen === "signalement" || screen === "avis") {
       setScreen("fiche")
+    } else if (screen === "alertes") {
+      setScreen("map")
     }
   }
 
@@ -228,7 +231,7 @@ export function MobileApp() {
 
   if (loading) return <SplashScreen />
 
-  const pushed = screen === "fiche" || screen === "signalement" || screen === "avis"
+  const pushed = screen === "fiche" || screen === "signalement" || screen === "avis" || screen === "alertes"
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -250,6 +253,7 @@ export function MobileApp() {
             {screen === "promos" && <PromosScreen api={api} />}
             {screen === "fidelite" && <LoyaltyScreen />}
             {screen === "profil" && <ProfileScreen api={api} />}
+            {screen === "alertes" && <AlertsScreen api={api} />}
           </motion.div>
         </AnimatePresence>
       </div>

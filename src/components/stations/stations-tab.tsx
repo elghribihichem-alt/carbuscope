@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, FileDown,
-  FileSpreadsheet, MapPin, Pencil, Plus, Printer, Search, SearchX, X,
+  FileSpreadsheet, GitCompareArrows, MapPin, Pencil, Plus, Printer, Search, SearchX, X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAppStore } from "@/store/app-store"
@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -26,12 +27,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StatusBadge } from "@/components/shell/badges"
 import { ErrorState, TabSkeleton } from "@/components/shell/loading"
 import { ServiceChips } from "./service-chip"
+import { StationCompareDialog } from "./station-compare-dialog"
 import { StationDetailDialog } from "./station-detail-dialog"
 import { StationFormDialog } from "./station-form-dialog"
 import { buildStationsCsv, downloadText, formatDateFr, normalizeFr, todayStamp } from "./station-utils"
 
 const PAGE_SIZE = 20
 const TENSION_THRESHOLD = 1100 // trafic captif (véh./j) sous lequel une station active est « sous tension »
+const MAX_COMPARE = 3 // nombre maximal de stations comparables côte à côte
 
 type SubTabKey = "all" | "ACTIVE" | "RENOVATION" | "PROJECT" | "TENSION"
 type SortKey =
@@ -170,6 +173,10 @@ export function StationsTab() {
   const [formOpen, setFormOpen] = useState(false)
   const [formStation, setFormStation] = useState<StationDTO | null>(null)
 
+  // ---- Comparateur de stations (2 à 3) ----
+  const [compareIds, setCompareIds] = useState<string[]>([])
+  const [compareOpen, setCompareOpen] = useState(false)
+
   // ---- Chargement du parc de l'enseigne connectée ----
   useEffect(() => {
     const ctrl = new AbortController()
@@ -299,6 +306,28 @@ export function StationsTab() {
     setPage(0)
   }, [])
 
+  // ---- Comparateur : sélection de 2 à 3 stations ----
+  const toggleCompare = useCallback((s: StationDTO) => {
+    if (compareIds.includes(s.id)) {
+      setCompareIds(compareIds.filter((x) => x !== s.id))
+      return
+    }
+    if (compareIds.length >= MAX_COMPARE) {
+      const lastId = compareIds[compareIds.length - 1]
+      const lastName = stations?.find((x) => x.id === lastId)?.name ?? "une station"
+      toast.info(`Maximum ${MAX_COMPARE} stations en comparaison`, {
+        description: `Retirez « ${lastName} » avant d'en ajouter une autre.`,
+      })
+      return
+    }
+    setCompareIds([...compareIds, s.id])
+  }, [compareIds, stations])
+
+  const compareSelection = useMemo(() => {
+    if (stations === null) return []
+    return stations.filter((s) => compareIds.includes(s.id))
+  }, [stations, compareIds])
+
   const onSortClick = useCallback((target: SortKey) => {
     setPage(0)
     setSort((cur) => toggleSort(cur, target))
@@ -396,6 +425,15 @@ export function StationsTab() {
               <Printer className="h-4 w-4" aria-hidden />
               Exporter PDF
             </Button>
+            <Button
+              variant="outline" size="sm" className="gap-1.5"
+              disabled={compareIds.length < 2}
+              onClick={() => setCompareOpen(true)}
+              title={compareIds.length < 2 ? "Sélectionnez au moins 2 stations à comparer" : `Comparer ${compareIds.length} stations`}
+            >
+              <GitCompareArrows className="h-4 w-4" aria-hidden />
+              Comparer {compareIds.length > 0 ? `(${compareIds.length}/${MAX_COMPARE})` : ""}
+            </Button>
           </div>
         </div>
 
@@ -437,6 +475,7 @@ export function StationsTab() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-background">
                     <tr className="border-b">
+                      <PlainTh label="Comparer" className="w-[64px]" />
                       <SortTh label="ID" target="code-asc" sort={sort} onSort={onSortClick} className="w-[104px]" />
                       <SortTh label="Nom" target="name-asc" sort={sort} onSort={onSortClick} />
                       <SortTh label="Gouvernorat" target="gov-asc" sort={sort} onSort={onSortClick} className="w-[150px]" />
@@ -450,6 +489,14 @@ export function StationsTab() {
                   <tbody>
                     {paged.map((s) => (
                       <tr key={s.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
+                        <td className="px-2 py-2 align-middle">
+                          <Checkbox
+                            checked={compareIds.includes(s.id)}
+                            onCheckedChange={() => toggleCompare(s)}
+                            aria-label={`Comparer ${s.name}`}
+                            title="Ajouter au comparateur"
+                          />
+                        </td>
                         <td className="px-2 py-2 align-middle font-mono text-xs text-muted-foreground">{s.code}</td>
                         <td className="max-w-[300px] px-2 py-2 align-middle">
                           <div className="flex items-center gap-2">
@@ -525,6 +572,12 @@ export function StationsTab() {
                 <Card key={s.id} className="p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
+                      <Checkbox
+                        checked={compareIds.includes(s.id)}
+                        onCheckedChange={() => toggleCompare(s)}
+                        aria-label={`Comparer ${s.name}`}
+                        className="mt-0.5"
+                      />
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.brandColor }} aria-hidden />
                       <button
                         type="button"
@@ -636,6 +689,12 @@ export function StationsTab() {
         </p>
       </div>
 
+      <StationCompareDialog
+        open={compareOpen}
+        stations={compareSelection}
+        onClose={() => setCompareOpen(false)}
+        onOpenDetail={(id) => { setCompareOpen(false); setDetailId(id) }}
+      />
       <StationDetailDialog
         stationId={detailId}
         onClose={() => setDetailId(null)}
