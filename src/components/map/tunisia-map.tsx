@@ -6,10 +6,11 @@
 
 import * as React from "react"
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+import dynamic from "next/dynamic"
 import {
   Store, Wind, DoorOpen, CreditCard, Coffee, Droplets, Wrench, Cog, Zap,
   MapPin, Navigation, X, Ruler, Hexagon, Circle as CircleIcon, Trash2, Plus, Minus,
-  Maximize, Layers, FileDown, ChevronDown, ChevronRight, Star, Gauge, Clock, ShieldCheck, History,
+  Maximize, Layers, FileDown, ChevronDown, ChevronRight, Star, Gauge, Clock, ShieldCheck, History, Globe, Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +23,30 @@ import type { StationDTO, StationDetail, RoadDTO, ProjectDTO, GovernoratRow, Ser
 import { SERVICE_LABELS } from "@/lib/types"
 import { MAP_W, MAP_H, project, unproject, haversineKm, kmToSvgUnits, svgUnitsToKm, pointInPolygon } from "@/lib/geo"
 import { TUNISIA_BORDER, DJERBA, KERKENNAH, CITIES, GOV_CENTERS } from "./tunisia-geo"
+import type { OsmBackground } from "./osm-map"
+
+// Fond cartographique réel (Leaflet + tuiles OSM/CARTO) — chargé côté client uniquement
+const OSMMap = dynamic(() => import("./osm-map").then(m => m.OSMMap), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 z-0 flex items-center justify-center bg-secondary/30 backdrop-blur-[2px]">
+      <span className="inline-flex items-center gap-2 rounded-lg border bg-background/90 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement du fond cartographique…
+      </span>
+    </div>
+  ),
+})
+
+const OSM_BG_LABELS: [OsmBackground, string][] = [
+  ["auto", "Automatique (suit le thème)"],
+  ["street", "Plan détaillé (Esri)"],
+  ["clair", "Clair minimal (Esri)"],
+  ["noir", "Nuit (Esri)"],
+  ["topo", "Relief (OpenTopoMap)"],
+  ["osm", "Plan communautaire OSM"],
+]
+
+const OSM_BG_KEYS = new Set<string>(["auto", "street", "clair", "noir", "topo", "osm"])
 
 export const SERVICE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   boutique: Store, gonflage: Wind, toilettes: DoorOpen, atm: CreditCard, cafe: Coffee,
@@ -116,6 +141,35 @@ export function TunisiaMap({
   const [detail, setDetail] = useState<StationDetail | null>(null)
   const [detailCode, setDetailCode] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
+
+  // Fond cartographique réel (OSM) vs schéma vectoriel — persisté par visiteur.
+  // Lecture différée (setTimeout 0) : évite tout écart d'hydratation SSR et les setState synchrones en effet.
+  // La persistance n'écrit qu'après la lecture initiale (sinon la valeur par défaut écraserait le choix stocké).
+  const [realMap, setRealMap] = useState(true)
+  const [osmBg, setOsmBg] = useState<OsmBackground>("auto")
+  const [bgPrefsLoaded, setBgPrefsLoaded] = useState(false)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem("carbuscope-map-bg")
+        setRealMap(stored ? stored === "real" : true) // fond réel activé par défaut
+      } catch { /* ignore */ }
+      try {
+        const b = localStorage.getItem("carbuscope-map-osmbg")
+        if (b && OSM_BG_KEYS.has(b)) setOsmBg(b as OsmBackground)
+      } catch { /* ignore */ }
+      setBgPrefsLoaded(true)
+    }, 0)
+    return () => clearTimeout(id)
+  }, [])
+  useEffect(() => {
+    if (!bgPrefsLoaded) return
+    try { localStorage.setItem("carbuscope-map-bg", realMap ? "real" : "schema") } catch { /* ignore */ }
+  }, [realMap, bgPrefsLoaded])
+  useEffect(() => {
+    if (!bgPrefsLoaded) return
+    try { localStorage.setItem("carbuscope-map-osmbg", osmBg) } catch { /* ignore */ }
+  }, [osmBg, bgPrefsLoaded])
 
   // outils
   const [tool, setTool] = useState<Tool>(null)
@@ -434,6 +488,21 @@ export function TunisiaMap({
 
   return (
     <div ref={wrapRef} className={`relative overflow-hidden rounded-xl border bg-[radial-gradient(ellipse_at_center,var(--secondary)_0%,var(--background)_75%)] ${className}`}>
+      {realMap ? (
+        <OSMMap
+          stations={stations}
+          roads={roads}
+          projects={projects}
+          layers={{ stations: layerState.stations, roads: layerState.roads, traffic: layerState.traffic, projects: layerState.projects }}
+          ownBrandSlug={ownBrandSlug}
+          selectedCode={selCode}
+          onSelect={selectStation}
+          onViewDetail={(s) => onViewDetail?.(s)}
+          background={osmBg}
+          focusCode={focusCode}
+          fitTo={fitTo}
+        />
+      ) : (
       <svg ref={svgRef} viewBox={`0 0 ${MAP_W} ${MAP_H}`} preserveAspectRatio="xMidYMid meet"
         className="h-full w-full touch-none select-none cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
@@ -587,11 +656,12 @@ export function TunisiaMap({
           {layerState.stations && <g>{stationNodes}</g>}
         </g>
       </svg>
+      )}
 
       {/* ---------- Overlays HTML ---------- */}
 
-      {/* Popup fiche station */}
-      {selectedStation && popupPos && (
+      {/* Popup fiche station (mode schéma) */}
+      {!realMap && selectedStation && popupPos && (
         <StationPopup
           station={selectedStation}
           detail={activeDetail}
@@ -605,8 +675,8 @@ export function TunisiaMap({
         />
       )}
 
-      {/* Tooltip survol */}
-      {hoverCode && hoverCode !== selCode && (() => {
+      {/* Tooltip survol (mode schéma) */}
+      {!realMap && hoverCode && hoverCode !== selCode && (() => {
         const st = stations.find(s => s.code === hoverCode)
         if (!st) return null
         const p = project(st.lng, st.lat)
@@ -623,19 +693,31 @@ export function TunisiaMap({
         )
       })()}
 
-      {/* Contrôles zoom */}
+      {/* Contrôles zoom + bascule fond réel */}
       <div className="absolute right-2 top-2 z-10 flex flex-col gap-1">
-        <div className="flex flex-col rounded-lg border bg-background/85 p-0.5 shadow-sm backdrop-blur">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1.35)} aria-label="Zoom avant"><Plus className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1 / 1.35)} aria-label="Zoom arrière"><Minus className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetView} aria-label="Réinitialiser la vue"><Maximize className="h-4 w-4" /></Button>
-        </div>
+        {!realMap && (
+          <div className="flex flex-col rounded-lg border bg-background/85 p-0.5 shadow-sm backdrop-blur">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1.35)} aria-label="Zoom avant"><Plus className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1 / 1.35)} aria-label="Zoom arrière"><Minus className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetView} aria-label="Réinitialiser la vue"><Maximize className="h-4 w-4" /></Button>
+          </div>
+        )}
+        <Button
+          variant={realMap ? "secondary" : "outline"}
+          size="icon"
+          className="h-8 w-8 rounded-lg shadow-sm"
+          onClick={() => { setRealMap(v => !v); toast(realMap ? "Fond schéma vectoriel activé" : "Fond cartographique réel OpenStreetMap activé") }}
+          aria-pressed={realMap}
+          aria-label="Basculer entre fond cartographique réel et schéma"
+          title={realMap ? "Revenir au schéma vectoriel" : "Afficher le fond cartographique réel (OSM)"}>
+          <Globe className="h-4 w-4" />
+        </Button>
         {showLayerControl && (
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg shadow-sm" aria-label="Couches cartographiques"><Layers className="h-4 w-4" /></Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-60 p-3">
+            <PopoverContent align="end" className="w-64 p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Couches cartographiques</p>
               {([
                 ["stations", "Stations-service"],
@@ -644,19 +726,41 @@ export function TunisiaMap({
                 ["zones", "Zones administratives"],
                 ["projects", "Projets d'infrastructure"],
                 ["fleet", "Parc automobile par zone"],
-              ] as [keyof MapLayers, string][]).map(([key, label]) => (
-                <label key={key} className="flex cursor-pointer items-center justify-between rounded px-1 py-1.5 text-sm hover:bg-accent">
-                  {label}
-                  <Switch checked={layerState[key]} onCheckedChange={v => setLayerState(s => ({ ...s, [key]: v }))} />
-                </label>
-              ))}
+              ] as [keyof MapLayers, string][]).map(([key, label]) => {
+                const svgOnly = realMap && (key === "zones" || key === "fleet")
+                return (
+                  <label key={key}
+                    className={`flex items-center justify-between rounded px-1 py-1.5 text-sm ${svgOnly ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-accent"}`}
+                    title={svgOnly ? "Disponible en mode schéma" : undefined}>
+                    {label}
+                    <Switch checked={layerState[key]} disabled={svgOnly} onCheckedChange={v => setLayerState(s => ({ ...s, [key]: v }))} />
+                  </label>
+                )
+              })}
+              {realMap && (
+                <div className="mt-2 space-y-1 border-t pt-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fond cartographique</p>
+                  {OSM_BG_LABELS.map(([key, label]) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-accent">
+                    <span
+                      role="radio"
+                      aria-checked={osmBg === key}
+                      tabIndex={0}
+                      onClick={() => setOsmBg(key)}
+                      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOsmBg(key) } }}
+                      className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 ${osmBg === key ? "border-primary bg-primary" : "border-muted-foreground/40"}`} />
+                    <span onClick={() => setOsmBg(key)}>{label}</span>
+                  </label>
+                  ))}
+                </div>
+              )}
             </PopoverContent>
           </Popover>
         )}
       </div>
 
-      {/* Barre d'outils d'analyse spatiale */}
-      {tools && (
+      {/* Barre d'outils d'analyse spatiale (mode schéma) */}
+      {tools && !realMap && (
         <div className="absolute bottom-2 left-2 z-10 flex flex-col gap-1.5">
           <div className="flex gap-1 rounded-lg border bg-background/85 p-1 shadow-sm backdrop-blur">
             <Button variant={tool === "measure" ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Mesure de distance"

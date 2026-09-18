@@ -7,13 +7,14 @@ import { useAppStore } from "@/store/app-store"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ShieldCheck, LayoutDashboard, Store, PlugZap, Building2 } from "lucide-react"
+import { ShieldCheck, LayoutDashboard, Store, PlugZap, Building2, Star } from "lucide-react"
 import type { BrandDTO } from "@/lib/types"
 import { num } from "@/components/settings/settings-shared"
 import { PortalDashboard } from "./portal-dashboard"
 import { PortalStations } from "./portal-stations"
 import { PortalPromotions } from "./portal-promotions"
 import { PortalApi } from "./portal-api"
+import { PortalReviews } from "./portal-reviews"
 
 export function PortalView() {
   const brandSlug = useAppStore(s => s.brandSlug)
@@ -73,11 +74,14 @@ export function PortalView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne du portail (3 onglets) */}
+      {/* Navigation interne du portail (4 onglets) */}
       <Tabs defaultValue="dashboard" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 sm:w-auto">
+        <TabsList className="grid h-auto w-full grid-cols-4 sm:w-auto">
           <TabsTrigger value="dashboard" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <LayoutDashboard className="h-4 w-4" aria-hidden /> Tableau de bord
+          </TabsTrigger>
+          <TabsTrigger value="reviews" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <Star className="h-4 w-4" aria-hidden /> Avis &amp; réputation
           </TabsTrigger>
           <TabsTrigger value="stations" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <Store className="h-4 w-4" aria-hidden /> Mes stations
@@ -89,6 +93,9 @@ export function PortalView() {
 
         <TabsContent value="dashboard" className="mt-0 space-y-4">
           <PortalDashboard brandSlug={brandSlug} />
+        </TabsContent>
+        <TabsContent value="reviews" className="mt-0 space-y-4">
+          <PortalReviews key={brandSlug} brandSlug={brandSlug} />
         </TabsContent>
         <TabsContent value="stations" className="mt-0 space-y-4">
           <PortalStations brandSlug={brandSlug} />

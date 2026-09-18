@@ -13,7 +13,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Search, RotateCcw, MapPin, Users } from "lucide-react"
+import { toast } from "sonner"
 import { TunisiaMap, SERVICE_ICONS } from "./tunisia-map"
+import { StationDetailDialog } from "@/components/stations/station-detail-dialog"
 import { useAppStore } from "@/store/app-store"
 import type { StationDTO, BrandDTO, ServiceDTO } from "@/lib/types"
 import { SERVICE_LABELS } from "@/lib/types"
@@ -36,6 +38,7 @@ const GOVS = ["Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul", "Bizerte", "S
 
 export function CarteInteractiveTab() {
   const { brandSlug, focusStationCode, setFocusStation } = useAppStore()
+  const [detailId, setDetailId] = useState<string | null>(null)
 
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [services, setServices] = useState<ServiceDTO[]>([])
@@ -204,9 +207,21 @@ export function CarteInteractiveTab() {
             className="h-[calc(100vh-150px)] min-h-[520px] w-full"
             focusCode={focusStationCode}
             onSelect={() => { if (focusStationCode) setFocusStation(null) }}
+            onViewDetail={(s) => setDetailId(s.id)}
           />
         )}
       </div>
+
+      {/* Fiche détaillée d'une station (depuis la popup carte) */}
+      <StationDetailDialog
+        stationId={detailId}
+        onClose={() => setDetailId(null)}
+        onEdit={() => {
+          setDetailId(null)
+          toast.info("L'édition d'une station se fait depuis l'onglet « Mes stations ».")
+        }}
+        onLocate={(code) => { setDetailId(null); setFocusStation(code) }}
+      />
     </div>
   )
 }

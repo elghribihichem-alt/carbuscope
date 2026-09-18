@@ -300,3 +300,99 @@ export const CONTRIBUTION_TYPE_LABELS: Record<string, string> = {
   QUEUE: "File d'attente",
   CLEANLINESS: "Propreté",
 }
+
+// ---- Réputation & avis (portail enseigne : comparaison concurrents + valeur enseigne) ----
+
+export const REVIEW_CRITERIA_LABELS: Record<string, string> = {
+  proprete: "Propreté",
+  accueil: "Accueil",
+  rapidite: "Rapidité",
+  services: "Offre de services",
+}
+
+export type ReputationBrandRow = {
+  slug: string
+  name: string
+  color: string
+  avgRating: number
+  reviewsCount: number
+  stationsCount: number
+  shareOfVoice: number // % des avis du marché
+  valueIndex: number // IVE 0-100
+}
+
+export type ReputationStats = {
+  fetchedAt: string
+  brand: { slug: string; name: string; color: string }
+  own: {
+    avgRating: number
+    reviewsCount: number
+    stationsWithReviews: number
+    stationsTotal: number
+    shareOfVoice: number
+    distribution: { rating: number; count: number }[]
+    criteria: { key: string; label: string; value: number }[]
+    trend: { months: string[]; values: number[]; counts: number[] }
+    topStations: { code: string; name: string; gouvernorat: string; rating: number; reviewsCount: number }[]
+    flopStations: { code: string; name: string; gouvernorat: string; rating: number; reviewsCount: number }[]
+    recentReviews: {
+      id: string
+      author: string
+      rating: number
+      comment: string
+      createdAt: string
+      stationName: string
+      stationCode: string
+      gouvernorat: string
+    }[]
+  }
+  market: {
+    avgRating: number
+    reviewsCount: number
+    distribution: { rating: number; count: number }[]
+    criteria: { key: string; label: string; value: number }[]
+    trend: { months: string[]; values: number[] }
+    brandComparison: ReputationBrandRow[]
+  }
+  valueIndex: {
+    score: number
+    rank: number
+    brandsCount: number
+    details: { key: string; label: string; points: number; max: number; hint: string }[]
+  }
+}
+
+// ---- Back-office : statistiques plateforme réelles (D.2.5 étendu) ----
+
+export type PlatformStats = {
+  fetchedAt: string
+  stations: {
+    total: number; rated: number; wellRated: number; fresh: number; h24: number; withAddress: number
+    servicesTotal: number; avgServicesPerStation: number; qualityScore: number
+  }
+  reviews: {
+    total: number; avgRating: number; distinctAuthors: number
+    trend: { month: string; reviews: number; authors: number }[]
+    topReviewers: { author: string; count: number }[]
+  }
+  moderation: {
+    total: number
+    byStatus: Record<string, number>
+    byType: Record<string, number>
+    resolutionRate: number
+    topContributors: { author: string; count: number }[]
+  }
+  alerts: {
+    total: number
+    bySeverity: Record<string, number>
+    byType: { type: string; count: number }[]
+  }
+  users: {
+    total: number; active: number
+    byRole: { role: string; count: number }[]
+  }
+  reports: {
+    total: number
+    byStatus: { status: string; count: number }[]
+  }
+}

@@ -239,3 +239,67 @@ Work Log:
 
 Stage Summary:
 - B.3.4 et A.9 pleinement réalisés : les 5 langues traduisent réellement l'application mobile (interface + alertes dynamiques + dates/heures/nombres via Intl), l'arabe passe l'UI en RTL complet, la détection automatique du terminal fonctionne au premier lancement, et le choix persiste. Les libellés desktop (observatoire B2B, portail, back-office) restent en français par choix assumé (outil pro tunisien) — l'infrastructure i18n est prête à les couvrir plus tard si demandé. Prochaines priorités recommandées : widget comparaison de stations sur la carte interactive (prolongement tâche 8), statistiques d'usage des favoris côté portail enseigne (C.2.5), export PDF enrichi (A.8).
+---
+Task ID: 11
+Agent: orchestrator (Z.ai Code)
+Task: Fond cartographique réel (OSM/Esri/OpenTopoMap) pour toutes les cartes de la plateforme
+
+Work Log:
+- `bun add leaflet react-leaflet @types/leaflet` (Leaflet 1.9.4 + react-leaflet 5.0.0, React 19 OK).
+- Nouveau fichier `src/components/map/osm-map.tsx` : carte Leaflet `preferCanvas` (fluide avec 2 200 marqueurs) — CircleMarkers colorés par enseigne (rayon selon trafic, statuts : fermée=barré gris, projet=pointillé, rénovation=contour ambre, sélection=halo), routes en Polyline [lng,lat]→[lat,lng] (tooltips A1–A4/RN/GP + tmj), heatmap trafic en halos, projets en pastilles émeraude/prune, popup fiche unique contrôlée par la sélection (mini-carte : badges statut/trafic/note/24h, icônes services, bouton « Voir la fiche détaillée »), tooltips survol natifs, attribution en bas-gauche (libère la légende), fitBounds Tunisie + flyTo focus/sélection.
+- Tuiles : détection que tile.openstreetmap.org et basemaps.cartocdn.com renvoient des tuiles bloquées/filigranées « API KEY REQUIRED » depuis une IP datacenter → bascule vers **Esri (World_Street_Map / Light_Gray / Dark_Gray — sans clé, propres)** + **OpenTopoMap (relief)** + OSM communautaire en option. 6 fonds : auto (thème), street, clair, noir, topo, osm.
+- `tunisia-map.tsx` : import dynamique `ssr:false` + loading skeleton ; état `realMap`/`osmBg` persistés localStorage (`carbuscope-map-bg` = real par défaut, `carbuscope-map-osmbg`) avec lecture différée setTimeout 0 (hydratation + lint set-state-in-effect) et écriture seulement après lecture (bug d'écrasement évité) ; bouton Globe dans les contrôles (aria-pressed, toast) ; SVG/popup/outils/zoom custom masqués en mode réel ; popover Couches enrichi (section « Fond cartographique », zones/parc auto désactivés en mode réel) ; StationPopup et tooltip SVG gated `!realMap`.
+- `globals.css` : styles Leaflet charte (popups rayon 0.625rem, tooltips, zoom, attribution en variables CSS, thème sombre).
+- `carte-interactive-tab.tsx` : bouton « Voir la fiche » de la popup désormais fonctionnel — rend `StationDetailDialog` (onLocate → focus carte, onEdit → toast guidant vers « Mes stations »).
+- QA agent-browser E2E : carte interactive → tuiles Esri réelles + 600 marqueurs colorés + légende ; clic marqueur (Station Soukra) → popup « En rénovation, 4.5 » → « Voir la fiche détaillée » → dialog complet (photo, historique) ; commutation topo (`a.tile.opentopomap.org`) et nuit (Dark_Gray) vérifiée par URL de tuiles ; bascule Globe → SVG schéma + toast ; **persistance rechargée** (real/noir conservés) ; dashboard mini-carte Leaflet OK ; **Mobile B2C** : carte réelle dans le phone frame (VLM : tuiles + marqueurs visibles) ; 0 erreur console liée (seuls warnings Radix DialogTitle préexistants du StationDetailDialog).
+- Incident dev-server résolu : serveur tombé pendant la session → relance `(setsid bun run dev …)` → 200, RSS ~1,8 Go.
+- Bug crucial trouvé et corrigé (Leaflet canvas) : le clic marqueur déclenchait ENSUITE le `map.on("click")` de désélection (ordre `targets = filtered.concat(targets)` dans `_fireDOMEvent`) → sélection immédiatement effacée. Correctif : `bubblingMouseEvents={false}` sur les CircleMarkers + toggle re-clic même station + popup avec `key={station.code}` (prop `open` inexistante en react-leaflet v5, `onClose` non supporté → retirés).
+- `bun run lint` : 0 erreur. Navigateur fermé (1,8 Go libres).
+
+Stage Summary:
+- Fond cartographique réel opérationnel sur TOUTES les cartes (observatoire, dashboard, mobile B2C, back-office agents) avec 6 fonds sans clé API, bascule schéma/réel persistée, popups interactives, routes/heatmap/projets superposés, mode sombre. Points d'attention : OSM communautaire peut être bloqué depuis certaines IP (403) — Esri/OpenTopoMap sûrs ; l'outil mesure/rayon/polygone reste en mode schéma uniquement ; warning Radix DialogTitle sur station-detail-dialog (préexistant, à corriger un jour).
+---
+Task ID: 12
+Agent: orchestrator (Z.ai Code)
+Task: Portail enseigne — Avis clients, comparaison concurrents, valeur de l'enseigne (C.2.6)
+
+Work Log:
+- Analyse des données : 4 588 avis / 1 643 stations / 6 enseignes, critères JSON {proprete, accueil, rapidite, services}, 8 mois d'historique (févr→sept 2026), createdAt en millisecondes (÷1000 pour SQL brut).
+- `src/lib/types.ts` : types `ReputationStats`, `ReputationBrandRow`, `REVIEW_CRITERIA_LABELS`.
+- Nouvelle API `GET /api/stats/reputation?brand=` (`src/app/api/stats/reputation/route.ts`) : agrégats par enseigne (notes, volume, distribution 1-5, critères, tendance mensuelle 8 mois, réseau actif/24h/fraîcheur 90j), top 5 / flop 5 stations (≥3 avis), 20 derniers avis détaillés, part de voix, comparaison toutes enseignes, et **IVE — Indice de Valeur d'Enseigne (0-100)** : note client 40 pts + volume d'avis 20 pts (3 avis/station = max) + expérience réseau 20 pts (actifs + 24h/7j) + fraîcheur des vérifications 20 pts, avec classement rang/N et décomposition détaillée.
+- Nouveau composant `src/components/portal/portal-reviews.tsx` (~520 lignes) : carte synthèse rédigée (delta vs marché coloré, badges stations notées/part de voix/IVE + pastille score), 4 KpiCard (note, avis, rang concurrentiel, IVE), 4 graphiques recharts (barres horizontales comparaison enseignes avec ligne de référence marché + (moi) en émeraude, distribution étoiles % moi vs marché, radar critères, ligne tendance moi vs marché), carte IVE avec barres de progression par composante + méthodologie, top 5 / flop 5 stations (étoiles, classement ambre/orange), flux ScrollArea max-h-96 des 20 derniers avis (avatar initiale, étoiles, citation, station + gouvernorat, relDays), états squelette/erreur/vides.
+- `portal-view.tsx` : 4e onglet « Avis & réputation » (icône Star), PortalReviews monté avec key={brandSlug} (remontage propre au changement d'enseigne).
+- QA agent-browser : portail Agil → onglet actif → synthèse « 3,9/5 sur 561 avis, +0,1 pt au-dessus du marché, IVE 64 » ; graphiques vérifiés (comparaison 6 enseignes avec Agil en émeraude + ligne Marché, distribution 1★-5★ moi vs marché, radar 4 critères, tendance 2 lignes vert/pointillé) ; bascule enseigne → Ola Energy « 3,7/5, IVE 65, 4e/6 » avec rechargement propre ; 0 erreur console ; API testée pour ola/agil (données complètes et cohérentes).
+- Correctifs pendant QA : comparaison `(moi)` (comparaison slug avec l'objet own au lieu de stats.brand.slug — toujours faux), setState dans l'effet → key remount, class terracotta inexistante → orange-600.
+- `bun run lint` : 0 erreur. Navigateur fermé.
+
+Stage Summary:
+- L'enseigne voit désormais les avis clients, se positionne face aux concurrents (notes, distribution, critères, tendance) et pilote la valeur perçue de son enseigne via l'IVE composite (rang + décomposition actionnable). Reste possible : réponses de l'enseigne aux avis, alertes « chute de note d'une station », export PDF réputation.
+---
+Task ID: 13
+Agent: orchestrator (Z.ai Code)
+Task: Back-office enrichi — « plus de données » réelles pour le pilotage de la plateforme (D.2.5 étendu)
+
+Work Log:
+- Exploration des données réelles : 4 588 avis / 16 auteurs distincts, 14 contributions (12 en attente, 2 rejetées, 6 types), 44 alertes (14 critiques, 20 moyennes, 10 info, 5 types), 4 comptes utilisateurs (4 rôles), 6 rapports générés, qualité fiches (1 786/1 814 notées, 1 426 ≥ 3 avis, 386 fraîches < 90 j, 716 en 24h/7j, 6 901 services = 3,8/fiche).
+- Nouvelle API `GET /api/stats/platform` (`src/app/api/stats/platform/route.ts`) : tout est calculé depuis la base (plus aucune valeur codée en dur) — qualité des fiches + indice qualité global (complétude 30 + notoriété 25 + fraîcheur 25 + services 20), avis (total, note moyenne, tendance 8 mois avec auteurs actifs, top 5 évaluateurs), modération (statuts, types, taux de résolution, top 5 contributeurs), alertes (sévérité + types), comptes (rôles, actifs), rapports.
+- `src/lib/types.ts` : type `PlatformStats`.
+- Réécriture enrichie de `src/components/backoffice/bo-stats.tsx` (202 → ~530 lignes) : 5 KPI réelles (stations suivies + services/fiche, avis + note moyenne, contributeurs actifs, contributions + en attente, indice qualité) ; part de marché (conservée) ; contributions par type (conservé) ; NOUVEAU « Qualité des données du référentiel » (jauge donut 70/100 + 5 barres de progression détaillées) ; NOUVEAU « Entonnoir de modération » (barres colorées PENDING/VALIDATED/REJECTED + taux de résolution + top contributeurs avec podium) ; NOUVEAU « Activité de la communauté » (ComposedChart aire avis/vert + ligne auteurs/ambre) ; NOUVEAU « Alertes stratégiques » (badges sévérité colorés + barres horizontales par type) ; NOUVEAU « Comptes plateforme & rapports » (rôles, rapports, 3 compteurs de synthèse).
+- Correctif pendant QA : Progress shadcn n'accepte pas de couleur personnalisée (bg-primary fixe) → barres de l'entonnoir en divs stylées accessibles (role=progressbar + aria).
+- QA agent-browser : onglet Stats plateforme → 5 KPI réelles, jauge 70/100 + 5 barres, entonnoir (12 en attente en ambre), top contributeurs, aire d'activité, badges alertes (Critique 14), comptes/rapports — tout rendu, 0 erreur console. (Note : les Tabs Radix nécessitent un clic natif agent-browser, pas .click() synthétique.)
+- `bun run lint` : 0 erreur. Navigateur fermé.
+
+Stage Summary:
+- Le back-office pilote désormais la plateforme avec des données réelles et détaillées : qualité du référentiel (indice + décomposition), entonnoir de modération avec contributeurs, activité communautaire mensuelle, alertes par sévérité/type, comptes par rôle et rapports. Idées suivantes : logs d'appels API, délai moyen de modération (updatedAt manquant), carte de santé des endpoints, export du tableau de bord.
+---
+Task ID: 14
+Agent: orchestrator (Z.ai Code)
+Task: Clôture de session — vérification finale des 3 demandes utilisateur
+
+Work Log:
+- Smoke tests : GET / 200, /api/stats/reputation 200, /api/stats/platform 200, lint 0 erreur, dev.log sans erreur, next-server RSS ~1,9 Go (sous contrôle), mémoire disponible ~1,6 Go.
+- Cron QA 15 min (webDevReview) déjà en place depuis les sessions précédentes — non dupliqué.
+- Livrables de la session : fond cartographique réel (Task 11), portail « Avis & réputation » avec IVE (Task 12), back-office enrichi données réelles (Task 13).
+
+Stage Summary:
+- Les 3 demandes utilisateur sont livrées et vérifiées E2E navigateur. Priorités suivantes recommandées : réponse de l'enseigne aux avis (C.2.6+), widget comparaison de stations sur carte réelle, export PDF réputation, correction du warning Radix DialogTitle sur station-detail-dialog, délai moyen de modération (champ updatedAt à ajouter au modèle Contribution).
