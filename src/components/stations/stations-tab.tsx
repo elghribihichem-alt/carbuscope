@@ -700,6 +700,8 @@ export function StationsTab() {
         onClose={() => setDetailId(null)}
         onEdit={(s) => { setDetailId(null); openEdit(s) }}
         onLocate={(code) => { setDetailId(null); locate(code) }}
+        onCompare={toggleCompare}
+        isStationPinned={(s) => compareIds.includes(s.id)}
       />
       <StationFormDialog
         open={formOpen}

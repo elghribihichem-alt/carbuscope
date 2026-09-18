@@ -23,6 +23,7 @@ import { PromosScreen } from "./screens/promos-screen"
 import { LoyaltyScreen } from "./screens/loyalty-screen"
 import { ProfileScreen } from "./screens/profile-screen"
 import { AlertsScreen } from "./screens/alerts-screen"
+import { CompareScreen } from "./screens/compare-screen"
 import type { DictKey } from "@/lib/i18n"
 
 const TABS: { id: Screen; labelKey: DictKey; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
@@ -168,6 +169,13 @@ export function MobileApp() {
     setScreen("search")
   }
 
+  const openCompare = () => {
+    if (screen !== "comparateur") {
+      setReturnTo(screen === "fiche" || screen === "signalement" || screen === "avis" || screen === "alertes" ? returnTo : screen)
+    }
+    setScreen("comparateur")
+  }
+
   const go = (s: Screen) => setScreen(s)
 
   const back = () => {
@@ -179,6 +187,8 @@ export function MobileApp() {
       setScreen("fiche")
     } else if (screen === "alertes") {
       setScreen("map")
+    } else if (screen === "comparateur") {
+      setScreen(returnTo === "comparateur" || returnTo === "fiche" ? "map" : returnTo)
     }
   }
 
@@ -226,6 +236,7 @@ export function MobileApp() {
     setSearchQuery,
     openStation,
     openSearch,
+    openCompare,
     go,
     back,
     incUserStat,
@@ -234,7 +245,7 @@ export function MobileApp() {
 
   if (loading) return <SplashScreen />
 
-  const pushed = screen === "fiche" || screen === "signalement" || screen === "avis" || screen === "alertes"
+  const pushed = screen === "fiche" || screen === "signalement" || screen === "avis" || screen === "alertes" || screen === "comparateur"
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -257,6 +268,7 @@ export function MobileApp() {
             {screen === "fidelite" && <LoyaltyScreen />}
             {screen === "profil" && <ProfileScreen api={api} />}
             {screen === "alertes" && <AlertsScreen api={api} />}
+            {screen === "comparateur" && <CompareScreen api={api} />}
           </motion.div>
         </AnimatePresence>
       </div>

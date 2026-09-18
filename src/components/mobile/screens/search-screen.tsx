@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
 import { StarRating, StationRow, toggleIn } from "../shared"
 import { useFavoritesStore } from "../favorites-store"
+import { CompareBar } from "../compare-bar"
 
 const SERVICES = ["boutique", "gonflage", "toilettes", "atm", "cafe", "lavage", "vidange", "atelier", "recharge"]
 const HOURS_IDS = ["24h", "7j"] as const
@@ -258,6 +259,9 @@ export function SearchScreen({ api }: { api: AppApi }) {
           )}
         </div>
       </div>
+
+      {/* Barre du comparateur (stations épinglées) */}
+      <CompareBar api={api} />
     </div>
   )
 }

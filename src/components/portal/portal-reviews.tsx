@@ -4,6 +4,7 @@
 // se compare aux concurrents et mesure la valeur de son enseigne (IVE).
 
 import { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card"
@@ -23,7 +24,7 @@ import {
 } from "recharts"
 import {
   Star, Trophy, TrendingUp, TrendingDown, MessageSquareQuote, MessageSquareReply, Award, Gauge,
-  Users, Quote, Info, Send, Pencil, Loader2, Trash2, Clock, Radar as RadarIcon, AlertTriangle, Download, CheckCircle2,
+  Users, Quote, Info, Send, Pencil, Loader2, Trash2, Clock, Radar as RadarIcon, AlertTriangle, Download, CheckCircle2, Printer, Fuel,
 } from "lucide-react"
 import type { ReputationStats } from "@/lib/types"
 import { num, relDays } from "@/components/settings/settings-shared"
@@ -32,6 +33,17 @@ import { StationDetailDialog } from "@/components/stations/station-detail-dialog
 const EMERALD = "#059669"
 const AMBER = "#d97706"
 const SLATE = "#94a3b8"
+
+// Feuille d'impression du rapport réputation : seul le nœud portail #cs-reputation-print
+// reste visible à l'impression (les autres enfants directs de <body> sont masqués).
+const PRINT_CSS = `
+@media print {
+  body > *:not(#cs-reputation-print) { display: none !important; }
+  #cs-reputation-print { display: block !important; }
+  #cs-reputation-print .bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+@page { size: A4 portrait; margin: 12mm; }
+`
 
 // ---------- Étoiles ----------
 function Stars({ value, className = "h-3.5 w-3.5" }: { value: number; className?: string }) {
@@ -174,6 +186,14 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
     toast.success(`${reviewFlow.list.length} avis exportés${filterLabel ? ` (filtre « ${filterLabel} »)` : ""}.`)
   }
 
+  // Rapport réputation imprimable (PDF via la boîte d'impression du navigateur)
+  const doExportPdf = () => {
+    toast.info("Rapport réputation — impression", {
+      description: "Choisissez « Enregistrer au format PDF » dans la boîte d'impression pour archiver ou partager le rapport.",
+    })
+    window.setTimeout(() => window.print(), 500)
+  }
+
   // Données dérivées pour les graphiques
   const derived = useMemo(() => {
     if (!stats) return null
@@ -305,6 +325,16 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">enseigne / 100</p>
             <div className="mt-2"><Stars value={own.avgRating} /></div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 h-8 w-full gap-1.5 text-xs"
+              onClick={doExportPdf}
+              title="Rapport complet A4 : synthèse, IVE, comparaison marché, top/flop, surveillance"
+            >
+              <Printer className="h-3.5 w-3.5" aria-hidden />
+              Rapport PDF
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -838,6 +868,250 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* ---------- Rapport réputation imprimable (A4, PDF via la boîte d'impression) ----------
+          Rendu dans un portail <body> : masqué à l'écran, seul visible à l'impression. */}
+      {typeof document !== "undefined" && createPortal(
+        <div id="cs-reputation-print" className="hidden bg-white text-slate-900">
+          <style>{PRINT_CSS}</style>
+
+          {/* En-tête */}
+          <div className="flex items-end justify-between border-b-2 border-emerald-700 pb-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-700 text-white">
+                <Fuel className="h-6 w-6" aria-hidden />
+              </span>
+              <div>
+                <h1 className="text-[19px] font-black leading-tight">Rapport de réputation — {brand.name}</h1>
+                <p className="text-[11px] text-slate-600">
+                  Portail enseigne CarbuScope · généré le {new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">IVE — Indice de valeur</p>
+              <p className="text-3xl font-black leading-none text-emerald-700">{ive.score}<span className="text-sm text-slate-400">/100</span></p>
+              <p className="text-[10.5px] text-slate-600">{ive.rank}<sup>e</sup> sur {ive.brandsCount} enseignes</p>
+            </div>
+          </div>
+
+          {/* Synthèse */}
+          <p className="mt-3 text-[12px] leading-relaxed text-slate-700">
+            L’enseigne <strong>{brand.name}</strong> est notée <strong>{own.avgRating.toFixed(1).replace(".", ",")}/5</strong> sur{" "}
+            <strong>{num(own.reviewsCount)} avis</strong> (marché : {market.avgRating.toFixed(1).replace(".", ",")}/5), avec{" "}
+            <strong>{own.stationsWithReviews}/{own.stationsTotal}</strong> stations notées, une part de voix de{" "}
+            <strong>{own.shareOfVoice} %</strong> et un taux de réponse officielle de <strong>{own.responseRate} %</strong>
+            {own.avgReplyDelayHours != null && <> (délai moyen : {Math.max(1, Math.round(own.avgReplyDelayHours))} h)</>}.
+          </p>
+
+          {/* KPIs */}
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              { label: "Note client", value: `${own.avgRating.toFixed(1).replace(".", ",")}/5` },
+              { label: "Avis reçus", value: num(own.reviewsCount) },
+              { label: "Rang concurrentiel", value: `${d.rank}e / ${ive.brandsCount}` },
+              { label: "IVE", value: `${ive.score}/100` },
+              { label: "Taux de réponse", value: `${own.responseRate} %` },
+              { label: "Part de voix", value: `${own.shareOfVoice} %` },
+            ].map(k => (
+              <div key={k.label} className="rounded-lg border border-slate-300 px-3 py-2">
+                <p className="text-[9.5px] font-bold uppercase tracking-wide text-slate-500">{k.label}</p>
+                <p className="text-[16px] font-black tabular-nums text-slate-900">{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Décomposition IVE */}
+          <h2 className="mt-5 border-b border-slate-300 pb-1 text-[13px] font-bold uppercase tracking-wide text-emerald-800">
+            Indice de valeur d’enseigne — décomposition
+          </h2>
+          <table className="mt-1.5 w-full text-[11px]">
+            <tbody>
+              {ive.details.map(det => (
+                <tr key={det.key} className="border-b border-slate-200 align-middle">
+                  <td className="w-[38%] py-1.5 pr-2 font-semibold">{det.label}</td>
+                  <td className="py-1.5">
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="bar h-full rounded-full bg-emerald-600"
+                        style={{ width: `${Math.min(100, Math.round((det.points / det.max) * 100))}%` }}
+                      />
+                    </div>
+                  </td>
+                  <td className="w-[70px] py-1.5 pl-2 text-right font-bold tabular-nums">
+                    {det.points.toFixed(1).replace(".", ",")}/{det.max}
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-b-2 border-slate-400 font-black">
+                <td className="py-1.5 pr-2">Score composite</td>
+                <td />
+                <td className="py-1.5 pl-2 text-right tabular-nums text-emerald-700">{ive.score}/100</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Comparaison marché */}
+          <h2 className="mt-5 border-b border-slate-300 pb-1 text-[13px] font-bold uppercase tracking-wide text-emerald-800">
+            Comparaison concurrentielle ({ive.brandsCount} enseignes)
+          </h2>
+          <table className="mt-1.5 w-full text-[11px]">
+            <thead>
+              <tr className="border-b-2 border-slate-400 text-left">
+                <th className="py-1 pr-2 font-semibold">Enseigne</th>
+                <th className="py-1 px-2 text-right font-semibold">Note</th>
+                <th className="py-1 px-2 text-right font-semibold">Avis</th>
+                <th className="py-1 px-2 text-right font-semibold">Taux de réponse</th>
+                <th className="py-1 pl-2 text-right font-semibold">IVE indicatif</th>
+              </tr>
+            </thead>
+            <tbody>
+              {market.brandComparison.map(b => (
+                <tr
+                  key={b.slug}
+                  className={`border-b border-slate-200 ${b.slug === brand.slug ? "bg-emerald-50 font-bold" : ""}`}
+                >
+                  <td className="py-1.5 pr-2">{b.name}{b.slug === brand.slug ? " (moi)" : ""}</td>
+                  <td className="py-1.5 px-2 text-right tabular-nums">{b.avgRating.toFixed(1).replace(".", ",")}/5</td>
+                  <td className="py-1.5 px-2 text-right tabular-nums">{num(b.reviewsCount)}</td>
+                  <td className="py-1.5 px-2 text-right tabular-nums">{b.responseRate} %</td>
+                  <td className="py-1.5 pl-2 text-right tabular-nums">{b.valueIndex}/100</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Distribution + critères */}
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <div>
+              <h2 className="border-b border-slate-300 pb-1 text-[12px] font-bold uppercase tracking-wide text-emerald-800">
+                Distribution des notes
+              </h2>
+              <table className="mt-1.5 w-full text-[10.5px]">
+                <thead>
+                  <tr className="border-b border-slate-300 text-left">
+                    <th className="py-1 font-semibold">Étoiles</th>
+                    <th className="py-1 text-right font-semibold">Moi</th>
+                    <th className="py-1 text-right font-semibold">Marché</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.dist.map(row => (
+                    <tr key={row.etoiles} className="border-b border-slate-200">
+                      <td className="py-1">{row.etoiles}</td>
+                      <td className="py-1 text-right font-semibold tabular-nums">{row.moi.toFixed(1).replace(".", ",")} %</td>
+                      <td className="py-1 text-right tabular-nums text-slate-600">{row.marche.toFixed(1).replace(".", ",")} %</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <h2 className="border-b border-slate-300 pb-1 text-[12px] font-bold uppercase tracking-wide text-emerald-800">
+                Critères notés par les clients
+              </h2>
+              <table className="mt-1.5 w-full text-[10.5px]">
+                <thead>
+                  <tr className="border-b border-slate-300 text-left">
+                    <th className="py-1 font-semibold">Critère</th>
+                    <th className="py-1 text-right font-semibold">Moi</th>
+                    <th className="py-1 text-right font-semibold">Marché</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.radar.map(row => (
+                    <tr key={row.critere} className="border-b border-slate-200">
+                      <td className="py-1">{row.critere}</td>
+                      <td className="py-1 text-right font-semibold tabular-nums">{row.moi.toFixed(1).replace(".", ",")}/5</td>
+                      <td className="py-1 text-right tabular-nums text-slate-600">{row.marche.toFixed(1).replace(".", ",")}/5</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Top 5 / Flop 5 */}
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <div>
+              <h2 className="border-b border-slate-300 pb-1 text-[12px] font-bold uppercase tracking-wide text-emerald-800">
+                Top 5 stations (≥ 3 avis)
+              </h2>
+              <table className="mt-1.5 w-full text-[10.5px]">
+                <tbody>
+                  {own.topStations.map(s => (
+                    <tr key={s.code} className="border-b border-slate-200">
+                      <td className="py-1 pr-1 font-semibold">{s.name}</td>
+                      <td className="py-1 text-right text-slate-600">{s.gouvernorat}</td>
+                      <td className="py-1 pl-2 text-right font-bold tabular-nums text-emerald-700">
+                        {s.rating.toFixed(1).replace(".", ",")}/5
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <h2 className="border-b border-slate-300 pb-1 text-[12px] font-bold uppercase tracking-wide text-amber-700">
+                Flop 5 stations (≥ 3 avis)
+              </h2>
+              <table className="mt-1.5 w-full text-[10.5px]">
+                <tbody>
+                  {own.flopStations.map(s => (
+                    <tr key={s.code} className="border-b border-slate-200">
+                      <td className="py-1 pr-1 font-semibold">{s.name}</td>
+                      <td className="py-1 text-right text-slate-600">{s.gouvernorat}</td>
+                      <td className="py-1 pl-2 text-right font-bold tabular-nums text-amber-700">
+                        {s.rating.toFixed(1).replace(".", ",")}/5
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Surveillance des notes */}
+          {own.watchlist.length > 0 && (
+            <>
+              <h2 className="mt-5 border-b border-slate-300 pb-1 text-[13px] font-bold uppercase tracking-wide text-red-700">
+                Surveillance — {own.watchlist.length} station{own.watchlist.length > 1 ? "s" : ""} en perte de vitesse
+              </h2>
+              <table className="mt-1.5 w-full text-[10.5px]">
+                <thead>
+                  <tr className="border-b-2 border-slate-400 text-left">
+                    <th className="py-1 pr-2 font-semibold">Station</th>
+                    <th className="py-1 px-2 font-semibold">Gouvernorat</th>
+                    <th className="py-1 px-2 text-right font-semibold">Note antérieure</th>
+                    <th className="py-1 px-2 text-right font-semibold">Note récente</th>
+                    <th className="py-1 pl-2 text-right font-semibold">Écart</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {own.watchlist.map(w => (
+                    <tr key={w.code} className="border-b border-slate-200">
+                      <td className="py-1.5 pr-2 font-semibold">{w.name}</td>
+                      <td className="py-1.5 px-2">{w.gouvernorat}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums">{w.previousRating.toFixed(1).replace(".", ",")}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums">{w.currentRating.toFixed(1).replace(".", ",")}</td>
+                      <td className="py-1.5 pl-2 text-right font-bold tabular-nums text-red-700">
+                        −{Math.abs(w.delta).toFixed(1).replace(".", ",")} pt
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          <p className="mt-5 border-t border-slate-300 pt-2 text-[9.5px] leading-snug text-slate-500">
+            Rapport généré depuis le portail enseigne CarbuScope — onglet « Avis &amp; réputation ». Données issues de la
+            communauté et des vérifications terrain. IVE = note client (35 pts) + volume d’avis (15 pts) + expérience réseau
+            (15 pts) + fraîcheur (15 pts) + taux de réponse (20 pts).
+          </p>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

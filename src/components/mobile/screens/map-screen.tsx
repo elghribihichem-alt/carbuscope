@@ -19,12 +19,21 @@ import type { AppApi } from "../shared"
 import { SectionTitle, StationRow } from "../shared"
 import { useAlertsStore } from "../alerts-store"
 import { computeSmartAlerts } from "../smart-alerts"
+import { CompareBar } from "../compare-bar"
+import { useCompareStore } from "../compare-store"
 
 export function MapScreen({ api }: { api: AppApi }) {
   const { t, lang } = useI18n()
   const [query, setQuery] = useState("")
   const [alertIdx, setAlertIdx] = useState(0)
   const prefs = useAlertsStore()
+  const compareIds = useCompareStore(s => s.stationIds)
+  const toggleCompare = useCompareStore(s => s.toggleCompare)
+  // TunisiaMap épingle par CODE de station — dérivation depuis les ids du store
+  const compareCodes = useMemo(
+    () => api.allStations.filter(s => compareIds.includes(s.id)).map(s => s.code),
+    [api.allStations, compareIds]
+  )
 
   // Alertes personnalisées (B.3.1) — recalculées selon les préférences persistées
   const allAlerts = useMemo(() => computeSmartAlerts(api.allStations, prefs, lang), [api.allStations, prefs, lang])
@@ -136,6 +145,19 @@ export function MapScreen({ api }: { api: AppApi }) {
             showLegend={false}
             layers={{ roads: true, traffic: false, zones: false, projects: false, fleet: false }}
             onViewDetail={api.openStation}
+            onCompare={s => {
+              const res = toggleCompare(s.id)
+              if (res === "added") {
+                toast.success(t("compare.pinToast", { n: useCompareStore.getState().stationIds.length, max: 3 }), {
+                  description: t("compare.pinToastDesc"),
+                })
+              } else if (res === "full") {
+                toast.error(t("compare.fullToast"), { description: t("compare.fullToastDesc", { max: 3 }) })
+              } else {
+                toast.info(t("compare.unpinToast"))
+              }
+            }}
+            compareCodes={compareCodes}
           />
           {api.offline && (
             <span className="absolute start-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2 py-1 text-[10px] font-bold text-white shadow">
@@ -230,6 +252,9 @@ export function MapScreen({ api }: { api: AppApi }) {
           </p>
         </section>
       </div>
+
+      {/* Barre du comparateur (stations épinglées) */}
+      <CompareBar api={api} />
     </div>
   )
 }

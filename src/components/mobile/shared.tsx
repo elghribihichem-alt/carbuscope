@@ -16,7 +16,7 @@ import { relativeDate } from "@/lib/i18n"
 
 export type Screen =
   | "map" | "search" | "promos" | "fidelite" | "profil"
-  | "fiche" | "signalement" | "avis" | "alertes"
+  | "fiche" | "signalement" | "avis" | "alertes" | "comparateur"
 
 export type StationWithDist = StationDTO & { distanceKm: number }
 
@@ -36,6 +36,7 @@ export interface AppApi {
   setSearchQuery: (q: string) => void
   openStation: (s: StationDTO) => void
   openSearch: (q: string) => void
+  openCompare: () => void
   go: (s: Screen) => void
   back: () => void
   incUserStat: (k: "reviews" | "reports") => void

@@ -4,7 +4,7 @@
 // Photo, identité, services, horaires, note + avis récents (lazy fetch),
 // actions Itinéraire / Signaler / Avis, favori (B.2.7), stations à proximité.
 
-import { BadgeCheck, Clock3, Flag, Heart, MapPin, MessageSquareReply, Navigation, Share2, Star } from "lucide-react"
+import { BadgeCheck, Clock3, Flag, GitCompareArrows, Heart, MapPin, MessageSquareReply, Navigation, Share2, Star } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,13 +18,29 @@ import {
 } from "../shared"
 import { relativeDate } from "@/lib/i18n"
 import { useFavoritesStore } from "../favorites-store"
+import { MAX_MOBILE_COMPARE, useCompareStore } from "../compare-store"
 
 export function StationScreen({ api }: { api: AppApi }) {
   const { t, lang, locale, svc } = useI18n()
   const s = api.selected
   const isFav = useFavoritesStore(st => (s ? st.stationIds.includes(s.id) : false))
   const toggleFavorite = useFavoritesStore(st => st.toggleFavorite)
+  const isPinned = useCompareStore(st => (s ? st.stationIds.includes(s.id) : false))
+  const toggleCompare = useCompareStore(st => st.toggleCompare)
   if (!s) return null
+
+  const onToggleCompare = () => {
+    const result = toggleCompare(s.id)
+    if (result === "added") {
+      toast.success(t("compare.pinToast", { n: useCompareStore.getState().stationIds.length, max: MAX_MOBILE_COMPARE }), {
+        description: t("compare.pinToastDesc"),
+      })
+    } else if (result === "removed") {
+      toast.info(t("compare.unpinToast"))
+    } else {
+      toast.error(t("compare.fullToast"), { description: t("compare.fullToastDesc", { max: MAX_MOBILE_COMPARE }) })
+    }
+  }
 
   const onToggleFav = () => {
     const next = !isFav
@@ -52,6 +68,18 @@ export function StationScreen({ api }: { api: AppApi }) {
         onBack={api.back}
         right={
           <span className="me-1 flex items-center">
+            <button
+              type="button"
+              aria-label={isPinned ? t("compare.pinnedAria") : t("compare.pinAria")}
+              aria-pressed={isPinned}
+              onClick={onToggleCompare}
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-90",
+                isPinned ? "bg-emerald-50 text-emerald-600" : "text-slate-500 hover:bg-slate-100"
+              )}
+            >
+              <GitCompareArrows className={cn("h-[18px] w-[18px] transition-transform", isPinned && "scale-110")} />
+            </button>
             <button
               type="button"
               aria-label={isFav ? t("station.removeFavAria") : t("station.addFavAria")}

@@ -319,6 +319,8 @@ export function CarteInteractiveTab() {
           toast.info("L'édition d'une station se fait depuis l'onglet « Mes stations ».")
         }}
         onLocate={(code) => { setDetailId(null); setFocusStation(code) }}
+        onCompare={toggleCompare}
+        isStationPinned={(st) => compareCodes.includes(st.code)}
       />
 
       {/* Comparateur de stations (épinglées depuis la carte) */}

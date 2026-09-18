@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react"
 import {
-  ArrowRight, Clock, Fuel, History, Loader2, MapPin, MessageSquare,
+  ArrowRight, Clock, Fuel, GitCompareArrows, History, Loader2, MapPin, MessageSquare,
   Pencil, ShieldCheck, Star,
 } from "lucide-react"
 import type { ReviewDTO, StationDTO, StationDetail } from "@/lib/types"
@@ -62,11 +62,17 @@ export function StationDetailDialog({
   onClose,
   onEdit,
   onLocate,
+  onCompare,
+  isStationPinned,
 }: {
   stationId: string | null
   onClose: () => void
   onEdit: (station: StationDTO) => void
   onLocate: (code: string) => void
+  /** Comparateur : épingle/déépingle la station courante ou une voisine (facultatif) */
+  onCompare?: (station: StationDTO) => void
+  /** Prédicat d'état épinglé — adapté à la clé du comparateur parent (code ou id) */
+  isStationPinned?: (station: StationDTO) => boolean
 }) {
   const myBrand = useAppStore((s) => s.brandSlug)
   const [loaded, setLoaded] = useState<{ key: string; data: StationDetail } | null>(null)
@@ -234,34 +240,61 @@ export function StationDetailDialog({
 
               {/* Concurrents à proximité */}
               <section className="rounded-xl border p-3">
-                <SectionTitle icon={MapPin}>Stations à proximité</SectionTitle>
+                <SectionTitle icon={MapPin}>
+                  Stations à proximité
+                  {onCompare && <span className="ml-1.5 font-normal normal-case tracking-normal text-muted-foreground/70">— épinglez pour comparer</span>}
+                </SectionTitle>
                 {detail && detail.nearby.length > 0 ? (
                   <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-                    {detail.nearby.slice(0, 10).map((n) => (
-                      <button
-                        key={n.id}
-                        type="button"
-                        onClick={() => onLocate(n.code)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
-                        title={`Voir ${n.name} sur la carte`}
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: n.brandColor }} aria-hidden />
-                          <span className="min-w-0">
-                            <span className="block truncate text-xs font-medium">{n.name}</span>
-                            <span className="block text-[10px] text-muted-foreground">
-                              {n.brandName}
-                              {n.brandSlug === myBrand ? " · mon réseau" : ""}
+                    {detail.nearby.slice(0, 10).map((n) => {
+                      const pinned = isStationPinned?.(n) ?? false
+                      return (
+                        <div
+                          key={n.id}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/60"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onLocate(n.code)}
+                            className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                            title={`Voir ${n.name} sur la carte`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: n.brandColor }} aria-hidden />
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-medium">{n.name}</span>
+                                <span className="block text-[10px] text-muted-foreground">
+                                  {n.brandName}
+                                  {n.brandSlug === myBrand ? " · mon réseau" : ""}
+                                </span>
+                              </span>
                             </span>
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
-                          {n.distanceKm < 1
-                            ? `${Math.round(n.distanceKm * 1000)} m`
-                            : `${n.distanceKm.toFixed(1).replace(".", ",")} km`}
-                        </span>
-                      </button>
-                    ))}
+                            <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+                              {n.distanceKm < 1
+                                ? `${Math.round(n.distanceKm * 1000)} m`
+                                : `${n.distanceKm.toFixed(1).replace(".", ",")} km`}
+                            </span>
+                          </button>
+                          {onCompare && (
+                            <button
+                              type="button"
+                              onClick={() => onCompare(n)}
+                              aria-label={pinned ? `Retirer ${n.name} du comparateur` : `Comparer ${n.name}`}
+                              aria-pressed={pinned}
+                              title={pinned ? "Retirer du comparateur" : "Épingler dans le comparateur"}
+                              className={cn(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors",
+                                pinned
+                                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                                  : "border-transparent text-muted-foreground/60 hover:border-muted hover:bg-muted hover:text-foreground"
+                              )}
+                            >
+                              <GitCompareArrows className="h-3.5 w-3.5" aria-hidden />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs italic text-muted-foreground">Aucune station recensée à proximité.</p>
@@ -270,10 +303,29 @@ export function StationDetailDialog({
             </div>
 
             <DialogFooter className="gap-2 sm:justify-between">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onLocate(s.code)}>
-                <MapPin className="h-4 w-4" aria-hidden />
-                Voir sur la carte
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onLocate(s.code)}>
+                  <MapPin className="h-4 w-4" aria-hidden />
+                  Voir sur la carte
+                </Button>
+                {onCompare && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "gap-1.5",
+                      isStationPinned?.(s)
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900"
+                        : ""
+                    )}
+                    onClick={() => onCompare(s)}
+                    aria-pressed={isStationPinned?.(s) ?? false}
+                  >
+                    <GitCompareArrows className="h-4 w-4" aria-hidden />
+                    {isStationPinned?.(s) ? "Retirer du comparateur" : "Comparer"}
+                  </Button>
+                )}
+              </div>
               <Button size="sm" className="gap-1.5" onClick={() => onEdit(s)}>
                 <Pencil className="h-4 w-4" aria-hidden />
                 Modifier la fiche
