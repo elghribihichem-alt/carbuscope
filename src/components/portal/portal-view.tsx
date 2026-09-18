@@ -20,6 +20,9 @@ import { NotificationsCenter } from "./notifications-center"
 export function PortalView() {
   const brandSlug = useAppStore(s => s.brandSlug)
   const [brand, setBrand] = useState<BrandDTO | null>(null)
+  // Onglet contrôlé : le deep-link depuis le centre de notifications (alerte de
+  // veille → « Avis & réputation », décret prix → tableau de bord) change l'onglet.
+  const [tab, setTab] = useState("dashboard")
 
   useEffect(() => {
     const ac = new AbortController()
@@ -73,14 +76,18 @@ export function PortalView() {
               </div>
               <Building2 className="ml-2 h-4 w-4 text-muted-foreground" aria-hidden />
             </div>
-            {/* Cloche de notifications : veille des notes + vie de la plateforme */}
-            <NotificationsCenter key={brandSlug} brandSlug={brandSlug} />
+            {/* Cloche de notifications : veille des notes + décrets prix + vie de la plateforme */}
+            <NotificationsCenter
+              key={brandSlug}
+              brandSlug={brandSlug}
+              onNavigate={kind => setTab(kind === "reviews" ? "reviews" : "dashboard")}
+            />
           </div>
         </CardContent>
       </Card>
 
-      {/* Navigation interne du portail (4 onglets) */}
-      <Tabs defaultValue="dashboard" className="space-y-4">
+      {/* Navigation interne du portail (4 onglets) — contrôlée pour le deep-link */}
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid h-auto w-full grid-cols-4 sm:w-auto">
           <TabsTrigger value="dashboard" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <LayoutDashboard className="h-4 w-4" aria-hidden /> Tableau de bord

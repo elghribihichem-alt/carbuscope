@@ -210,7 +210,7 @@ model AlertRun {
 model Notification {
   id           String   @id @default(cuid())
   brandSlug    String
-  kind         String   @default("WATCHLIST") // WATCHLIST | SYSTEM
+  kind         String   @default("WATCHLIST") // WATCHLIST | SYSTEM | DECREE
   title        String
   body         String
   stationLabel String? // station ou périmètre concerné

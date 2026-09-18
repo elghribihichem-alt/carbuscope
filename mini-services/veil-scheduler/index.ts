@@ -104,9 +104,8 @@ function nextRunAt(now = Date.now()): number {
 
 /** Prochaine passe en texte FR court : « aujourd'hui 08:00 » / « demain 08:00 ». */
 function nextRunLabel(next: number): string {
-  const nowShifted = Date.now() + 60 * 60_000
-  const nextShifted = next + 60 * 60_000
-  const sameDay = tunisDayKey(new Date(nowShifted)) === tunisDayKey(new Date(nextShifted))
+  // tunisDayKey applique déjà le décalage UTC+1 — ne PAS re-shifter ici.
+  const sameDay = tunisDayKey(new Date()) === tunisDayKey(new Date(next))
   return `${sameDay ? "aujourd'hui" : "demain"} 08:00`
 }
 

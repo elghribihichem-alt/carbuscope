@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
-  ServerCog, ShieldAlert, Database, TimerReset, UserCog, BarChart3, MapPin, Inbox, Radar,
+  ServerCog, ShieldAlert, Database, TimerReset, UserCog, BarChart3, MapPin, Inbox, Radar, Banknote,
 } from "lucide-react"
 import type { ContributionDTO } from "@/lib/types"
 import { BoModeration } from "./bo-moderation"
@@ -16,6 +16,7 @@ import { BoFreshness } from "./bo-freshness"
 import { BoAgents } from "./bo-agents"
 import { BoStats } from "./bo-stats"
 import { BoAlerts } from "./bo-alerts"
+import { BoDecrees } from "./bo-decrees"
 
 export function BackofficeView() {
   // File de modération partagée : badge d'onglet + onglet Modération
@@ -80,9 +81,9 @@ export function BackofficeView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne (6 onglets) */}
+      {/* Navigation interne (7 onglets) */}
       <Tabs defaultValue="moderation" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-7">
           <TabsTrigger value="moderation" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <ShieldAlert className="h-4 w-4" aria-hidden /> Modération
             <Badge
@@ -106,6 +107,9 @@ export function BackofficeView() {
           </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <BarChart3 className="h-4 w-4" aria-hidden /> Stats plateforme
+          </TabsTrigger>
+          <TabsTrigger value="decrees" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <Banknote className="h-4 w-4" aria-hidden /> Prix &amp; décrets
           </TabsTrigger>
         </TabsList>
 
@@ -131,6 +135,9 @@ export function BackofficeView() {
         </TabsContent>
         <TabsContent value="stats" className="mt-0 space-y-4">
           <BoStats />
+        </TabsContent>
+        <TabsContent value="decrees" className="mt-0 space-y-4">
+          <BoDecrees />
         </TabsContent>
       </Tabs>
     </div>

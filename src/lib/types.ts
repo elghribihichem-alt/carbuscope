@@ -479,7 +479,7 @@ export type WatchlistOverviewResponse = {
 export type NotificationDTO = {
   id: string
   brandSlug: string
-  kind: string // WATCHLIST | SYSTEM
+  kind: string // WATCHLIST | SYSTEM | DECREE
   title: string
   body: string
   stationLabel: string | null

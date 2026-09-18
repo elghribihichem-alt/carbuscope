@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import {
-  Bell, BellRing, CheckCheck, TrendingDown, Radar, Inbox, MailCheck, Loader2, MapPin,
+  Bell, BellRing, CheckCheck, TrendingDown, Radar, Inbox, MailCheck, Loader2, MapPin, Banknote, ArrowRight,
 } from "lucide-react"
 import type { NotificationDTO } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -37,7 +37,7 @@ function timeAgo(iso: string): string {
 
 const fr1 = (n: number) => n.toFixed(1).replace(".", ",")
 
-export function NotificationsCenter({ brandSlug }: { brandSlug: string }) {
+export function NotificationsCenter({ brandSlug, onNavigate }: { brandSlug: string; onNavigate?: (kind: string) => void }) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<NotificationDTO[]>([])
   const [unread, setUnread] = useState(0)
@@ -92,6 +92,25 @@ export function NotificationsCenter({ brandSlug }: { brandSlug: string }) {
       void refresh(true)
     }
   }, [refresh])
+
+  // Deep-link (T23) : cliquer une notification de veille (chute de note, seuil)
+  // emmène directement l'enseigne sur l'onglet « Avis & réputation » du portail
+  // pour consulter les avis à l'origine de l'alerte — fermeture de boucle.
+  const openNotification = useCallback((n: NotificationDTO) => {
+    if (!n.read) void markRead(n.id)
+    if (onNavigate) {
+      const tab = n.kind === "WATCHLIST" ? "reviews" : n.kind === "DECREE" ? "dashboard" : null
+      if (tab) {
+        setOpen(false)
+        onNavigate(tab)
+        if (n.kind === "WATCHLIST") {
+          toast.info("Avis & réputation ouverts", {
+            description: "Consultez les avis à l'origine de cette alerte de veille.",
+          })
+        }
+      }
+    }
+  }, [onNavigate, markRead])
 
   const markAllRead = useCallback(async () => {
     if (unread === 0) return
@@ -201,8 +220,8 @@ export function NotificationsCenter({ brandSlug }: { brandSlug: string }) {
                 <li key={n.id}>
                   <button
                     type="button"
-                    onClick={() => { if (!n.read) void markRead(n.id) }}
-                    aria-label={`${n.read ? "Notification lue" : "Notification non lue"} — ${n.title}`}
+                    onClick={() => openNotification(n)}
+                    aria-label={`${n.read ? "Notification lue" : "Notification non lue"} — ${n.title}${n.kind === "WATCHLIST" ? " — ouvrir Avis & réputation" : ""}`}
                     className={cn(
                       "group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors",
                       "hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/50",
@@ -213,13 +232,15 @@ export function NotificationsCenter({ brandSlug }: { brandSlug: string }) {
                     <span
                       className={cn(
                         "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-transform group-hover:scale-105",
-                        n.kind === "SYSTEM"
-                          ? "border-violet-200 bg-violet-100 text-violet-700 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-300"
-                          : "border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
+                        n.kind === "DECREE"
+                          ? "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400"
+                          : n.kind === "SYSTEM"
+                            ? "border-violet-200 bg-violet-100 text-violet-700 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-300"
+                            : "border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
                       )}
                       aria-hidden
                     >
-                      {n.kind === "SYSTEM" ? <Radar className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                      {n.kind === "DECREE" ? <Banknote className="h-4 w-4" /> : n.kind === "SYSTEM" ? <Radar className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                     </span>
 
                     <div className="min-w-0 flex-1">
@@ -244,6 +265,19 @@ export function NotificationsCenter({ brandSlug }: { brandSlug: string }) {
                         {n.alertRunId && (
                           <Badge variant="outline" className="h-5 gap-1 border-amber-300 bg-amber-50 px-1.5 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400">
                             <MailCheck className="h-3 w-3" aria-hidden /> Email envoyé
+                          </Badge>
+                        )}
+                        {n.kind === "DECREE" && (
+                          <Badge variant="outline" className="h-5 gap-1 border-amber-300 bg-amber-50 px-1.5 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400">
+                            <Banknote className="h-3 w-3" aria-hidden /> Décret prix
+                          </Badge>
+                        )}
+                        {n.kind === "WATCHLIST" && onNavigate && (
+                          <Badge
+                            variant="outline"
+                            className="h-5 gap-0.5 border-emerald-300 bg-emerald-50 px-1.5 text-[10px] font-semibold text-emerald-700 transition-colors group-hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                          >
+                            Avis <ArrowRight className="h-2.5 w-2.5" aria-hidden />
                           </Badge>
                         )}
                         <span className="ml-auto text-[10px] tabular-nums text-muted-foreground/80">{timeAgo(n.createdAt)}</span>
