@@ -10,7 +10,7 @@ import dynamic from "next/dynamic"
 import {
   Store, Wind, DoorOpen, CreditCard, Coffee, Droplets, Wrench, Cog, Zap,
   MapPin, Navigation, X, Ruler, Hexagon, Circle as CircleIcon, Trash2, Plus, Minus,
-  Maximize, Layers, FileDown, ChevronDown, ChevronRight, Star, Gauge, Clock, ShieldCheck, History, Globe, Loader2,
+  Maximize, Layers, FileDown, ChevronDown, ChevronRight, Star, Gauge, Clock, ShieldCheck, History, Globe, Loader2, GitCompareArrows,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -77,6 +77,10 @@ export interface TunisiaMapProps {
   fitTo?: StationDTO[] | null
   autoFitOnLoad?: boolean
   govStationCounts?: Record<string, number> | null
+  /** Comparateur : épingle/déépingle une station (popup réelle ou schéma) */
+  onCompare?: (s: StationDTO) => void
+  /** Codes des stations épinglées dans le comparateur */
+  compareCodes?: string[]
 }
 
 type Tool = "measure" | "radius" | "polygon" | null
@@ -125,7 +129,9 @@ export function TunisiaMap({
   stations, ownBrandSlug, selectedCode, onSelect, onViewDetail,
   layers, showLayerControl = true, tools = false, showLegend = true,
   className = "h-[560px]", focusCode, fitTo, autoFitOnLoad = false, govStationCounts,
+  onCompare, compareCodes,
 }: TunisiaMapProps) {
+  const compareSet = useMemo(() => new Set(compareCodes ?? []), [compareCodes])
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const movedRef = useRef(0)
@@ -438,13 +444,15 @@ export function TunisiaMap({
       const isHover = s.code === hoverCode
       const inRad = insideRadius?.has(s.code)
       const inPoly = insidePolygon?.has(s.code)
-      const highlighted = isOwn || isSel || isHover || inRad || inPoly
+      const isPinned = compareSet.has(s.code)
+      const highlighted = isOwn || isSel || isHover || inRad || inPoly || isPinned
       const r = isOwn ? 3.6 : 2.7
       if (s.status === "CLOSED") {
         return (
           <g key={s.id} onClick={(e) => { e.stopPropagation(); if (movedRef.current <= 3) selectStation(s) }}
              onMouseEnter={() => setHoverCode(s.code)} onMouseLeave={() => setHoverCode(null)} className="cursor-pointer">
-            <circle cx={p.x} cy={p.y} r={3.4} fill="#9ca3af" stroke="#6b7280" strokeWidth={1} />
+            {isPinned && <circle cx={p.x} cy={p.y} r={6.4} fill="none" stroke="#059669" strokeWidth={1.5} className="pointer-events-none" />}
+            <circle cx={p.x} cy={p.y} r={3.4} fill="#9ca3af" stroke={isPinned ? "#059669" : "#6b7280"} strokeWidth={isPinned ? 2 : 1} />
             <line x1={p.x - 2} y1={p.y - 2} x2={p.x + 2} y2={p.y + 2} stroke="#f8fafc" strokeWidth={0.9} />
             <line x1={p.x - 2} y1={p.y + 2} x2={p.x + 2} y2={p.y - 2} stroke="#f8fafc" strokeWidth={0.9} />
           </g>
@@ -454,16 +462,17 @@ export function TunisiaMap({
         <g key={s.id} onClick={(e) => { e.stopPropagation(); if (movedRef.current <= 3) selectStation(s) }}
            onMouseEnter={() => setHoverCode(s.code)} onMouseLeave={() => setHoverCode(null)} className="cursor-pointer">
           {isSel && <circle cx={p.x} cy={p.y} r={8} fill={s.brandColor} opacity={0.25} className="animate-ping-slow" />}
+          {isPinned && <circle cx={p.x} cy={p.y} r={r + 3.4} fill="none" stroke="#059669" strokeWidth={1.5} className="pointer-events-none" />}
           {s.status === "PROJECT" ? (
-            <circle cx={p.x} cy={p.y} r={r} fill="none" stroke={s.brandColor} strokeWidth={1.6} strokeDasharray="2 1.6" />
+            <circle cx={p.x} cy={p.y} r={r} fill="none" stroke={isPinned ? "#059669" : s.brandColor} strokeWidth={isPinned ? 2.2 : 1.6} strokeDasharray="2 1.6" />
           ) : (
             <circle cx={p.x} cy={p.y} r={r} fill={s.brandColor} opacity={highlighted ? 1 : 0.72}
-              stroke={s.status === "RENOVATION" ? "#d97706" : "white"} strokeWidth={s.status === "RENOVATION" ? 1.6 : isSel ? 1.8 : 0.7} />
+              stroke={isPinned ? "#059669" : s.status === "RENOVATION" ? "#d97706" : "white"} strokeWidth={isPinned ? 2.2 : s.status === "RENOVATION" ? 1.6 : isSel ? 1.8 : 0.7} />
           )}
         </g>
       )
     })
-  }, [stations, ownBrandSlug, selCode, hoverCode, insideRadius, insidePolygon, selectStation])
+  }, [stations, ownBrandSlug, selCode, hoverCode, insideRadius, insidePolygon, selectStation, compareSet])
 
   // ---------- Popup position ----------
   const selectedStation = stations.find(s => s.code === selCode) ?? null
@@ -501,6 +510,8 @@ export function TunisiaMap({
           background={osmBg}
           focusCode={focusCode}
           fitTo={fitTo}
+          onCompare={onCompare}
+          compareCodes={compareCodes}
         />
       ) : (
       <svg ref={svgRef} viewBox={`0 0 ${MAP_W} ${MAP_H}`} preserveAspectRatio="xMidYMid meet"
@@ -670,6 +681,8 @@ export function TunisiaMap({
           wrapW={mstate.w}
           onClose={() => selectStation(null)}
           onViewDetail={() => onViewDetail?.(selectedStation)}
+          onCompare={onCompare ? () => onCompare(selectedStation) : undefined}
+          isPinned={compareSet.has(selectedStation.code)}
           showHistory={showHistory}
           setShowHistory={setShowHistory}
         />
@@ -857,7 +870,7 @@ function brandLegend(stations: StationDTO[], ownSlug?: string | null): [string, 
 // ---------------- Popup fiche station (A.3.3) ----------------
 
 function StationPopup({
-  station, detail, left, top, wrapW, onClose, onViewDetail, showHistory, setShowHistory,
+  station, detail, left, top, wrapW, onClose, onViewDetail, onCompare, isPinned, showHistory, setShowHistory,
 }: {
   station: StationDTO
   detail: StationDetail | null
@@ -866,6 +879,8 @@ function StationPopup({
   wrapW: number
   onClose: () => void
   onViewDetail: () => void
+  onCompare?: () => void
+  isPinned: boolean
   showHistory: boolean
   setShowHistory: (v: boolean) => void
 }) {
@@ -977,9 +992,21 @@ function StationPopup({
 
       <div className="flex gap-2 border-t p-2">
         <Button size="sm" className="h-7 flex-1 text-xs" onClick={onViewDetail}>Fiche complète</Button>
-        <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => toast.info("Itinéraire lancé (démo)", { description: "Intégration Google Maps / Waze sur l'app mobile B2C." })}>
-          <Navigation className="mr-1 h-3 w-3" />Itinéraire
-        </Button>
+        {onCompare ? (
+          <Button
+            size="sm" variant={isPinned ? "secondary" : "outline"}
+            aria-pressed={isPinned}
+            className={`h-7 flex-1 gap-1 text-xs ${isPinned ? "border border-emerald-500/50 text-emerald-700 dark:text-emerald-400" : ""}`}
+            onClick={onCompare}
+          >
+            <GitCompareArrows className="h-3 w-3" aria-hidden />
+            {isPinned ? "Retirer du comparateur" : "Comparer"}
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => toast.info("Itinéraire lancé (démo)", { description: "Intégration Google Maps / Waze sur l'app mobile B2C." })}>
+            <Navigation className="mr-1 h-3 w-3" />Itinéraire
+          </Button>
+        )}
       </div>
     </div>
   )

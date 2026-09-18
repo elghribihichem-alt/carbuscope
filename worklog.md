@@ -350,3 +350,29 @@ Work Log:
 
 Stage Summary:
 - La réputation devient pro-active : l'enseigne ne consulte plus seulement ses notes, elle est alertée sur les stations qui décrochent (détection data-driven calibrée sur les données réelles), accède en un clic à la fiche complète pour agir, et exporte ses avis (avec réponses) pour analyse externe. Reste recommandé : intégrer le taux de réponse dans l'IVE (poids à arbitrer), export PDF réputation, widget comparaison de stations sur la carte réelle, alertes email/programmées depuis la watchlist.
+
+---
+Task ID: 17
+Agent: orchestrator (Z.ai Code)
+Task: QA de routine + « Comparateur de stations sur la carte » (recommandé T10/T14/T15/T16) + IVE v2 avec taux de réponse (recommandé T15/T16)
+
+Work Log:
+- QA initial : serveur 200 (next-server ~2,1 Go RSS, mémoire 1,5 Go dispo), 6 endpoints API 200, sweep navigateur 4 modes (carte réelle Esri + popup clic marqueur + « Voir la fiche », portail Avis & réputation, back-office Modération/Stats plateforme, mobile B2C) — 0 erreur console → phase stable, développement de nouvelles fonctionnalités.
+- NOUVEAU « Comparateur de stations sur la carte interactive » :
+  - `station-compare-dialog.tsx` étendu : `MAX_COMPARE_STATIONS` exporté (3 → 4 stations), largeur de grille dynamique (`minWidth: max(520, 160+n*180)`), dialog élargi `sm:max-w-4xl`, prop `onLocate` optionnelle → bouton « Carte » (Crosshair) par colonne qui ferme le dialog et centre la carte (flyTo), boutons « Fiche »/« Carte » par station.
+  - `osm-map.tsx` : props `onCompare` + `compareCodes` ; popup StationMiniCard → badge « Comparateur » (Pin, émeraude) quand épinglée + bouton toggle « Comparer »/« Retirer » (GitCompareArrows, aria-pressed, bordure émeraude à l'état épinglé) à côté de « Voir la fiche » ; markerStyle `isPinned` → anneau/contour émeraude #059669 (weight 3, +1 rayon) sur tous les statuts (actif/rénovation/projet/fermé).
+  - `tunisia-map.tsx` : props `onCompare`/`compareCodes` passées à OSMMap ; mode schéma → anneau émeraude extérieur autour des marqueurs épinglés (tous statuts) + StationPopup → bouton « Comparer »/« Retirer du comparateur » (remplace « Itinéraire » quand onCompare fourni) ; memo deps + compareSet.
+  - `carte-interactive-tab.tsx` : état `compareCodes`/`compareOpen`, `toggleCompare` (toasts épinglée n/4 / retirée / comparateur plein, max 4), `compareStations` (ordre d'épinglage conservé), barre de comparaison sticky en bas de carte (glassmorphism : bg-background/92 backdrop-blur, bordure émeraude, ombre, chips avec pastille enseigne + X, compteur n/4, bouton « Comparer » disabled < 2, bouton vider Trash2, animation animate-in slide-in-from-bottom) + StationCompareDialog câblé (onOpenDetail → fiche, onLocate → focus carte).
+  - `stations-tab.tsx` (« Mes stations ») : MAX_COMPARE local remplacé par la constante partagée (3 → 4, cohérence plateforme).
+- BUG trouvé et corrigé pendant le QA : la barre en `absolute bottom-6` sortait du viewport sur écrans courts (viewport agent-browser 577px → tray à y=629, invisible) → passage en `sticky bottom-4 mt-[-72px]` : la barre reste visible en bas d'écran tant que la carte est à l'écran, chevauche le bas de la carte quand tout est visible. Vérifié : y=507, visible:true.
+- IVE v2 (Indice de Valeur d'Enseigne) — le taux de réponse est désormais une composante :
+  - `/api/stats/reputation` computeIVE v2 : Note client 35 pts (×40 avant) · Volume d'avis 15 pts (×20) · Expérience réseau 15 pts (×20) · Fraîcheur 15 pts (×20) · **Taux de réponse 20 pts (nouveau)** = 100. Justification : réactivité = levier d'image directement actionnable depuis le flux d'avis (C.2.6).
+  - `valueIndex.details` : 5e entrée « reponse » (hint méthodologique), max recalibrés.
+  - `portal-reviews.tsx` : icône MessageSquareReply pour la 5e ligne + méthodologie mise à jour.
+  - Nouveaux scores : Agil 57 (rang 6/6, réponse 25,1 % → 5,0/20), Shell 60 (1er), Staroil 59, Ola Energy 58, TotalEnergies 58 — le classement récompense désormais la réactivité (Shell 25,4 % et Staroil 30,8 % devant).
+- QA E2E agent-browser (comparateur) : popup réelle → « Comparer » → toast « épinglée (1/4) » + barre visible avec hint ; épingle 2ᵉ et 3ᵉ stations (Agil Hammam Lif, Station Le Bardo) → chips + compteur 2/4, bouton activé ; « Comparer » → dialog 2/4 avec table complète (badges numérotés couleur enseigne, Top par critère, score comparatif, « Meilleur profil », matrice Services différenciants, Fiche/Carte) ; VLM : rendu propre, pas de glitch, alignement parfait ; bouton « Carte » → dialog fermé + flyTo + barre conservée ; anneaux émeraude visibles sur les marqueurs épinglés (réel + schéma, 3 cercles #059669 vérifiés en SVG) ; popup mode schéma (Shell Mornag) → « Comparer » → épinglage OK ; 0 erreur console à chaque étape.
+- QA E2E (IVE) : portail Agil → carte IVE « Score composite 57/100 » avec 5 barres (Note client 27/35, Volume 12,3/15, Expérience 9,7/15, Fraîcheur 3,2/15, Taux de réponse 5/20) — API testée sur 5 enseignes, cohérente.
+- `bun run lint` : 0 erreur. `bunx tsc --noEmit` : aucune erreur nouvelle (4 préexistantes api/stations + serialize, 8 dans examples/seed — documentées). Navigateur fermé (1,3 Go libres).
+
+Stage Summary:
+- La comparaison de stations, auparavant cantonnée à l'onglet « Mes stations », est maintenant accessible directement depuis la carte interactive (réelle ET schéma) : épinglage depuis les popups, barre sticky de suivi, dialog enrichi 4 colonnes avec actions. L'IVE intègre la réactivité de l'enseigne (20 pts) — boucle C.2.6 complète : répondre aux avis améliore désormais mesurablement l'indice de valeur. Reste recommandé : export PDF réputation, alertes email/programmées depuis la watchlist, comparaison depuis la fiche détaillée (StationDetailDialog), étendre le comparateur au mode mobile B2C.

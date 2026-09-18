@@ -467,6 +467,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                     {det.key === "volume" && <MessageSquareQuote className="h-3.5 w-3.5 text-amber-500" aria-hidden />}
                     {det.key === "experience" && <Gauge className="h-3.5 w-3.5 text-amber-500" aria-hidden />}
                     {det.key === "fraicheur" && <Info className="h-3.5 w-3.5 text-amber-500" aria-hidden />}
+                    {det.key === "reponse" && <MessageSquareReply className="h-3.5 w-3.5 text-amber-500" aria-hidden />}
                     {det.label}
                   </span>
                   <span className="tabular-nums text-muted-foreground">
@@ -477,8 +478,9 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
               </div>
             ))}
             <p className="rounded-lg border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-              L’IVE agrège la satisfaction client (40 pts), la densité d’avis (20 pts), l’expérience réseau —
-              stations actives et 24h/24-7j/7 (20 pts) et la fraîcheur des vérifications terrain (20 pts).
+              L’IVE agrège la satisfaction client (35 pts), la densité d’avis (15 pts), l’expérience réseau —
+              stations actives et 24h/24-7j/7 (15 pts), la fraîcheur des vérifications terrain (15 pts)
+              et le taux de réponse aux avis (20 pts) — un levier directement actionnable depuis le flux ci-dessous.
               Il permet de suivre la valeur perçue de l’enseigne mois après mois.
             </p>
           </CardContent>

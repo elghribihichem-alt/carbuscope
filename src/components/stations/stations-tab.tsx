@@ -27,14 +27,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StatusBadge } from "@/components/shell/badges"
 import { ErrorState, TabSkeleton } from "@/components/shell/loading"
 import { ServiceChips } from "./service-chip"
-import { StationCompareDialog } from "./station-compare-dialog"
+import { StationCompareDialog, MAX_COMPARE_STATIONS } from "./station-compare-dialog"
 import { StationDetailDialog } from "./station-detail-dialog"
 import { StationFormDialog } from "./station-form-dialog"
 import { buildStationsCsv, downloadText, formatDateFr, normalizeFr, todayStamp } from "./station-utils"
 
 const PAGE_SIZE = 20
 const TENSION_THRESHOLD = 1100 // trafic captif (véh./j) sous lequel une station active est « sous tension »
-const MAX_COMPARE = 3 // nombre maximal de stations comparables côte à côte
+const MAX_COMPARE = MAX_COMPARE_STATIONS // nombre maximal de stations comparables côte à côte
 
 type SubTabKey = "all" | "ACTIVE" | "RENOVATION" | "PROJECT" | "TENSION"
 type SortKey =

@@ -10,8 +10,10 @@ export const dynamic = "force-dynamic"
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
-// IVE : Indice de Valeur d'Enseigne (0-100) — composite comparable entre enseignes
-//   Note client 40 pts · Volume d'avis 20 pts · Expérience réseau 20 pts · Fraîcheur 20 pts
+// IVE v2 : Indice de Valeur d'Enseigne (0-100) — composite comparable entre enseignes
+//   Note client 35 pts · Volume d'avis 15 pts · Expérience réseau 15 pts · Fraîcheur 15 pts · Taux de réponse 20 pts
+//   La réactivité aux avis (20 pts) récompense l'enseigne qui répond publiquement à ses clients —
+//   un levier d'image directement actionnable, aligné avec la boucle de réputation C.2.6.
 function computeIVE(input: {
   avgRating: number
   reviews: number
@@ -19,13 +21,15 @@ function computeIVE(input: {
   active: number
   open24or7: number
   fresh90: number
+  responseRate: number // 0-100
 }) {
-  const { avgRating, reviews, stations, active, open24or7, fresh90 } = input
-  const note = (avgRating / 5) * 40
-  const volume = Math.min(1, stations ? reviews / (stations * 3) : 0) * 20 // 3 avis/station = maximum
-  const exp = (stations ? active / stations : 0) * 10 + (stations ? open24or7 / stations : 0) * 10
-  const fresh = (stations ? fresh90 / stations : 0) * 20
-  return { note, volume, exp, fresh, total: note + volume + exp + fresh }
+  const { avgRating, reviews, stations, active, open24or7, fresh90, responseRate } = input
+  const note = (avgRating / 5) * 35
+  const volume = Math.min(1, stations ? reviews / (stations * 3) : 0) * 15 // 3 avis/station = maximum
+  const exp = (stations ? active / stations : 0) * 7.5 + (stations ? open24or7 / stations : 0) * 7.5
+  const fresh = (stations ? fresh90 / stations : 0) * 15
+  const reply = (Math.min(100, Math.max(0, responseRate)) / 100) * 20
+  return { note, volume, exp, fresh, reply, total: note + volume + exp + fresh + reply }
 }
 
 export async function GET(req: NextRequest) {
@@ -124,6 +128,7 @@ export async function GET(req: NextRequest) {
         avgRating: a.reviews ? a.ratingSum / a.reviews : 0,
         reviews: a.reviews, stations: a.stations,
         active: a.active, open24or7: a.open24or7, fresh90: a.fresh90,
+        responseRate: a.reviews ? (a.replies / a.reviews) * 100 : 0,
       }))
     }
   }
@@ -310,20 +315,24 @@ export async function GET(req: NextRequest) {
       brandsCount: aggs.size,
       details: [
         {
-          key: "note", label: "Note client", points: round1(ownIve.note), max: 40,
-          hint: "Moyenne des avis clients (note / 5 × 40 points).",
+          key: "note", label: "Note client", points: round1(ownIve.note), max: 35,
+          hint: "Moyenne des avis clients (note / 5 × 35 points).",
         },
         {
-          key: "volume", label: "Volume d'avis", points: round1(ownIve.volume), max: 20,
-          hint: "Densité d'avis par station (3 avis/station = 20 points).",
+          key: "volume", label: "Volume d'avis", points: round1(ownIve.volume), max: 15,
+          hint: "Densité d'avis par station (3 avis/station = 15 points).",
         },
         {
-          key: "experience", label: "Expérience réseau", points: round1(ownIve.exp), max: 20,
+          key: "experience", label: "Expérience réseau", points: round1(ownIve.exp), max: 15,
           hint: "Stations actives et ouvertes 24h/24 ou 7j/7.",
         },
         {
-          key: "fraicheur", label: "Fraîcheur des données", points: round1(ownIve.fresh), max: 20,
+          key: "fraicheur", label: "Fraîcheur des données", points: round1(ownIve.fresh), max: 15,
           hint: "Part des stations vérifiées il y a moins de 90 jours.",
+        },
+        {
+          key: "reponse", label: "Taux de réponse", points: round1(ownIve.reply), max: 20,
+          hint: "Avis clients ayant reçu une réponse officielle de l'enseigne (20 points à 100 %).",
         },
       ],
     },

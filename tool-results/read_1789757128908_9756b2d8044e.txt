@@ -1,0 +1,987 @@
+     1→'use client'
+     2→
+     3→// CarbuScope — Carte de Tunisie interactive (SVG multi-couches)
+     4→// Fonctionnalités : pan/zoom, couches (stations, routes, trafic, zones, projets, parc auto),
+     5→// fiche station au clic, outils : mesure de distance, rayon de chalandise, sélection polygone + export.
+     6→
+     7→import * as React from "react"
+     8→import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+     9→import dynamic from "next/dynamic"
+    10→import {
+    11→  Store, Wind, DoorOpen, CreditCard, Coffee, Droplets, Wrench, Cog, Zap,
+    12→  MapPin, Navigation, X, Ruler, Hexagon, Circle as CircleIcon, Trash2, Plus, Minus,
+    13→  Maximize, Layers, FileDown, ChevronDown, ChevronRight, Star, Gauge, Clock, ShieldCheck, History, Globe, Loader2,
+    14→} from "lucide-react"
+    15→import { Button } from "@/components/ui/button"
+    16→import { Badge } from "@/components/ui/badge"
+    17→import { Switch } from "@/components/ui/switch"
+    18→import { Slider } from "@/components/ui/slider"
+    19→import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+    20→import { ScrollArea } from "@/components/ui/scroll-area"
+    21→import { toast } from "sonner"
+    22→import type { StationDTO, StationDetail, RoadDTO, ProjectDTO, GovernoratRow, ServiceDTO } from "@/lib/types"
+    23→import { SERVICE_LABELS } from "@/lib/types"
+    24→import { MAP_W, MAP_H, project, unproject, haversineKm, kmToSvgUnits, svgUnitsToKm, pointInPolygon } from "@/lib/geo"
+    25→import { TUNISIA_BORDER, DJERBA, KERKENNAH, CITIES, GOV_CENTERS } from "./tunisia-geo"
+    26→import type { OsmBackground } from "./osm-map"
+    27→
+    28→// Fond cartographique réel (Leaflet + tuiles OSM/CARTO) — chargé côté client uniquement
+    29→const OSMMap = dynamic(() => import("./osm-map").then(m => m.OSMMap), {
+    30→  ssr: false,
+    31→  loading: () => (
+    32→    <div className="absolute inset-0 z-0 flex items-center justify-center bg-secondary/30 backdrop-blur-[2px]">
+    33→      <span className="inline-flex items-center gap-2 rounded-lg border bg-background/90 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm">
+    34→        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement du fond cartographique…
+    35→      </span>
+    36→    </div>
+    37→  ),
+    38→})
+    39→
+    40→const OSM_BG_LABELS: [OsmBackground, string][] = [
+    41→  ["auto", "Automatique (suit le thème)"],
+    42→  ["street", "Plan détaillé (Esri)"],
+    43→  ["clair", "Clair minimal (Esri)"],
+    44→  ["noir", "Nuit (Esri)"],
+    45→  ["topo", "Relief (OpenTopoMap)"],
+    46→  ["osm", "Plan communautaire OSM"],
+    47→]
+    48→
+    49→const OSM_BG_KEYS = new Set<string>(["auto", "street", "clair", "noir", "topo", "osm"])
+    50→
+    51→export const SERVICE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+    52→  boutique: Store, gonflage: Wind, toilettes: DoorOpen, atm: CreditCard, cafe: Coffee,
+    53→  lavage: Droplets, vidange: Wrench, atelier: Cog, recharge: Zap,
+    54→}
+    55→
+    56→export interface MapLayers {
+    57→  stations: boolean
+    58→  roads: boolean
+    59→  traffic: boolean
+    60→  zones: boolean
+    61→  projects: boolean
+    62→  fleet: boolean
+    63→}
+    64→
+    65→export interface TunisiaMapProps {
+    66→  stations: StationDTO[]
+    67→  ownBrandSlug?: string | null
+    68→  selectedCode?: string | null
+    69→  onSelect?: (s: StationDTO | null) => void
+    70→  onViewDetail?: (s: StationDTO) => void
+    71→  layers?: Partial<MapLayers>
+    72→  showLayerControl?: boolean
+    73→  tools?: boolean
+    74→  showLegend?: boolean
+    75→  className?: string
+    76→  focusCode?: string | null
+    77→  fitTo?: StationDTO[] | null
+    78→  autoFitOnLoad?: boolean
+    79→  govStationCounts?: Record<string, number> | null
+    80→}
+    81→
+    82→type Tool = "measure" | "radius" | "polygon" | null
+    83→
+    84→interface StaticLayers {
+    85→  roads: RoadDTO[]
+    86→  projects: ProjectDTO[]
+    87→  governorats: GovernoratRow[]
+    88→  services: ServiceDTO[]
+    89→}
+    90→
+    91→let staticPromise: Promise<StaticLayers> | null = null
+    92→function loadStatic(): Promise<StaticLayers> {
+    93→  if (!staticPromise) {
+    94→    staticPromise = (async () => {
+    95→      const safe = async (url: string, key: string) => {
+    96→        try {
+    97→          const r = await fetch(url)
+    98→          if (!r.ok) return []
+    99→          const j = await r.json()
+   100→          return j[key] ?? []
+   101→        } catch { return [] }
+   102→      }
+   103→      const [roads, projects, governorats, services] = await Promise.all([
+   104→        safe("/api/roads", "roads"),
+   105→        safe("/api/projects", "projects"),
+   106→        safe("/api/governorats", "governorats"),
+   107→        safe("/api/services", "services"),
+   108→      ])
+   109→      return { roads, projects, governorats, services }
+   110→    })()
+   111→  }
+   112→  return staticPromise
+   113→}
+   114→
+   115→const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+   116→
+   117→function borderToPath(pts: [number, number][]): string {
+   118→  return pts.map((p, i) => `${i === 0 ? "M" : "L"}${project(p[0], p[1]).x.toFixed(1)} ${project(p[0], p[1]).y.toFixed(1)}`).join(" ") + " Z"
+   119→}
+   120→
+   121→const DATE_FR = (d: string | Date) =>
+   122→  new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(d))
+   123→
+   124→export function TunisiaMap({
+   125→  stations, ownBrandSlug, selectedCode, onSelect, onViewDetail,
+   126→  layers, showLayerControl = true, tools = false, showLegend = true,
+   127→  className = "h-[560px]", focusCode, fitTo, autoFitOnLoad = false, govStationCounts,
+   128→}: TunisiaMapProps) {
+   129→  const wrapRef = useRef<HTMLDivElement>(null)
+   130→  const svgRef = useRef<SVGSVGElement>(null)
+   131→  const movedRef = useRef(0)
+   132→
+   133→  const [view, setView] = useState({ k: 1, x: 0, y: 0 })
+   134→  const [hoverCode, setHoverCode] = useState<string | null>(null)
+   135→  const [selCode, setSelCode] = useState<string | null>(selectedCode ?? null)
+   136→  const [layerState, setLayerState] = useState<MapLayers>({
+   137→    stations: true, roads: true, traffic: false, zones: false, projects: false, fleet: false,
+   138→    ...(layers ?? {}),
+   139→  })
+   140→  const [staticData, setStaticData] = useState<StaticLayers | null>(null)
+   141→  const [detail, setDetail] = useState<StationDetail | null>(null)
+   142→  const [detailCode, setDetailCode] = useState<string | null>(null)
+   143→  const [showHistory, setShowHistory] = useState(false)
+   144→
+   145→  // Fond cartographique réel (OSM) vs schéma vectoriel — persisté par visiteur.
+   146→  // Lecture différée (setTimeout 0) : évite tout écart d'hydratation SSR et les setState synchrones en effet.
+   147→  // La persistance n'écrit qu'après la lecture initiale (sinon la valeur par défaut écraserait le choix stocké).
+   148→  const [realMap, setRealMap] = useState(true)
+   149→  const [osmBg, setOsmBg] = useState<OsmBackground>("auto")
+   150→  const [bgPrefsLoaded, setBgPrefsLoaded] = useState(false)
+   151→  useEffect(() => {
+   152→    const id = setTimeout(() => {
+   153→      try {
+   154→        const stored = localStorage.getItem("carbuscope-map-bg")
+   155→        setRealMap(stored ? stored === "real" : true) // fond réel activé par défaut
+   156→      } catch { /* ignore */ }
+   157→      try {
+   158→        const b = localStorage.getItem("carbuscope-map-osmbg")
+   159→        if (b && OSM_BG_KEYS.has(b)) setOsmBg(b as OsmBackground)
+   160→      } catch { /* ignore */ }
+   161→      setBgPrefsLoaded(true)
+   162→    }, 0)
+   163→    return () => clearTimeout(id)
+   164→  }, [])
+   165→  useEffect(() => {
+   166→    if (!bgPrefsLoaded) return
+   167→    try { localStorage.setItem("carbuscope-map-bg", realMap ? "real" : "schema") } catch { /* ignore */ }
+   168→  }, [realMap, bgPrefsLoaded])
+   169→  useEffect(() => {
+   170→    if (!bgPrefsLoaded) return
+   171→    try { localStorage.setItem("carbuscope-map-osmbg", osmBg) } catch { /* ignore */ }
+   172→  }, [osmBg, bgPrefsLoaded])
+   173→
+   174→  // outils
+   175→  const [tool, setTool] = useState<Tool>(null)
+   176→  const [measurePts, setMeasurePts] = useState<[number, number][]>([])
+   177→  const [radiusCenter, setRadiusCenter] = useState<[number, number] | null>(null)
+   178→  const [radiusKm, setRadiusKm] = useState(10)
+   179→  const [polygonPts, setPolygonPts] = useState<[number, number][]>([])
+   180→  const [polygonClosed, setPolygonClosed] = useState(false)
+   181→
+   182→  useEffect(() => { loadStatic().then(setStaticData).catch(() => {}) }, [])
+   183→
+   184→  // ---------- Conversions écran ↔ SVG (letterbox-safe) ----------
+   185→  // métriques de conteneur suivies par ResizeObserver (accessibles au rendu)
+   186→  const [mstate, setMstate] = useState<{ scale: number; offX: number; offY: number; w: number; h: number }>({
+   187→    scale: 0.5, offX: 0, offY: 0, w: 520, h: 1000,
+   188→  })
+   189→
+   190→  useEffect(() => {
+   191→    const el = svgRef.current
+   192→    if (!el) return
+   193→    const update = () => {
+   194→      const r = el.getBoundingClientRect()
+   195→      const scale = Math.min(r.width / MAP_W, r.height / MAP_H) || 0.5
+   196→      setMstate({
+   197→        scale,
+   198→        offX: (r.width - MAP_W * scale) / 2,
+   199→        offY: (r.height - MAP_H * scale) / 2,
+   200→        w: r.width,
+   201→        h: r.height,
+   202→      })
+   203→    }
+   204→    const raf = requestAnimationFrame(update)
+   205→    const ro = new ResizeObserver(update)
+   206→    ro.observe(el)
+   207→    return () => { cancelAnimationFrame(raf); ro.disconnect() }
+   208→  }, [])
+   209→
+   210→  const metrics = useCallback(() => {
+   211→    const el = svgRef.current
+   212→    if (!el) return null
+   213→    const r = el.getBoundingClientRect()
+   214→    const scale = Math.min(r.width / MAP_W, r.height / MAP_H)
+   215→    const offX = (r.width - MAP_W * scale) / 2
+   216→    const offY = (r.height - MAP_H * scale) / 2
+   217→    return { scale, offX, offY, rect: r }
+   218→  }, [])
+   219→
+   220→  const svgPointFromEvent = useCallback((e: { clientX: number; clientY: number }): [number, number] | null => {
+   221→    const m = metrics()
+   222→    if (!m) return null
+   223→    const sx = (e.clientX - m.rect.left - m.offX) / m.scale
+   224→    const sy = (e.clientY - m.rect.top - m.offY) / m.scale
+   225→    return [sx, sy]
+   226→  }, [metrics])
+   227→
+   228→  const toScreen = useCallback((p: { x: number; y: number }) => ({
+   229→    left: mstate.offX + (p.x * view.k + view.x) * mstate.scale,
+   230→    top: mstate.offY + (p.y * view.k + view.y) * mstate.scale,
+   231→  }), [mstate, view])
+   232→
+   233→  // ---------- Zoom / pan ----------
+   234→  useEffect(() => {
+   235→    const el = svgRef.current
+   236→    if (!el) return
+   237→    const onWheel = (e: WheelEvent) => {
+   238→      e.preventDefault()
+   239→      const pt = svgPointFromEvent(e)
+   240→      if (!pt) return
+   241→      setView(v => {
+   242→        const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18
+   243→        const k = clamp(v.k * factor, 1, 14)
+   244→        const mx = (pt[0] - v.x) / v.k
+   245→        const my = (pt[1] - v.y) / v.k
+   246→        return { k, x: pt[0] - mx * k, y: pt[1] - my * k }
+   247→      })
+   248→    }
+   249→    el.addEventListener("wheel", onWheel, { passive: false })
+   250→    return () => el.removeEventListener("wheel", onWheel)
+   251→  }, [svgPointFromEvent])
+   252→
+   253→  const zoomBy = (factor: number) => setView(v => {
+   254→    const k = clamp(v.k * factor, 1, 14)
+   255→    const cx = MAP_W / 2, cy = MAP_H / 2
+   256→    const mx = (cx - v.x) / v.k, my = (cy - v.y) / v.k
+   257→    return { k, x: cx - mx * k, y: cy - my * k }
+   258→  })
+   259→
+   260→  const resetView = () => setView({ k: 1, x: 0, y: 0 })
+   261→
+   262→  const fitBounds = useCallback((sts: StationDTO[]) => {
+   263→    if (!sts.length) { resetView(); return }
+   264→    const pts = sts.map(s => project(s.lng, s.lat))
+   265→    const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
+   266→    const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
+   267→    const bw = Math.max(maxX - minX, 10), bh = Math.max(maxY - minY, 10)
+   268→    const k = clamp(Math.min((MAP_W - 80) / bw, (MAP_H - 80) / bh), 1, 6)
+   269→    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+   270→    setView({ k, x: MAP_W / 2 - cx * k, y: MAP_H / 2 - cy * k })
+   271→  }, [])
+   272→
+   273→  useEffect(() => {
+   274→    if (!(autoFitOnLoad && stations.length)) return
+   275→    const raf = requestAnimationFrame(() => fitBounds(stations))
+   276→    return () => cancelAnimationFrame(raf)
+   277→  }, [autoFitOnLoad, stations, fitBounds])
+   278→
+   279→  useEffect(() => {
+   280→    if (!fitTo) return
+   281→    const raf = requestAnimationFrame(() => fitBounds(fitTo))
+   282→    return () => cancelAnimationFrame(raf)
+   283→  }, [fitTo, fitBounds])
+   284→
+   285→  const selectStation = useCallback((s: StationDTO | null) => {
+   286→    setSelCode(s ? s.code : null)
+   287→    setShowHistory(false)
+   288→    onSelect?.(s)
+   289→  }, [onSelect])
+   290→
+   291→  // ---------- Focus « voir sur la carte » ----------
+   292→  useEffect(() => {
+   293→    if (!focusCode) return
+   294→    const raf = requestAnimationFrame(() => {
+   295→      const st = stations.find(s => s.code === focusCode)
+   296→      if (st) {
+   297→        selectStation(st)
+   298→        const p = project(st.lng, st.lat)
+   299→        setView({ k: 6, x: MAP_W / 2 - p.x * 6, y: MAP_H / 2 - p.y * 6 })
+   300→      }
+   301→    })
+   302→    return () => cancelAnimationFrame(raf)
+   303→  }, [focusCode, stations, selectStation])
+   304→
+   305→  // ---------- Détail fiche (dérivé : actif seulement si cohérent avec la sélection) ----------
+   306→  const activeDetail = selCode && detailCode === selCode ? detail : null
+   307→  useEffect(() => {
+   308→    if (!selCode) return
+   309→    const st = stations.find(s => s.code === selCode)
+   310→    if (!st) return
+   311→    if (detailCode === selCode) return
+   312→    const ctrl = new AbortController()
+   313→    fetch(`/api/stations/${st.id}`, { signal: ctrl.signal })
+   314→      .then(r => (r.ok ? r.json() : null))
+   315→      .then((d: StationDetail | null) => { if (d) { setDetail(d); setDetailCode(selCode) } })
+   316→      .catch(() => {})
+   317→    return () => ctrl.abort()
+   318→  }, [selCode, stations, detailCode])
+   319→
+   320→  // ---------- Drag pan ----------
+   321→  const dragRef = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null)
+   322→  const onPointerDown = (e: React.PointerEvent) => {
+   323→    if (e.button !== 0) return
+   324→    movedRef.current = 0
+   325→    dragRef.current = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }
+   326→    ;(e.target as Element).setPointerCapture?.(e.pointerId)
+   327→  }
+   328→  const onPointerMove = (e: React.PointerEvent) => {
+   329→    const d = dragRef.current
+   330→    if (!d) return
+   331→    const m = metrics()
+   332→    if (!m) return
+   333→    const dx = (e.clientX - d.sx) / m.scale
+   334→    const dy = (e.clientY - d.sy) / m.scale
+   335→    movedRef.current = Math.max(movedRef.current, Math.abs(dx) + Math.abs(dy))
+   336→    if (movedRef.current > 3) {
+   337→      setView(v => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
+   338→    }
+   339→  }
+   340→  const onPointerUp = () => { dragRef.current = null }
+   341→
+   342→  // ---------- Clic fond de carte ----------
+   343→  const onBackgroundClick = (e: React.MouseEvent) => {
+   344→    if (movedRef.current > 3) return
+   345→    const pt = svgPointFromEvent(e)
+   346→    if (!pt) return
+   347→    if (tool === "measure") { setMeasurePts(p => [...p, pt]); return }
+   348→    if (tool === "radius") { setRadiusCenter(pt); return }
+   349→    if (tool === "polygon" && !polygonClosed) { setPolygonPts(p => [...p, pt]); return }
+   350→    selectStation(null)
+   351→  }
+   352→
+   353→  const onDoubleClick = (e: React.MouseEvent) => {
+   354→    if (tool === "polygon" && polygonPts.length >= 3) { setPolygonClosed(true); return }
+   355→    const pt = svgPointFromEvent(e)
+   356→    if (!pt) return
+   357→    setView(v => {
+   358→      const k = clamp(v.k * 1.7, 1, 14)
+   359→      const mx = (pt[0] - v.x) / v.k, my = (pt[1] - v.y) / v.k
+   360→      return { k, x: pt[0] - mx * k, y: pt[1] - my * k }
+   361→    })
+   362→  }
+   363→
+   364→  // ---------- Sélections par outil ----------
+   365→  const insideRadius = useMemo(() => {
+   366→    if (!radiusCenter || tool !== "radius") return null
+   367→    const c = unproject(radiusCenter[0], radiusCenter[1])
+   368→    const set = new Set<string>()
+   369→    for (const s of stations) {
+   370→      if (haversineKm(c.lat, c.lng, s.lat, s.lng) <= radiusKm) set.add(s.code)
+   371→    }
+   372→    return set
+   373→  }, [radiusCenter, radiusKm, stations, tool])
+   374→
+   375→  const insidePolygon = useMemo(() => {
+   376→    if (tool !== "polygon" || polygonPts.length < 3 || !polygonClosed) return null
+   377→    const poly = polygonPts.map(p => { const u = unproject(p[0], p[1]); return [u.lng, u.lat] as [number, number] })
+   378→    const set = new Set<string>()
+   379→    for (const s of stations) if (pointInPolygon(s.lng, s.lat, poly)) set.add(s.code)
+   380→    return set
+   381→  }, [polygonPts, polygonClosed, stations, tool])
+   382→
+   383→  const exportSelection = (format: "csv" | "geojson") => {
+   384→    const set = tool === "polygon" ? insidePolygon : insideRadius
+   385→    if (!set) return
+   386→    const selected = stations.filter(s => set.has(s.code))
+   387→    if (!selected.length) { toast.info("Aucune station dans la sélection."); return }
+   388→    let blob: Blob
+   389→    let ext: string
+   390→    if (format === "csv") {
+   391→      const header = "code;nom;enseigne;gouvernorat;delegation;statut;trafic;lat;lng;services\n"
+   392→      const rows = selected.map(s =>
+   393→        [s.code, s.name, s.brandName, s.gouvernorat, s.delegation, s.status, s.traffic, s.lat, s.lng, s.services.join("|")].join(";")
+   394→      ).join("\n")
+   395→      blob = new Blob(["\ufeff" + header + rows], { type: "text/csv;charset=utf-8" })
+   396→      ext = "csv"
+   397→    } else {
+   398→      const fc = {
+   399→        type: "FeatureCollection",
+   400→        features: selected.map(s => ({
+   401→          type: "Feature",
+   402→          geometry: { type: "Point", coordinates: [s.lng, s.lat] },
+   403→          properties: { code: s.code, nom: s.name, enseigne: s.brandName, gouvernorat: s.gouvernorat, statut: s.status, trafic: s.traffic, services: s.services },
+   404→        })),
+   405→      }
+   406→      blob = new Blob([JSON.stringify(fc, null, 2)], { type: "application/geo+json" })
+   407→      ext = "geojson"
+   408→    }
+   409→    const a = document.createElement("a")
+   410→    a.href = URL.createObjectURL(blob)
+   411→    a.download = `carbuscope-selection.${ext}`
+   412→    a.click()
+   413→    URL.revokeObjectURL(a.href)
+   414→    toast.success(`${selected.length} stations exportées (${ext.toUpperCase()})`)
+   415→  }
+   416→
+   417→  const clearTools = () => {
+   418→    setTool(null); setMeasurePts([]); setRadiusCenter(null); setPolygonPts([]); setPolygonClosed(false)
+   419→  }
+   420→
+   421→  const measureTotal = useMemo(() => {
+   422→    if (measurePts.length < 2) return 0
+   423→    let t = 0
+   424→    for (let i = 1; i < measurePts.length; i++) {
+   425→      const a = unproject(measurePts[i - 1][0], measurePts[i - 1][1])
+   426→      const b = unproject(measurePts[i][0], measurePts[i][1])
+   427→      t += haversineKm(a.lat, a.lng, b.lat, b.lng)
+   428→    }
+   429→    return t
+   430→  }, [measurePts])
+   431→
+   432→  // ---------- Rendu stations (mémoïsé) ----------
+   433→  const stationNodes = useMemo(() => {
+   434→    return stations.map(s => {
+   435→      const p = project(s.lng, s.lat)
+   436→      const isOwn = ownBrandSlug && s.brandSlug === ownBrandSlug
+   437→      const isSel = s.code === selCode
+   438→      const isHover = s.code === hoverCode
+   439→      const inRad = insideRadius?.has(s.code)
+   440→      const inPoly = insidePolygon?.has(s.code)
+   441→      const highlighted = isOwn || isSel || isHover || inRad || inPoly
+   442→      const r = isOwn ? 3.6 : 2.7
+   443→      if (s.status === "CLOSED") {
+   444→        return (
+   445→          <g key={s.id} onClick={(e) => { e.stopPropagation(); if (movedRef.current <= 3) selectStation(s) }}
+   446→             onMouseEnter={() => setHoverCode(s.code)} onMouseLeave={() => setHoverCode(null)} className="cursor-pointer">
+   447→            <circle cx={p.x} cy={p.y} r={3.4} fill="#9ca3af" stroke="#6b7280" strokeWidth={1} />
+   448→            <line x1={p.x - 2} y1={p.y - 2} x2={p.x + 2} y2={p.y + 2} stroke="#f8fafc" strokeWidth={0.9} />
+   449→            <line x1={p.x - 2} y1={p.y + 2} x2={p.x + 2} y2={p.y - 2} stroke="#f8fafc" strokeWidth={0.9} />
+   450→          </g>
+   451→        )
+   452→      }
+   453→      return (
+   454→        <g key={s.id} onClick={(e) => { e.stopPropagation(); if (movedRef.current <= 3) selectStation(s) }}
+   455→           onMouseEnter={() => setHoverCode(s.code)} onMouseLeave={() => setHoverCode(null)} className="cursor-pointer">
+   456→          {isSel && <circle cx={p.x} cy={p.y} r={8} fill={s.brandColor} opacity={0.25} className="animate-ping-slow" />}
+   457→          {s.status === "PROJECT" ? (
+   458→            <circle cx={p.x} cy={p.y} r={r} fill="none" stroke={s.brandColor} strokeWidth={1.6} strokeDasharray="2 1.6" />
+   459→          ) : (
+   460→            <circle cx={p.x} cy={p.y} r={r} fill={s.brandColor} opacity={highlighted ? 1 : 0.72}
+   461→              stroke={s.status === "RENOVATION" ? "#d97706" : "white"} strokeWidth={s.status === "RENOVATION" ? 1.6 : isSel ? 1.8 : 0.7} />
+   462→          )}
+   463→        </g>
+   464→      )
+   465→    })
+   466→  }, [stations, ownBrandSlug, selCode, hoverCode, insideRadius, insidePolygon, selectStation])
+   467→
+   468→  // ---------- Popup position ----------
+   469→  const selectedStation = stations.find(s => s.code === selCode) ?? null
+   470→  const popupPos = useMemo(() => {
+   471→    if (!selectedStation) return null
+   472→    const p = project(selectedStation.lng, selectedStation.lat)
+   473→    return toScreen(p)
+   474→  }, [selectedStation, toScreen])
+   475→
+   476→  const roads = staticData?.roads ?? []
+   477→  const projects = staticData?.projects ?? []
+   478→  const governorats = staticData?.governorats ?? []
+   479→  const govCountFallback = useMemo(() => {
+   480→    const m: Record<string, number> = {}
+   481→    for (const s of stations) m[s.gouvernorat] = (m[s.gouvernorat] ?? 0) + 1
+   482→    return m
+   483→  }, [stations])
+   484→  const govCountMap = govStationCounts ?? govCountFallback
+   485→
+   486→  const transform = `translate(${view.x} ${view.y}) scale(${view.k})`
+   487→  const invK = 1 / view.k
+   488→
+   489→  return (
+   490→    <div ref={wrapRef} className={`relative overflow-hidden rounded-xl border bg-[radial-gradient(ellipse_at_center,var(--secondary)_0%,var(--background)_75%)] ${className}`}>
+   491→      {realMap ? (
+   492→        <OSMMap
+   493→          stations={stations}
+   494→          roads={roads}
+   495→          projects={projects}
+   496→          layers={{ stations: layerState.stations, roads: layerState.roads, traffic: layerState.traffic, projects: layerState.projects }}
+   497→          ownBrandSlug={ownBrandSlug}
+   498→          selectedCode={selCode}
+   499→          onSelect={selectStation}
+   500→          onViewDetail={(s) => onViewDetail?.(s)}
+   501→          background={osmBg}
+   502→          focusCode={focusCode}
+   503→          fitTo={fitTo}
+   504→        />
+   505→      ) : (
+   506→      <svg ref={svgRef} viewBox={`0 0 ${MAP_W} ${MAP_H}`} preserveAspectRatio="xMidYMid meet"
+   507→        className="h-full w-full touch-none select-none cursor-grab active:cursor-grabbing"
+   508→        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+   509→        onClick={onBackgroundClick} onDoubleClick={onDoubleClick}
+   510→        role="img" aria-label="Carte des stations-service de Tunisie">
+   511→
+   512→        <defs>
+   513→          <filter id="heat-blur" x="-60%" y="-60%" width="220%" height="220%">
+   514→            <feGaussianBlur stdDeviation="7" />
+   515→          </filter>
+   516→        </defs>
+   517→
+   518→        <g transform={transform}>
+   519→          {/* Pays */}
+   520→          <path d={borderToPath(TUNISIA_BORDER)} className="map-land" stroke="var(--border)" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+   521→          <path d={borderToPath(DJERBA)} className="map-land" stroke="var(--border)" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+   522→          <path d={borderToPath(KERKENNAH)} className="map-land" stroke="var(--border)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+   523→
+   524→          {/* Villes */}
+   525→          <g>
+   526→            {CITIES.map(([name, lng, lat, major]) => {
+   527→              const p = project(lng, lat)
+   528→              return (
+   529→                <g key={name} style={{ display: view.k > 1.35 || major ? undefined : "none" }}>
+   530→                  <circle cx={p.x} cy={p.y} r={major ? 2.4 : 1.6} className="map-city" />
+   531→                  <text x={p.x + 4} y={p.y + 3} fontSize={major ? 10 : 8.5} className="map-city-label" fontWeight={major ? 600 : 400}>{name}</text>
+   532→                </g>
+   533→              )
+   534→            })}
+   535→          </g>
+   536→
+   537→          {/* Couche : zones administratives */}
+   538→          {layerState.zones && (
+   539→            <g>
+   540→              {governorats.map(g => {
+   541→                const c = GOV_CENTERS[g.name]
+   542→                if (!c) return null
+   543→                const p = project(c[0], c[1])
+   544→                const n = govCountMap[g.name] ?? g.stations ?? 0
+   545→                const w = 8 + Math.max(g.name.length, String(n).length) * 4.6
+   546→                return (
+   547→                  <g key={g.name}>
+   548→                    <rect x={p.x - w / 2} y={p.y - 9} width={w} height={17} rx={8.5} className="map-zone-badge" />
+   549→                    <text x={p.x} y={p.y + 2.5} textAnchor="middle" fontSize={8.5} className="map-zone-label">{g.name} · {n}</text>
+   550→                  </g>
+   551→                )
+   552→              })}
+   553→            </g>
+   554→          )}
+   555→
+   556→          {/* Couche : densité parc automobile */}
+   557→          {layerState.fleet && (
+   558→            <g>
+   559→              {governorats.map(g => {
+   560→                const c = GOV_CENTERS[g.name]
+   561→                if (!c) return null
+   562→                const p = project(c[0], c[1])
+   563→                const r = Math.sqrt(g.vehicles) / 28
+   564→                return <circle key={g.name} cx={p.x} cy={p.y} r={r} fill="#d97706" opacity={0.14} stroke="#d97706" strokeWidth={0.6} strokeOpacity={0.4} />
+   565→              })}
+   566→            </g>
+   567→          )}
+   568→
+   569→          {/* Couche : axes routiers */}
+   570→          {layerState.roads && roads.map(rd => {
+   571→            const pts = rd.segments.map(s => project(s[0], s[1]))
+   572→            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")
+   573→            const mid = pts[Math.floor(pts.length / 2)]
+   574→            const color = rd.type === "AUTOROUTE" ? "#d97706" : rd.type === "RN" ? "#e07856" : "#9ca3af"
+   575→            const w = rd.type === "AUTOROUTE" ? 2.6 : rd.type === "RN" ? 1.7 : 1.2
+   576→            return (
+   577→              <g key={rd.id}>
+   578→                <path d={d} fill="none" stroke={color} strokeWidth={w} opacity={0.85} strokeLinecap="round" />
+   579→                <text x={mid.x + 3} y={mid.y - 3} fontSize={8.5} fontWeight={700} fill={color} opacity={0.95}>{rd.code}</text>
+   580→              </g>
+   581→            )
+   582→          })}
+   583→
+   584→          {/* Couche : heatmap trafic */}
+   585→          {layerState.traffic && roads.map(rd => {
+   586→            const circles: React.ReactNode[] = []
+   587→            rd.segments.slice(0, -1).forEach((s, i) => {
+   588→              const n = rd.segments[i + 1]
+   589→              for (let t = 0.25; t < 1; t += 0.25) {
+   590→                const lng = s[0] + (n[0] - s[0]) * t, lat = s[1] + (n[1] - s[1]) * t
+   591→                const p = project(lng, lat)
+   592→                circles.push(<circle key={`${rd.id}-${i}-${t}`} cx={p.x} cy={p.y} r={(rd.tmj / 1400) * 2.6} fill={rd.tmj > 15000 ? "#dc2626" : rd.tmj > 9000 ? "#ea580c" : "#d9a514"} opacity={0.3} filter="url(#heat-blur)" />)
+   593→              }
+   594→            })
+   595→            return <g key={`t-${rd.id}`}>{circles}</g>
+   596→          })}
+   597→
+   598→          {/* Couche : projets d'infrastructure */}
+   599→          {layerState.projects && projects.map(pr => {
+   600→            const p = project(pr.lng, pr.lat)
+   601→            const color = pr.status === "CONSTRUCTION" ? "#059669" : "#9333ea"
+   602→            return (
+   603→              <g key={pr.id} className="cursor-pointer">
+   604→                <rect x={p.x - 3.4} y={p.y - 3.4} width={6.8} height={6.8} transform={`rotate(45 ${p.x} ${p.y})`} fill={color} opacity={0.9} stroke="white" strokeWidth={0.7} />
+   605→                <title>{`${pr.name} — ${pr.status === "CONSTRUCTION" ? "En construction" : "Planifié"} — ${pr.budget} — horizon ${pr.targetDate}`}</title>
+   606→              </g>
+   607→            )
+   608→          })}
+   609→
+   610→          {/* Outil : rayon de chalandise */}
+   611→          {tool === "radius" && radiusCenter && (
+   612→            <g>
+   613→              <circle cx={radiusCenter[0]} cy={radiusCenter[1]} r={kmToSvgUnits(radiusKm)} fill="#d97706" opacity={0.07} stroke="#d97706" strokeWidth={1.4 / view.k} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+   614→              <circle cx={radiusCenter[0]} cy={radiusCenter[1]} r={3} fill="#d97706" />
+   615→              <text x={radiusCenter[0] + 5} y={radiusCenter[1] - 5} fontSize={11 * invK} fontWeight={600} fill="#d97706">
+   616→                {radiusKm} km
+   617→              </text>
+   618→            </g>
+   619→          )}
+   620→
+   621→          {/* Outil : mesure de distance */}
+   622→          {measurePts.length > 0 && (
+   623→            <g>
+   624→              <path d={measurePts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]} ${p[1]}`).join(" ")}
+   625→                fill="none" stroke="#dc2626" strokeWidth={1.4} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+   626→              {measurePts.map((p, i) => (
+   627→                <g key={i}>
+   628→                  <circle cx={p[0]} cy={p[1]} r={2.6} fill="#dc2626" stroke="white" strokeWidth={0.8} />
+   629→                  {i > 0 && (() => {
+   630→                    const a = unproject(measurePts[i - 1][0], measurePts[i - 1][1])
+   631→                    const b = unproject(p[0], p[1])
+   632→                    const km = haversineKm(a.lat, a.lng, b.lat, b.lng)
+   633→                    return (
+   634→                      <text x={(measurePts[i - 1][0] + p[0]) / 2 + 4 * invK} y={(measurePts[i - 1][1] + p[1]) / 2 - 4 * invK}
+   635→                        fontSize={9 * invK} fontWeight={600} fill="#dc2626" className="map-tool-label">
+   636→                        {km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`}
+   637→                      </text>
+   638→                    )
+   639→                  })()}
+   640→                </g>
+   641→              ))}
+   642→            </g>
+   643→          )}
+   644→
+   645→          {/* Outil : polygone */}
+   646→          {tool === "polygon" && polygonPts.length > 0 && (
+   647→            <g>
+   648→              <path d={polygonPts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]} ${p[1]}`).join(" ") + (polygonClosed ? " Z" : "")}
+   649→                fill={polygonClosed ? "#059669" : "none"} fillOpacity={0.08} stroke="#059669" strokeWidth={1.5}
+   650→                strokeDasharray={polygonClosed ? undefined : "5 4"} vectorEffect="non-scaling-stroke" />
+   651→              {polygonPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.6} fill="#059669" stroke="white" strokeWidth={0.8} />)}
+   652→            </g>
+   653→          )}
+   654→
+   655→          {/* Couche : stations */}
+   656→          {layerState.stations && <g>{stationNodes}</g>}
+   657→        </g>
+   658→      </svg>
+   659→      )}
+   660→
+   661→      {/* ---------- Overlays HTML ---------- */}
+   662→
+   663→      {/* Popup fiche station (mode schéma) */}
+   664→      {!realMap && selectedStation && popupPos && (
+   665→        <StationPopup
+   666→          station={selectedStation}
+   667→          detail={activeDetail}
+   668→          left={popupPos.left}
+   669→          top={popupPos.top}
+   670→          wrapW={mstate.w}
+   671→          onClose={() => selectStation(null)}
+   672→          onViewDetail={() => onViewDetail?.(selectedStation)}
+   673→          showHistory={showHistory}
+   674→          setShowHistory={setShowHistory}
+   675→        />
+   676→      )}
+   677→
+   678→      {/* Tooltip survol (mode schéma) */}
+   679→      {!realMap && hoverCode && hoverCode !== selCode && (() => {
+   680→        const st = stations.find(s => s.code === hoverCode)
+   681→        if (!st) return null
+   682→        const p = project(st.lng, st.lat)
+   683→        const sp = toScreen(p)
+   684→        return (
+   685→          <div className="pointer-events-none absolute z-20 -translate-y-full rounded-md border bg-popover px-2 py-1 text-[11px] font-medium text-popover-foreground shadow-lg"
+   686→            style={{ left: clamp(sp.left, 8, mstate.w - 180), top: Math.max(sp.top - 8, 18) }}>
+   687→            <span className="inline-flex items-center gap-1.5">
+   688→              <span className="inline-block h-2 w-2 rounded-full" style={{ background: st.brandColor }} />
+   689→              {st.name}
+   690→            </span>
+   691→            <span className="ml-2 text-muted-foreground">{st.traffic > 0 ? `${new Intl.NumberFormat("fr-FR").format(st.traffic)} véh/j` : st.status === "PROJECT" ? "Projet" : "—"}</span>
+   692→          </div>
+   693→        )
+   694→      })()}
+   695→
+   696→      {/* Contrôles zoom + bascule fond réel */}
+   697→      <div className="absolute right-2 top-2 z-10 flex flex-col gap-1">
+   698→        {!realMap && (
+   699→          <div className="flex flex-col rounded-lg border bg-background/85 p-0.5 shadow-sm backdrop-blur">
+   700→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1.35)} aria-label="Zoom avant"><Plus className="h-4 w-4" /></Button>
+   701→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => zoomBy(1 / 1.35)} aria-label="Zoom arrière"><Minus className="h-4 w-4" /></Button>
+   702→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetView} aria-label="Réinitialiser la vue"><Maximize className="h-4 w-4" /></Button>
+   703→          </div>
+   704→        )}
+   705→        <Button
+   706→          variant={realMap ? "secondary" : "outline"}
+   707→          size="icon"
+   708→          className="h-8 w-8 rounded-lg shadow-sm"
+   709→          onClick={() => { setRealMap(v => !v); toast(realMap ? "Fond schéma vectoriel activé" : "Fond cartographique réel OpenStreetMap activé") }}
+   710→          aria-pressed={realMap}
+   711→          aria-label="Basculer entre fond cartographique réel et schéma"
+   712→          title={realMap ? "Revenir au schéma vectoriel" : "Afficher le fond cartographique réel (OSM)"}>
+   713→          <Globe className="h-4 w-4" />
+   714→        </Button>
+   715→        {showLayerControl && (
+   716→          <Popover>
+   717→            <PopoverTrigger asChild>
+   718→              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg shadow-sm" aria-label="Couches cartographiques"><Layers className="h-4 w-4" /></Button>
+   719→            </PopoverTrigger>
+   720→            <PopoverContent align="end" className="w-64 p-3">
+   721→              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Couches cartographiques</p>
+   722→              {([
+   723→                ["stations", "Stations-service"],
+   724→                ["roads", "Axes routiers (A1–A4, RN, GP)"],
+   725→                ["traffic", "Densité de trafic (heatmap)"],
+   726→                ["zones", "Zones administratives"],
+   727→                ["projects", "Projets d'infrastructure"],
+   728→                ["fleet", "Parc automobile par zone"],
+   729→              ] as [keyof MapLayers, string][]).map(([key, label]) => {
+   730→                const svgOnly = realMap && (key === "zones" || key === "fleet")
+   731→                return (
+   732→                  <label key={key}
+   733→                    className={`flex items-center justify-between rounded px-1 py-1.5 text-sm ${svgOnly ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-accent"}`}
+   734→                    title={svgOnly ? "Disponible en mode schéma" : undefined}>
+   735→                    {label}
+   736→                    <Switch checked={layerState[key]} disabled={svgOnly} onCheckedChange={v => setLayerState(s => ({ ...s, [key]: v }))} />
+   737→                  </label>
+   738→                )
+   739→              })}
+   740→              {realMap && (
+   741→                <div className="mt-2 space-y-1 border-t pt-2">
+   742→                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fond cartographique</p>
+   743→                  {OSM_BG_LABELS.map(([key, label]) => (
+   744→                    <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-accent">
+   745→                    <span
+   746→                      role="radio"
+   747→                      aria-checked={osmBg === key}
+   748→                      tabIndex={0}
+   749→                      onClick={() => setOsmBg(key)}
+   750→                      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOsmBg(key) } }}
+   751→                      className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 ${osmBg === key ? "border-primary bg-primary" : "border-muted-foreground/40"}`} />
+   752→                    <span onClick={() => setOsmBg(key)}>{label}</span>
+   753→                  </label>
+   754→                  ))}
+   755→                </div>
+   756→              )}
+   757→            </PopoverContent>
+   758→          </Popover>
+   759→        )}
+   760→      </div>
+   761→
+   762→      {/* Barre d'outils d'analyse spatiale (mode schéma) */}
+   763→      {tools && !realMap && (
+   764→        <div className="absolute bottom-2 left-2 z-10 flex flex-col gap-1.5">
+   765→          <div className="flex gap-1 rounded-lg border bg-background/85 p-1 shadow-sm backdrop-blur">
+   766→            <Button variant={tool === "measure" ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Mesure de distance"
+   767→              onClick={() => { setTool(tool === "measure" ? null : "measure"); setMeasurePts([]) }} aria-label="Mesure de distance">
+   768→              <Ruler className="h-4 w-4" />
+   769→            </Button>
+   770→            <Button variant={tool === "radius" ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Rayon de chalandise"
+   771→              onClick={() => { setTool(tool === "radius" ? null : "radius"); setRadiusCenter(null) }} aria-label="Rayon de chalandise">
+   772→              <CircleIcon className="h-4 w-4" />
+   773→            </Button>
+   774→            <Button variant={tool === "polygon" ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Sélection par polygone"
+   775→              onClick={() => { setTool(tool === "polygon" ? null : "polygon"); setPolygonPts([]); setPolygonClosed(false) }} aria-label="Sélection par polygone">
+   776→              <Hexagon className="h-4 w-4" />
+   777→            </Button>
+   778→            <Button variant="ghost" size="icon" className="h-7 w-7" title="Effacer" onClick={clearTools} aria-label="Effacer les outils">
+   779→              <Trash2 className="h-4 w-4" />
+   780→            </Button>
+   781→          </div>
+   782→          {tool === "measure" && (
+   783→            <div className="rounded-lg border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
+   784→              <span className="font-medium">Cliquez pour ajouter des points</span>
+   785→              {measurePts.length >= 2 && <span className="ml-2 font-bold text-destructive">{measureTotal < 1 ? `${Math.round(measureTotal * 1000)} m` : `${measureTotal.toFixed(1)} km`}</span>}
+   786→            </div>
+   787→          )}
+   788→          {tool === "radius" && (
+   789→            <div className="flex items-center gap-2 rounded-lg border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
+   790→              <span className="font-medium whitespace-nowrap">Rayon {radiusKm} km</span>
+   791→              <Slider value={[radiusKm]} min={2} max={60} step={1} onValueChange={v => setRadiusKm(v[0])} className="w-28" />
+   792→              {insideRadius && <Badge variant="secondary">{insideRadius.size} st.</Badge>}
+   793→              {insideRadius && insideRadius.size > 0 && (
+   794→                <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => exportSelection("csv")}>
+   795→                  <FileDown className="mr-1 h-3 w-3" /> CSV
+   796→                </Button>
+   797→              )}
+   798→            </div>
+   799→          )}
+   800→          {tool === "polygon" && (
+   801→            <div className="flex items-center gap-2 rounded-lg border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
+   802→              {!polygonClosed ? (
+   803→                <>
+   804→                  <span className="font-medium">Cliquez les sommets, double-clic pour fermer</span>
+   805→                  {polygonPts.length >= 3 && (
+   806→                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => setPolygonClosed(true)}>Fermer</Button>
+   807→                  )}
+   808→                </>
+   809→              ) : (
+   810→                <>
+   811→                  <Badge variant="secondary">{insidePolygon?.size ?? 0} stations</Badge>
+   812→                  <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => exportSelection("csv")}><FileDown className="mr-1 h-3 w-3" />CSV</Button>
+   813→                  <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => exportSelection("geojson")}><FileDown className="mr-1 h-3 w-3" />GeoJSON</Button>
+   814→                </>
+   815→              )}
+   816→            </div>
+   817→          )}
+   818→        </div>
+   819→      )}
+   820→
+   821→      {/* Légende */}
+   822→      {showLegend && (
+   823→        <div className="absolute bottom-2 right-2 z-10 max-w-[180px] rounded-lg border bg-background/85 p-2 text-[10px] shadow-sm backdrop-blur">
+   824→          <p className="mb-1 font-semibold uppercase tracking-wide text-muted-foreground">Enseignes</p>
+   825→          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+   826→            {brandLegend(stations, ownBrandSlug).map(([name, color, count]) => (
+   827→              <span key={name} className="flex items-center gap-1 truncate">
+   828→                <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+   829→                <span className="truncate">{name}</span>
+   830→                <span className="ml-auto text-muted-foreground">{count}</span>
+   831→              </span>
+   832→            ))}
+   833→          </div>
+   834→          <div className="mt-1.5 space-y-0.5 border-t pt-1 text-muted-foreground">
+   835→            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full border border-amber-500 bg-transparent" /> Rénovation</span>
+   836→            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full border border-dashed" /> Projet</span>
+   837→            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-gray-400" /> Fermée</span>
+   838→          </div>
+   839→        </div>
+   840→      )}
+   841→    </div>
+   842→  )
+   843→}
+   844→
+   845→function brandLegend(stations: StationDTO[], ownSlug?: string | null): [string, string, number][] {
+   846→  const m = new Map<string, [string, number]>()
+   847→  for (const s of stations) {
+   848→    const cur = m.get(s.brandName)
+   849→    m.set(s.brandName, [s.brandColor, (cur?.[1] ?? 0) + 1])
+   850→  }
+   851→  return [...m.entries()]
+   852→    .sort((a, b) => b[1][1] - a[1][1])
+   853→    .slice(0, 8)
+   854→    .map(([name, [color, count]]) => [ownSlug && stations.find(s => s.brandName === name)?.brandSlug === ownSlug ? `${name} (moi)` : name, color, count])
+   855→}
+   856→
+   857→// ---------------- Popup fiche station (A.3.3) ----------------
+   858→
+   859→function StationPopup({
+   860→  station, detail, left, top, wrapW, onClose, onViewDetail, showHistory, setShowHistory,
+   861→}: {
+   862→  station: StationDTO
+   863→  detail: StationDetail | null
+   864→  left: number
+   865→  top: number
+   866→  wrapW: number
+   867→  onClose: () => void
+   868→  onViewDetail: () => void
+   869→  showHistory: boolean
+   870→  setShowHistory: (v: boolean) => void
+   871→}) {
+   872→  const W = 320
+   873→  const flip = left + W + 24 > wrapW
+   874→  const x = flip ? left - W - 16 : left + 16
+   875→  const y = clamp(top - 140, 8, 10000)
+   876→  const nearby = detail?.nearby?.slice(0, 3) ?? []
+   877→
+   878→  return (
+   879→    <div className="absolute z-30 max-h-[92%] w-80 overflow-hidden rounded-xl border bg-background shadow-2xl"
+   880→      style={{ left: x, top: y }} role="dialog" aria-label={`Fiche station ${station.name}`}>
+   881→      <div className="flex items-start justify-between gap-2 border-b bg-muted/40 px-3 py-2">
+   882→        <div className="min-w-0">
+   883→          <div className="flex items-center gap-1.5">
+   884→            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: station.brandColor }} />
+   885→            <p className="truncate text-sm font-semibold">{station.name}</p>
+   886→          </div>
+   887→          <p className="text-[11px] text-muted-foreground">{station.brandName} · {station.code}</p>
+   888→        </div>
+   889→        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onClose} aria-label="Fermer"><X className="h-3.5 w-3.5" /></Button>
+   890→      </div>
+   891→
+   892→      <ScrollArea className="max-h-[380px]">
+   893→        <div className="space-y-2.5 p-3">
+   894→          {station.photoUrl && (
+   895→            <img src={station.photoUrl} alt={`Photo ${station.name}`} className="h-28 w-full rounded-lg border object-cover" />
+   896→          )}
+   897→
+   898→          <div className="space-y-1 text-xs text-muted-foreground">
+   899→            <p className="flex items-start gap-1.5"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{station.address}</p>
+   900→            <p className="font-mono text-[10px]">GPS {station.lat.toFixed(4)}, {station.lng.toFixed(4)}</p>
+   901→            <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 shrink-0" />
+   902→              {station.open24 ? "Ouverte 24h/24" : station.open7j ? "7j/7" : "Horaires de jour"}
+   903→            </p>
+   904→          </div>
+   905→
+   906→          <div className="flex flex-wrap items-center gap-1.5">
+   907→            <Badge variant={station.status === "ACTIVE" ? "default" : station.status === "RENOVATION" ? "secondary" : "outline"}
+   908→              className={station.status === "RENOVATION" ? "border-amber-500 text-amber-600" : station.status === "PROJECT" ? "border-dashed" : ""}>
+   909→              {station.status === "ACTIVE" ? "Active" : station.status === "RENOVATION" ? "Rénovation" : station.status === "PROJECT" ? "Projet" : "Fermée"}
+   910→            </Badge>
+   911→            {station.traffic > 0 && (
+   912→              <Badge variant="outline" className="gap-1"><Gauge className="h-3 w-3" />{new Intl.NumberFormat("fr-FR").format(station.traffic)} véh/j</Badge>
+   913→            )}
+   914→            {station.rating > 0 && (
+   915→              <Badge variant="outline" className="gap-1"><Star className="h-3 w-3 fill-amber-500 text-amber-500" />{station.rating.toFixed(1)} ({station.reviewsCount})</Badge>
+   916→            )}
+   917→          </div>
+   918→
+   919→          <div>
+   920→            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Services</p>
+   921→            <div className="flex flex-wrap gap-1">
+   922→              {station.services.map(sl => {
+   923→                const Icon = SERVICE_ICONS[sl]
+   924→                return (
+   925→                  <span key={sl} title={SERVICE_LABELS[sl] ?? sl} className="inline-flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-[10px]">
+   926→                    {Icon && <Icon className="h-3 w-3" />}{SERVICE_LABELS[sl] ?? sl}
+   927→                  </span>
+   928→                )
+   929→              })}
+   930→            </div>
+   931→          </div>
+   932→
+   933→          <div className="rounded-lg border bg-muted/30 p-2 text-[11px]">
+   934→            <p className="flex items-center gap-1.5 font-medium"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+   935→              Dernière vérification : {DATE_FR(station.lastVerified)}
+   936→            </p>
+   937→            <p className="ml-5 text-muted-foreground">{station.verifiedBy} · {detail ? "fiche certifiée" : "source terrain"}</p>
+   938→          </div>
+   939→
+   940→          {detail && detail.nearby.length > 0 && (
+   941→            <div>
+   942→              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Concurrents proches</p>
+   943→              <div className="space-y-1">
+   944→                {nearby.map(n => (
+   945→                  <div key={n.id} className="flex items-center justify-between gap-2 text-xs">
+   946→                    <span className="flex min-w-0 items-center gap-1.5">
+   947→                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: n.brandColor }} />
+   948→                      <span className="truncate">{n.name}</span>
+   949→                    </span>
+   950→                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{n.distanceKm.toFixed(1)} km</span>
+   951→                  </div>
+   952→                ))}
+   953→              </div>
+   954→            </div>
+   955→          )}
+   956→
+   957→          {detail && detail.history.length > 0 && (
+   958→            <div className="rounded-lg border">
+   959→              <button className="flex w-full items-center justify-between px-2 py-1.5 text-xs font-medium" onClick={() => setShowHistory(!showHistory)}>
+   960→                <span className="flex items-center gap-1.5"><History className="h-3.5 w-3.5" />Historique ({detail.history.length})</span>
+   961→                {showHistory ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+   962→              </button>
+   963→              {showHistory && (
+   964→                <div className="max-h-28 space-y-1 overflow-y-auto border-t px-2 py-1.5 text-[10px]">
+   965→                  {detail.history.map(h => (
+   966→                    <p key={h.id} className="text-muted-foreground">
+   967→                      <span className="font-medium text-foreground">{h.field}</span> : {h.oldValue} → {h.newValue}
+   968→                      <span className="ml-1">({h.author}, {DATE_FR(h.createdAt)})</span>
+   969→                    </p>
+   970→                  ))}
+   971→                </div>
+   972→              )}
+   973→            </div>
+   974→          )}
+   975→        </div>
+   976→      </ScrollArea>
+   977→
+   978→      <div className="flex gap-2 border-t p-2">
+   979→        <Button size="sm" className="h-7 flex-1 text-xs" onClick={onViewDetail}>Fiche complète</Button>
+   980→        <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => toast.info("Itinéraire lancé (démo)", { description: "Intégration Google Maps / Waze sur l'app mobile B2C." })}>
+   981→          <Navigation className="mr-1 h-3 w-3" />Itinéraire
+   982→        </Button>
+   983→      </div>
+   984→    </div>
+   985→  )
+   986→}
+   987→

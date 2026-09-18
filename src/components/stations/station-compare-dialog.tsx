@@ -5,7 +5,7 @@
 // horaires, services (matrice des différenciants), fraîcheur — avec mise en
 // avant du meilleur profil et scores par critère.
 
-import { Check, Eye, Minus, Star, Trophy } from "lucide-react"
+import { Check, Crosshair, Eye, Minus, Star, Trophy } from "lucide-react"
 import type { StationDTO } from "@/lib/types"
 import { SERVICE_LABELS } from "@/lib/types"
 import { num } from "@/lib/chart"
@@ -51,13 +51,16 @@ function Stars({ rating }: { rating: number }) {
   )
 }
 
+export const MAX_COMPARE_STATIONS = 4 // nombre maximal de stations comparables côte à côte
+
 export function StationCompareDialog({
-  open, stations, onClose, onOpenDetail,
+  open, stations, onClose, onOpenDetail, onLocate,
 }: {
   open: boolean
   stations: StationDTO[]
   onClose: () => void
   onOpenDetail: (id: string) => void
+  onLocate?: (code: string) => void
 }) {
   const n = stations.length
   if (n === 0) return null
@@ -83,15 +86,18 @@ export function StationCompareDialog({
 
   // ---- Matrice des services (différenciants) ----
   const matrixServices = SERVICE_SLUGS.filter(slug => stations.some(s => s.services.includes(slug)))
-  const gridCols = { gridTemplateColumns: `150px repeat(${n}, minmax(160px, 1fr))` }
+  const gridCols = {
+    gridTemplateColumns: `150px repeat(${n}, minmax(160px, 1fr))`,
+    minWidth: `${Math.max(520, 160 + n * 180)}px`,
+  }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-3xl gap-0 p-0 sm:max-w-3xl">
+      <DialogContent className="gap-0 p-0 sm:max-w-4xl max-w-[calc(100vw-2rem)]">
         <DialogHeader className="border-b px-5 py-4">
           <DialogTitle className="flex items-center gap-2 text-base">
             Comparateur de stations
-            <Badge variant="secondary" className="font-mono text-[10px]">{n}/{3}</Badge>
+            <Badge variant="secondary" className="font-mono text-[10px]">{n}/{MAX_COMPARE_STATIONS}</Badge>
           </DialogTitle>
           <DialogDescription>
             Comparaison côte à côte sur {CRITERIA_COUNT} critères — trafic captif, note communautaire, services et fraîcheur des données.
@@ -102,7 +108,7 @@ export function StationCompareDialog({
           <div className="px-5 py-4">
             {/* Défilement horizontal sur petits écrans */}
             <div className="overflow-x-auto">
-              <div className="grid min-w-[560px] text-sm" style={gridCols} role="table" aria-label="Comparaison des stations">
+              <div className="grid text-sm" style={gridCols} role="table" aria-label="Comparaison des stations">
 
                 {/* En-têtes : identité des stations */}
                 <div className={labelCls}>Station</div>
@@ -231,13 +237,25 @@ export function StationCompareDialog({
                       </span>
                       {i === championIdx && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Meilleur profil</span>}
                     </div>
-                    <Button
-                      variant="outline" size="sm" className="mt-2 h-7 gap-1 text-[11px]"
-                      onClick={() => onOpenDetail(s.id)}
-                    >
-                      <Eye className="h-3 w-3" aria-hidden />
-                      Voir la fiche
-                    </Button>
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <Button
+                        variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
+                        onClick={() => onOpenDetail(s.id)}
+                      >
+                        <Eye className="h-3 w-3" aria-hidden />
+                        Fiche
+                      </Button>
+                      {onLocate && (
+                        <Button
+                          variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
+                          onClick={() => onLocate(s.code)}
+                          title="Centrer la carte sur cette station"
+                        >
+                          <Crosshair className="h-3 w-3" aria-hidden />
+                          Carte
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -250,7 +268,7 @@ export function StationCompareDialog({
                   Services différenciants
                 </p>
                 <div className="overflow-x-auto">
-                  <div className="grid min-w-[460px] text-sm" style={gridCols} role="table" aria-label="Matrice des services">
+                  <div className="grid text-sm" style={gridCols} role="table" aria-label="Matrice des services">
                     {matrixServices.map(slug => {
                       const common = stations.every(s => s.services.includes(slug))
                       return (

@@ -12,10 +12,11 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Search, RotateCcw, MapPin, Users } from "lucide-react"
+import { Search, RotateCcw, MapPin, Users, GitCompareArrows, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { TunisiaMap, SERVICE_ICONS } from "./tunisia-map"
 import { StationDetailDialog } from "@/components/stations/station-detail-dialog"
+import { StationCompareDialog, MAX_COMPARE_STATIONS } from "@/components/stations/station-compare-dialog"
 import { useAppStore } from "@/store/app-store"
 import type { StationDTO, BrandDTO, ServiceDTO } from "@/lib/types"
 import { SERVICE_LABELS } from "@/lib/types"
@@ -39,6 +40,10 @@ const GOVS = ["Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul", "Bizerte", "S
 export function CarteInteractiveTab() {
   const { brandSlug, focusStationCode, setFocusStation } = useAppStore()
   const [detailId, setDetailId] = useState<string | null>(null)
+
+  // Comparateur de stations (épingle depuis les popups de la carte)
+  const [compareCodes, setCompareCodes] = useState<string[]>([])
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [services, setServices] = useState<ServiceDTO[]>([])
@@ -90,6 +95,35 @@ export function CarteInteractiveTab() {
 
   const toggle = (arr: string[], v: string, set: (a: string[]) => void) =>
     set(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
+
+  // ---- Comparateur ----
+  const toggleCompare = useCallback((s: StationDTO) => {
+    const has = compareCodes.includes(s.code)
+    if (!has && compareCodes.length >= MAX_COMPARE_STATIONS) {
+      toast.error("Comparateur plein", {
+        description: `Maximum ${MAX_COMPARE_STATIONS} stations — retirez-en une avant d'en épingler une autre.`,
+      })
+      return
+    }
+    setCompareCodes(has ? compareCodes.filter(c => c !== s.code) : [...compareCodes, s.code])
+    if (has) {
+      toast.info(`${s.name} retirée du comparateur.`)
+    } else {
+      toast.success(`${s.name} épinglée (${compareCodes.length + 1}/${MAX_COMPARE_STATIONS}).`, {
+        description: "Épinglez au moins une autre station puis cliquez sur « Comparer ».",
+      })
+    }
+  }, [compareCodes])
+
+  const compareStations = useMemo(() => {
+    const byCode = new Map(stations.map(s => [s.code, s]))
+    return compareCodes.map(c => byCode.get(c)).filter(Boolean) as StationDTO[]
+  }, [stations, compareCodes])
+
+  const clearCompare = useCallback(() => {
+    setCompareCodes([])
+    setCompareOpen(false)
+  }, [])
 
   const resetFilters = useCallback(() => {
     setBrandSel([]); setServiceSel([]); setStatusSel([]); setHours("ALL"); setGov("ALL"); setSearch("")
@@ -208,7 +242,71 @@ export function CarteInteractiveTab() {
             focusCode={focusStationCode}
             onSelect={() => { if (focusStationCode) setFocusStation(null) }}
             onViewDetail={(s) => setDetailId(s.id)}
+            onCompare={toggleCompare}
+            compareCodes={compareCodes}
           />
+        )}
+
+        {/* Barre de comparaison — stations épinglées depuis les popups.
+            Sticky : reste visible en bas de l'écran même quand le bas de la carte
+            est sous la ligne de flottaison (viewports courts). */}
+        {compareStations.length > 0 && (
+          <div
+            role="region"
+            aria-label="Comparateur de stations"
+            className="sticky bottom-4 z-30 mx-auto mt-[-72px] w-[min(94%,680px)] pb-1 animate-in fade-in slide-in-from-bottom-3 duration-300"
+          >
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-600/25 bg-background/92 p-2 shadow-xl shadow-emerald-950/10 backdrop-blur">
+              <span className="ml-1 flex shrink-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                <GitCompareArrows className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Comparateur</span>
+              </span>
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
+                {compareStations.map(s => (
+                  <span
+                    key={s.code}
+                    className="group inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 py-1 pl-2 pr-1 text-xs transition-colors hover:bg-muted"
+                  >
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: s.brandColor }} aria-hidden />
+                    <span className="max-w-[130px] truncate">{s.name}</span>
+                    <button
+                      onClick={() => toggleCompare(s)}
+                      aria-label={`Retirer ${s.name} du comparateur`}
+                      className="flex h-4.5 w-4.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" aria-hidden />
+                    </button>
+                  </span>
+                ))}
+                {compareStations.length < 2 && (
+                  <span className="shrink-0 text-[11px] italic text-muted-foreground">
+                    Épinglez au moins 2 stations (clic sur un marqueur → « Comparer »)
+                  </span>
+                )}
+              </div>
+              <span className="shrink-0 rounded-full bg-emerald-600/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-400" aria-hidden>
+                {compareStations.length}/{MAX_COMPARE_STATIONS}
+              </span>
+              <Button
+                size="sm"
+                disabled={compareStations.length < 2}
+                className="h-8 shrink-0 gap-1.5"
+                onClick={() => setCompareOpen(true)}
+              >
+                <GitCompareArrows className="h-3.5 w-3.5" aria-hidden />
+                Comparer
+              </Button>
+              <Button
+                variant="ghost" size="icon"
+                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={clearCompare}
+                aria-label="Vider le comparateur"
+                title="Vider le comparateur"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -221,6 +319,15 @@ export function CarteInteractiveTab() {
           toast.info("L'édition d'une station se fait depuis l'onglet « Mes stations ».")
         }}
         onLocate={(code) => { setDetailId(null); setFocusStation(code) }}
+      />
+
+      {/* Comparateur de stations (épinglées depuis la carte) */}
+      <StationCompareDialog
+        open={compareOpen}
+        stations={compareStations}
+        onClose={() => setCompareOpen(false)}
+        onOpenDetail={(id) => { setCompareOpen(false); setDetailId(id) }}
+        onLocate={(code) => { setCompareOpen(false); setFocusStation(code) }}
       />
     </div>
   )

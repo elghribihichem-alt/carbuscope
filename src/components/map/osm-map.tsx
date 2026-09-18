@@ -10,7 +10,7 @@ import * as L from "leaflet"
 import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, useMap } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import { useTheme } from "next-themes"
-import { Gauge, Star, Clock } from "lucide-react"
+import { Gauge, Star, Clock, GitCompareArrows, Pin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { StationDTO, RoadDTO, ProjectDTO } from "@/lib/types"
@@ -31,6 +31,10 @@ export interface OsmMapProps {
   background?: OsmBackground
   focusCode?: string | null
   fitTo?: StationDTO[] | null
+  /** Comparateur : épingle/déépingle une station (depuis la popup) */
+  onCompare?: (s: StationDTO) => void
+  /** Codes des stations actuellement épinglées dans le comparateur */
+  compareCodes?: string[]
 }
 
 // Tunisie : lat 30.2→37.6, lng 7.5→11.9 (marges incluses)
@@ -80,11 +84,11 @@ const ROAD_STYLE: Record<string, { color: string; weight: number }> = {
   GP: { color: "#9ca3af", weight: 1.4 },
 }
 
-function markerStyle(s: StationDTO, opts: { isOwn: boolean; isSel: boolean }) {
+function markerStyle(s: StationDTO, opts: { isOwn: boolean; isSel: boolean; isPinned?: boolean }) {
   if (s.status === "CLOSED") {
     return {
       radius: opts.isSel ? 7 : 5,
-      color: "#6b7280", weight: 1.5,
+      color: opts.isPinned ? "#059669" : "#6b7280", weight: opts.isPinned ? 3 : 1.5,
       fillColor: "#9ca3af", fillOpacity: 0.55,
       dashArray: "3 2",
     } as const
@@ -92,15 +96,16 @@ function markerStyle(s: StationDTO, opts: { isOwn: boolean; isSel: boolean }) {
   if (s.status === "PROJECT") {
     return {
       radius: opts.isSel ? 8 : 6,
-      color: s.brandColor, weight: 2,
+      color: opts.isPinned ? "#059669" : s.brandColor, weight: opts.isPinned ? 3 : 2,
       fillColor: s.brandColor, fillOpacity: 0.12,
       dashArray: "4 3",
     } as const
   }
   return {
-    radius: (opts.isOwn ? 6 : 5) + Math.min(3.5, Math.sqrt(Math.max(s.traffic, 0)) / 30) + (opts.isSel ? 2.5 : 0),
-    color: s.status === "RENOVATION" ? "#d97706" : opts.isSel ? "#f8fafc" : "#ffffff",
-    weight: s.status === "RENOVATION" ? 2.5 : opts.isSel ? 2.5 : 1.3,
+    radius: (opts.isOwn ? 6 : 5) + Math.min(3.5, Math.sqrt(Math.max(s.traffic, 0)) / 30) + (opts.isSel ? 2.5 : 0) + (opts.isPinned ? 1 : 0),
+    color: opts.isPinned ? "#059669"
+      : s.status === "RENOVATION" ? "#d97706" : opts.isSel ? "#f8fafc" : "#ffffff",
+    weight: opts.isPinned ? 3 : s.status === "RENOVATION" ? 2.5 : opts.isSel ? 2.5 : 1.3,
     fillColor: s.brandColor, fillOpacity: opts.isSel || opts.isOwn ? 0.95 : 0.8,
   } as const
 }
@@ -152,18 +157,23 @@ function MapEffects({ fitTo, focusStation, selectedStation, onSelect }: {
 }
 
 /** Mini-fiche station rendue dans la popup Leaflet */
-function StationMiniCard({ s, isOwn, onViewDetail }: { s: StationDTO; isOwn: boolean; onViewDetail?: (s: StationDTO) => void }) {
+function StationMiniCard({ s, isOwn, onViewDetail, onCompare, isPinned }: { s: StationDTO; isOwn: boolean; onViewDetail?: (s: StationDTO) => void; onCompare?: (s: StationDTO) => void; isPinned: boolean }) {
   const svcIcons = s.services.slice(0, 7)
   return (
     <div className="min-w-[218px] space-y-2">
       <div className="flex items-start gap-2">
         <span className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-ring/20" style={{ background: s.brandColor }} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight">{s.name}</p>
           <p className="truncate text-xs text-muted-foreground">
             {s.brandName}{isOwn ? " (moi)" : ""} · {s.gouvernorat}
           </p>
         </div>
+        {isPinned && (
+          <Badge variant="outline" className="gap-0.5 border-emerald-500/60 bg-emerald-500/10 px-1.5 py-0 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+            <Pin className="h-2.5 w-2.5" aria-hidden />Comparateur
+          </Badge>
+        )}
       </div>
       <div className="flex flex-wrap gap-1">
         <Badge variant={s.status === "ACTIVE" ? "default" : s.status === "CLOSED" ? "outline" : "secondary"} className="px-1.5 py-0 text-[10px]">
@@ -200,10 +210,25 @@ function StationMiniCard({ s, isOwn, onViewDetail }: { s: StationDTO; isOwn: boo
           {s.services.length > 7 && <span className="text-[10px] text-muted-foreground">+{s.services.length - 7}</span>}
         </div>
       )}
-      {onViewDetail && (
-        <Button size="sm" className="h-7 w-full text-xs" onClick={() => onViewDetail(s)}>
-          Voir la fiche détaillée
-        </Button>
+      {(onViewDetail || onCompare) && (
+        <div className="grid grid-cols-2 gap-1.5">
+          {onViewDetail && (
+            <Button size="sm" className="h-7 text-xs" onClick={() => onViewDetail(s)}>
+              Voir la fiche
+            </Button>
+          )}
+          {onCompare && (
+            <Button
+              size="sm" variant={isPinned ? "secondary" : "outline"}
+              className={`h-7 gap-1 text-xs ${isPinned ? "border border-emerald-500/50 text-emerald-700 dark:text-emerald-400" : ""}`}
+              aria-pressed={isPinned}
+              onClick={() => onCompare(s)}
+            >
+              <GitCompareArrows className="h-3.5 w-3.5" aria-hidden />
+              {isPinned ? "Retirer" : "Comparer"}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )
@@ -214,6 +239,7 @@ export function OSMMap({
   layers = { stations: true, roads: true, traffic: false, projects: false },
   ownBrandSlug, selectedCode, onSelect, onViewDetail,
   background = "auto", focusCode, fitTo,
+  onCompare, compareCodes = [],
 }: OsmMapProps) {
   const { resolvedTheme } = useTheme()
   const tileKey: Exclude<OsmBackground, "auto"> =
@@ -326,12 +352,13 @@ export function OSMMap({
         {layers.stations && stations.map(s => {
           const isOwn = !!ownBrandSlug && s.brandSlug === ownBrandSlug
           const isSel = s.code === selectedCode
+          const isPinned = compareCodes.includes(s.code)
           return (
             <CircleMarker
               key={s.id}
               center={[s.lat, s.lng]}
               bubblingMouseEvents={false}
-              {...markerStyle(s, { isOwn, isSel })}
+              {...markerStyle(s, { isOwn, isSel, isPinned })}
               eventHandlers={{ click: () => onSelect?.(s.code === selectedCode ? null : s) }}
             >
               <Tooltip direction="top" offset={[0, -6]} opacity={1}>
@@ -353,7 +380,13 @@ export function OSMMap({
             closeButton
             maxWidth={280}
           >
-            <StationMiniCard s={selected} isOwn={!!ownBrandSlug && selected.brandSlug === ownBrandSlug} onViewDetail={onViewDetail} />
+            <StationMiniCard
+              s={selected}
+              isOwn={!!ownBrandSlug && selected.brandSlug === ownBrandSlug}
+              onViewDetail={onViewDetail}
+              onCompare={onCompare}
+              isPinned={compareCodes.includes(selected.code)}
+            />
           </Popup>
         )}
       </MapContainer>
