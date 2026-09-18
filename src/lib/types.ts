@@ -343,6 +343,12 @@ export type ReputationStats = {
     trend: { months: string[]; values: number[]; counts: number[] }
     topStations: { code: string; name: string; gouvernorat: string; rating: number; reviewsCount: number }[]
     flopStations: { code: string; name: string; gouvernorat: string; rating: number; reviewsCount: number }[]
+    // Surveillance des notes : stations en perte de vitesse (chute récente ≥ 0,8 pt)
+    watchlist: {
+      id: string; code: string; name: string; gouvernorat: string
+      previousRating: number; currentRating: number; delta: number; recentCount: number
+      lastLowReview: { author: string; rating: number; comment: string; createdAt: string } | null
+    }[]
     recentReviews: {
       id: string
       author: string

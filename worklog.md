@@ -325,3 +325,28 @@ Work Log:
 
 Stage Summary:
 - La boucle de réputation est bouclée de bout en bout : le client laisse un avis (mobile), l'enseigne répond officiellement (portail), la réponse est publiée sur l'app mobile, et le pilotage se fait par KPI (taux de réponse, délai moyen, comparaison concurrentielle). Le back-office mesure désormais le délai réel de modération (updatedAt horodaté à chaque VALIDATE/REJECT). Warning Radix résolu. Reste recommandé : alertes « chute de note d'une station » (portail), export PDF réputation, widget comparaison sur carte réelle, taux de réponse intégré au calcul IVE (poids à arbitrer).
+
+---
+Task ID: 16
+Agent: orchestrator (Z.ai Code) — cron QA 15 min
+Task: QA de routine + « Surveillance des notes » (chutes de note par station) + export CSV des avis + fiches actionnables depuis la veille
+
+Work Log:
+- QA initial : serveur 200 (next-server ~1,9 Go RSS), 8 endpoints API 200, sweep navigateur (portail Avis & réputation avec réponses OK, back-office, mobile), 0 erreur console → phase stable, développement de nouvelles fonctionnalités.
+- Calibrage data-driven du détecteur : analyse réelle des 4 588 avis (groupés par ID de station) — les fenêtres « 3+3 avis » ne donnent AUCUNE station éligible (données éparses ~2,8 avis/station) ; règle retenue : ≥ 2 avis récents (≤ 90 j, moy ≤ 3,5) et chute ≥ 0,8 pt vs historique (≥ 1 avis antérieur) → Agil 7, Shell 3, Staroil 6, Ola 4, TotalEnergies 1 stations détectées.
+- API `/api/stats/reputation` : `own.watchlist[]` (id, code, nom, gouvernorat, previousRating, currentRating, delta, recentCount, lastLowReview {author, rating, comment, createdAt} = dernier avis ≤ 3★) ; select stations étendu à `id` pour les fiches.
+- Types : `ReputationStats.own.watchlist` (id inclus).
+- Portail (`portal-reviews.tsx`) :
+  - NOUVELLE carte « Surveillance des notes » (icône Radar, badge compteur coloré, description méthodologique) — grille 2 colonnes, cartes à bordure rouge (Δ ≥ 1, point pulsant) ou orange, transition « 5,0 → 3,5 » avec TrendingDown + badge « −1,5 pt », méta (gouvernorat · code · n avis récents), blockquote « Dernier avis défavorable » (filet orange, citation), état vide positif émeraude (CheckCircle2 « satisfaction stable »).
+  - Badge d'alerte dans la synthèse : « n stations en perte de vitesse » (orange, title explicatif) quand watchlist > 0.
+  - Bouton « Voir la fiche » sur chaque station surveillée → StationDetailDialog (importé, état watchFicheId) — l'enseigne passe directement de l'alerte au plan d'action (fiche complète : avis, concurrents proches, historique).
+  - Bouton « Exporter CSV » dans l'en-tête du flux d'avis : export du flux filtré courant (BOM UTF-8, séparateur « ; », 10 colonnes dont statut/texte/date de réponse) + toast contextuel.
+- Incidents résolus pendant le dev :
+  1. Build Error « the name `Radar` is defined multiple times » — collision import lucide `Radar` vs recharts `Radar` (radar chart) → alias `Radar as RadarIcon`.
+  2. Erreur React Compiler « Existing memoization could not be preserved » sur le useMemo reviewFlow (interaction avec la closure exportCsv) → calcul direct (le compilateur mémoïse automatiquement), même pattern validé.
+  3. Erreur de parsing eslint (guillemets imbriqués dans template literal du toast) → restructuration avec variable filterLabel intermédiaire.
+- QA E2E agent-browser : carte « Surveillance des notes 7 stations » (Agil : El Ouardia 2 5,0→3,5, Zahret Medien, Korba 2… avec blockquotes avis) ; bascule enseigne Ola → « 4 stations » recalculées propre ; clic « Voir la fiche » → dialog « Ola Energy Ghannouche 3 » complet (avis + concurrents proches) ; « Exporter CSV » → fichier avis-agil-2026-09-18.csv téléchargé (21 lignes, échappements corrects, réponses incluses) + toast « 20 avis exportés » ; mode sombre vérifié (VLM : hiérarchie visuelle et badges d'alerte « well-styled », contraste bon) ; 0 erreur console à chaque étape (console vidée pour écarter l'historique du Build Error corrigé).
+- `bun run lint` : 0 erreur. GET / : 200. Navigateur fermé (1,5 Go libres).
+
+Stage Summary:
+- La réputation devient pro-active : l'enseigne ne consulte plus seulement ses notes, elle est alertée sur les stations qui décrochent (détection data-driven calibrée sur les données réelles), accède en un clic à la fiche complète pour agir, et exporte ses avis (avec réponses) pour analyse externe. Reste recommandé : intégrer le taux de réponse dans l'IVE (poids à arbitrer), export PDF réputation, widget comparaison de stations sur la carte réelle, alertes email/programmées depuis la watchlist.

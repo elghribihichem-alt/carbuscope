@@ -23,10 +23,11 @@ import {
 } from "recharts"
 import {
   Star, Trophy, TrendingUp, TrendingDown, MessageSquareQuote, MessageSquareReply, Award, Gauge,
-  Users, Quote, Info, Send, Pencil, Loader2, Trash2, Clock,
+  Users, Quote, Info, Send, Pencil, Loader2, Trash2, Clock, Radar as RadarIcon, AlertTriangle, Download, CheckCircle2,
 } from "lucide-react"
 import type { ReputationStats } from "@/lib/types"
 import { num, relDays } from "@/components/settings/settings-shared"
+import { StationDetailDialog } from "@/components/stations/station-detail-dialog"
 
 const EMERALD = "#059669"
 const AMBER = "#d97706"
@@ -78,6 +79,8 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
   const [replyText, setReplyText] = useState("")
   const [sending, setSending] = useState(false)
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all")
+  // Fiche station ouverte depuis la surveillance des notes
+  const [watchFicheId, setWatchFicheId] = useState<string | null>(null)
 
   useEffect(() => {
     const ac = new AbortController()
@@ -140,6 +143,37 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
       .finally(() => setSending(false))
   }
 
+  // Export CSV du flux d'avis filtré (BOM UTF-8, séparateur « ; » standard Excel fr)
+  const exportCsv = () => {
+    if (!stats || reviewFlow.list.length === 0) {
+      toast.error("Aucun avis à exporter avec le filtre courant.")
+      return
+    }
+    const esc = (v: string | number) => {
+      const s = String(v ?? "")
+      return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const header = ["Date avis", "Auteur", "Note", "Station", "Gouvernorat", "Commentaire", "Réponse publiée", "Texte de la réponse", "Répondu par", "Date réponse"]
+    const rows = reviewFlow.list.map(r => [
+      new Date(r.createdAt).toLocaleDateString("fr-FR"),
+      r.author, `${r.rating}/5`, r.stationName, r.gouvernorat, r.comment,
+      r.replyText ? "oui" : "non", r.replyText ?? "", r.repliedBy ?? "",
+      r.repliedAt ? new Date(r.repliedAt).toLocaleDateString("fr-FR") : "",
+    ])
+    const csv = [header, ...rows].map(row => row.map(esc).join(";")).join("\r\n")
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `avis-${stats.brand.slug}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    const filterLabel = reviewFilter === "pending" ? "À traiter" : reviewFilter === "replied" ? "Traités" : null
+    toast.success(`${reviewFlow.list.length} avis exportés${filterLabel ? ` (filtre « ${filterLabel} »)` : ""}.`)
+  }
+
   // Données dérivées pour les graphiques
   const derived = useMemo(() => {
     if (!stats) return null
@@ -184,16 +218,17 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
   }, [stats])
 
   // Flux d'avis filtré (tous / sans réponse / avec réponse) + compteurs
-  const reviewFlow = useMemo(() => {
-    if (!stats) return { list: [], pending: 0, replied: 0 }
-    const all = stats.own.recentReviews
-    const pending = all.filter(r => !r.replyText).length
-    const replied = all.length - pending
-    const list = reviewFilter === "pending" ? all.filter(r => !r.replyText)
-      : reviewFilter === "replied" ? all.filter(r => r.replyText)
-      : all
-    return { list, pending, replied }
-  }, [stats, reviewFilter])
+  // (calcul direct — le compilateur React mémoïse automatiquement)
+  const allReviews = stats?.own.recentReviews ?? []
+  const pendingCount = allReviews.filter(r => !r.replyText).length
+  const repliedCount = allReviews.length - pendingCount
+  const reviewFlow = {
+    list: reviewFilter === "pending" ? allReviews.filter(r => !r.replyText)
+      : reviewFilter === "replied" ? allReviews.filter(r => r.replyText)
+      : allReviews,
+    pending: pendingCount,
+    replied: repliedCount,
+  }
 
   if (error) return <ErrorState message={error} />
   if (!stats || !derived) return <TabSkeleton title="Chargement de la réputation…" />
@@ -246,6 +281,16 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                     <span className="text-muted-foreground">· sous {Math.max(1, Math.round(own.avgReplyDelayHours / 24))} j</span>
                   )}
                 </Badge>
+                {own.watchlist.length > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-400"
+                    title="Stations dont la note récente a chuté d’au moins 0,8 point"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {own.watchlist.length} station{own.watchlist.length > 1 ? "s" : ""} en perte de vitesse
+                  </Badge>
+                )}
                 <Badge variant="outline" className="gap-1.5">
                   <Award className="h-3.5 w-3.5" />
                   IVE : {ive.score}/100 — {ive.rank}<sup>e</sup>/{ive.brandsCount}
@@ -501,6 +546,111 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
         </Card>
       </div>
 
+      {/* ---------- Surveillance des notes (chutes récentes) ---------- */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <RadarIcon className="h-4 w-4 text-orange-600 dark:text-orange-400" aria-hidden />
+            Surveillance des notes
+            <Badge
+              variant="outline"
+              className={own.watchlist.length > 0
+                ? "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-400"
+                : "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+            }
+            >
+              {own.watchlist.length} station{own.watchlist.length > 1 ? "s" : ""}
+            </Badge>
+          </CardTitle>
+          <CardDescription>
+            Stations en perte de vitesse : moyenne récente (≤ 90 jours) en baisse d’au moins 0,8 point
+            par rapport à l’historique — vos priorités d’audit terrain.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {own.watchlist.length === 0 ? (
+            <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+              <p className="text-sm leading-relaxed">
+                <strong className="text-emerald-700 dark:text-emerald-400">Aucune station en perte de vitesse.</strong>{" "}
+                <span className="text-muted-foreground">La satisfaction de votre réseau est stable sur les 3 derniers mois.</span>
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-2.5 lg:grid-cols-2">
+              {own.watchlist.map(w => {
+                const severe = w.delta >= 1
+                return (
+                  <div
+                    key={w.code}
+                    className={`rounded-lg border p-3 transition-colors hover:bg-muted/30 ${
+                      severe
+                        ? "border-red-200/80 dark:border-red-900/60"
+                        : "border-orange-200/80 dark:border-orange-900/50"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${severe ? "bg-red-500 animate-pulse" : "bg-orange-400"}`}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{w.name}</span>
+                      <span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums">
+                        <span className="text-muted-foreground line-through decoration-muted-foreground/50">{w.previousRating.toFixed(1).replace(".", ",")}</span>
+                        <TrendingDown className="h-3.5 w-3.5 text-red-500" aria-hidden />
+                        <span className="font-bold text-red-600 dark:text-red-400">{w.currentRating.toFixed(1).replace(".", ",")}</span>
+                        <Badge variant="outline" className="border-red-300 bg-red-50 text-[10px] font-bold text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
+                          −{w.delta.toFixed(1).replace(".", ",")} pt
+                        </Badge>
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {w.gouvernorat} · code {w.code} · {w.recentCount} avis récents
+                    </p>
+                    {w.lastLowReview && (
+                      <blockquote className="mt-2 rounded-md border-l-2 border-orange-300 bg-orange-50/50 px-2.5 py-1.5 dark:border-orange-700 dark:bg-orange-950/30">
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-medium text-orange-700 dark:text-orange-400">
+                          <span>Dernier avis défavorable ({w.lastLowReview.rating}/5)</span>
+                          <span className="font-normal text-orange-600/80 dark:text-orange-400/70">
+                            {w.lastLowReview.author} · {relDays(w.lastLowReview.createdAt)}
+                          </span>
+                        </p>
+                        {w.lastLowReview.comment && (
+                          <p className="mt-0.5 line-clamp-2 text-[11px] italic leading-snug text-muted-foreground">
+                            « {w.lastLowReview.comment} »
+                          </p>
+                        )}
+                      </blockquote>
+                    )}
+                    {w.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1.5 h-7 gap-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                        onClick={() => setWatchFicheId(w.id)}
+                      >
+                        Voir la fiche
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Fiche station (depuis la surveillance des notes) */}
+      <StationDetailDialog
+        stationId={watchFicheId}
+        onClose={() => setWatchFicheId(null)}
+        onEdit={() => {
+          setWatchFicheId(null)
+          toast.info("L’édition d’une station se fait depuis l’onglet « Mes stations » de l’observatoire.")
+        }}
+        onLocate={() => setWatchFicheId(null)}
+      />
+
       {/* ---------- Flux d'avis récents + gestion des réponses ---------- */}
       <Card>
         <CardHeader className="pb-3">
@@ -514,22 +664,33 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                 Répondez officiellement aux avis : votre réponse est publiée sur l’app mobile, visible par tous les clients.
               </CardDescription>
             </div>
-            <ToggleGroup
-              type="single"
-              value={reviewFilter}
-              onValueChange={v => { if (v) setReviewFilter(v as ReviewFilter) }}
-              variant="outline"
-              size="sm"
-              aria-label="Filtrer les avis"
-            >
-              <ToggleGroupItem value="all" className="gap-1.5">Tous ({own.recentReviews.length})</ToggleGroupItem>
-              <ToggleGroupItem value="pending" className="gap-1.5 data-[state=on]:border-amber-400 data-[state=on]:bg-amber-50 data-[state=on]:text-amber-700 dark:data-[state=on]:bg-amber-950 dark:data-[state=on]:text-amber-400">
-                À traiter ({reviewFlow.pending})
-              </ToggleGroupItem>
-              <ToggleGroupItem value="replied" className="gap-1.5 data-[state=on]:border-emerald-400 data-[state=on]:bg-emerald-50 data-[state=on]:text-emerald-700 dark:data-[state=on]:bg-emerald-950 dark:data-[state=on]:text-emerald-400">
-                Traités ({reviewFlow.replied})
-              </ToggleGroupItem>
-            </ToggleGroup>
+            <div className="flex flex-wrap items-center gap-2">
+              <ToggleGroup
+                type="single"
+                value={reviewFilter}
+                onValueChange={v => { if (v) setReviewFilter(v as ReviewFilter) }}
+                variant="outline"
+                size="sm"
+                aria-label="Filtrer les avis"
+              >
+                <ToggleGroupItem value="all" className="gap-1.5">Tous ({own.recentReviews.length})</ToggleGroupItem>
+                <ToggleGroupItem value="pending" className="gap-1.5 data-[state=on]:border-amber-400 data-[state=on]:bg-amber-50 data-[state=on]:text-amber-700 dark:data-[state=on]:bg-amber-950 dark:data-[state=on]:text-amber-400">
+                  À traiter ({reviewFlow.pending})
+                </ToggleGroupItem>
+                <ToggleGroupItem value="replied" className="gap-1.5 data-[state=on]:border-emerald-400 data-[state=on]:bg-emerald-50 data-[state=on]:text-emerald-700 dark:data-[state=on]:bg-emerald-950 dark:data-[state=on]:text-emerald-400">
+                  Traités ({reviewFlow.replied})
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 px-2.5 text-xs"
+                onClick={exportCsv}
+                title="Télécharger les avis affichés (CSV, compatible Excel)"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden /> Exporter CSV
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

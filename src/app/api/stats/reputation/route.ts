@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     }),
     db.station.findMany({
       select: {
-        code: true, name: true, gouvernorat: true, status: true, open24: true, open7j: true,
+        id: true, code: true, name: true, gouvernorat: true, status: true, open24: true, open7j: true,
         lastVerified: true, rating: true, reviewsCount: true,
         brand: { select: { slug: true } },
       },
@@ -230,6 +230,47 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.score - a.score)
   const rank = iveRanking.findIndex(x => x.slug === brand.slug) + 1
 
+  // --- Surveillance des notes (C.2.6+) : stations en perte de vitesse ---
+  // Règle : ≥ 2 avis récents (≤ 90 j) à moyenne ≤ 3,5 et chute ≥ 0,8 pt
+  // vs moyenne historique (≥ 1 avis antérieur).
+  const RECENT_WIN = 90 * 86400_000
+  type WatchEntry = {
+    id: string; code: string; name: string; gouvernorat: string
+    previousRating: number; currentRating: number; delta: number; recentCount: number
+    lastLowReview: { author: string; rating: number; comment: string; createdAt: string } | null
+  }
+  const watchByStation = new Map<string, { recent: number[]; older: number[]; low: typeof ownReviews[number] | null }>()
+  for (const r of ownReviews) {
+    const w = watchByStation.get(r.station.code) ?? { recent: [], older: [], low: null as typeof r | null }
+    const isRecent = now - r.createdAt.getTime() <= RECENT_WIN
+    if (isRecent) {
+      w.recent.push(r.rating)
+      if (r.rating <= 3 && (!w.low || r.createdAt > w.low.createdAt)) w.low = r
+    } else {
+      w.older.push(r.rating)
+    }
+    watchByStation.set(r.station.code, w)
+  }
+  const watchlist: WatchEntry[] = []
+  for (const [code, w] of watchByStation) {
+    if (w.recent.length < 2 || w.older.length < 1) continue
+    const cur = w.recent.reduce((a, b) => a + b, 0) / w.recent.length
+    const prev = w.older.reduce((a, b) => a + b, 0) / w.older.length
+    const delta = prev - cur
+    if (cur <= 3.5 && delta >= 0.8) {
+      const st = ownStations.find(s => s.code === code)
+      watchlist.push({
+        id: st?.id ?? "", code, name: st?.name ?? code, gouvernorat: st?.gouvernorat ?? "",
+        previousRating: round1(prev), currentRating: round1(cur), delta: round1(delta),
+        recentCount: w.recent.length,
+        lastLowReview: w.low
+          ? { author: w.low.author, rating: w.low.rating, comment: w.low.comment, createdAt: w.low.createdAt.toISOString() }
+          : null,
+      })
+    }
+  }
+  watchlist.sort((a, b) => b.delta - a.delta)
+
   // Taux de réponse marché
   const marketReplies = reviews.filter(r => r.replyText && r.repliedAt).length
   const marketResponseRate = totalReviews ? Math.round((marketReplies / totalReviews) * 1000) / 10 : 0
@@ -251,6 +292,7 @@ export async function GET(req: NextRequest) {
       trend: { months: months.map(monthLabel), values: ownTrend.map(round1), counts: ownTrendCounts },
       topStations,
       flopStations,
+      watchlist,
       recentReviews,
     },
     market: {
