@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     reviews: reviews.map(r => ({
       id: r.id, stationId: r.stationId, author: r.author, rating: r.rating, comment: r.comment,
       criteria: r.criteria as Record<string, number> | null, createdAt: r.createdAt.toISOString(),
+      replyText: r.replyText, repliedAt: r.repliedAt?.toISOString() ?? null, repliedBy: r.repliedBy,
     })),
   })
 }
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     where: { id: body.stationId },
     data: {
       rating: Math.round((agg._avg.rating ?? 0) * 10) / 10,
-      reviewsCount: agg._count,
+      reviewsCount: (agg._count as unknown as number) ?? 0,
     },
   })
 

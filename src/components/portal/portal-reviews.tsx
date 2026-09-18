@@ -8,8 +8,12 @@ import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Progress } from "@/components/ui/progress"
+import { Textarea } from "@/components/ui/textarea"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { toast } from "sonner"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
 import { ChartContainer } from "@/components/ui/chart"
@@ -18,7 +22,8 @@ import {
   Radar, RadarChart, ReferenceLine, Tooltip, XAxis, YAxis,
 } from "recharts"
 import {
-  Star, Trophy, TrendingUp, TrendingDown, MessageSquareQuote, Award, Gauge, Users, Quote, Info,
+  Star, Trophy, TrendingUp, TrendingDown, MessageSquareQuote, MessageSquareReply, Award, Gauge,
+  Users, Quote, Info, Send, Pencil, Loader2, Trash2, Clock,
 } from "lucide-react"
 import type { ReputationStats } from "@/lib/types"
 import { num, relDays } from "@/components/settings/settings-shared"
@@ -63,9 +68,16 @@ function ChartTip({ active, payload, label, suffix = "" }: {
   )
 }
 
+type ReviewFilter = "all" | "pending" | "replied"
+
 export function PortalReviews({ brandSlug }: { brandSlug: string }) {
   const [stats, setStats] = useState<ReputationStats | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Réponse de l'enseigne (C.2.6+)
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState("")
+  const [sending, setSending] = useState(false)
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all")
 
   useEffect(() => {
     const ac = new AbortController()
@@ -75,6 +87,58 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
       .catch(e => { if (e.name !== "AbortError") setError(e.message) })
     return () => ac.abort()
   }, [brandSlug])
+
+  // Publication / mise à jour d'une réponse officielle
+  const submitReply = (reviewId: string) => {
+    const text = replyText.trim()
+    if (text.length < 10) {
+      toast.error("La réponse doit contenir au moins 10 caractères.")
+      return
+    }
+    setSending(true)
+    fetch(`/api/reviews/${reviewId}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, by: `Équipe ${stats?.brand.name ?? "enseigne"}` }),
+    })
+      .then(r => (r.ok ? r.json() : r.json().then(j => Promise.reject(new Error(j.error ?? `HTTP ${r.status}`)))))
+      .then(({ reply }: { reply: { replyText: string; repliedAt: string; repliedBy: string } }) => {
+        setStats(prev => prev ? {
+          ...prev,
+          own: {
+            ...prev.own,
+            recentReviews: prev.own.recentReviews.map(rv =>
+              rv.id === reviewId ? { ...rv, ...reply } : rv),
+          },
+        } : prev)
+        toast.success("Réponse publiée — elle est visible par les clients sur l’app mobile.")
+        setReplyingTo(null)
+        setReplyText("")
+      })
+      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Échec de l’envoi"))
+      .finally(() => setSending(false))
+  }
+
+  // Retrait d'une réponse
+  const removeReply = (reviewId: string) => {
+    setSending(true)
+    fetch(`/api/reviews/${reviewId}/reply`, { method: "DELETE" })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(() => {
+        setStats(prev => prev ? {
+          ...prev,
+          own: {
+            ...prev.own,
+            recentReviews: prev.own.recentReviews.map(rv =>
+              rv.id === reviewId ? { ...rv, replyText: null, repliedAt: null, repliedBy: null } : rv),
+          },
+        } : prev)
+        toast.success("Réponse retirée.")
+        if (replyingTo === reviewId) { setReplyingTo(null); setReplyText("") }
+      })
+      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Échec du retrait"))
+      .finally(() => setSending(false))
+  }
 
   // Données dérivées pour les graphiques
   const derived = useMemo(() => {
@@ -118,6 +182,18 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
 
     return { comparison, maxNote, dist, radar, trend, delta, rank }
   }, [stats])
+
+  // Flux d'avis filtré (tous / sans réponse / avec réponse) + compteurs
+  const reviewFlow = useMemo(() => {
+    if (!stats) return { list: [], pending: 0, replied: 0 }
+    const all = stats.own.recentReviews
+    const pending = all.filter(r => !r.replyText).length
+    const replied = all.length - pending
+    const list = reviewFilter === "pending" ? all.filter(r => !r.replyText)
+      : reviewFilter === "replied" ? all.filter(r => r.replyText)
+      : all
+    return { list, pending, replied }
+  }, [stats, reviewFilter])
 
   if (error) return <ErrorState message={error} />
   if (!stats || !derived) return <TabSkeleton title="Chargement de la réputation…" />
@@ -164,6 +240,13 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                   Part de voix : {own.shareOfVoice} %
                 </Badge>
                 <Badge variant="outline" className="gap-1.5">
+                  <MessageSquareReply className="h-3.5 w-3.5 text-emerald-600" />
+                  Taux de réponse : {own.responseRate} %
+                  {own.avgReplyDelayHours != null && (
+                    <span className="text-muted-foreground">· sous {Math.max(1, Math.round(own.avgReplyDelayHours / 24))} j</span>
+                  )}
+                </Badge>
+                <Badge variant="outline" className="gap-1.5">
                   <Award className="h-3.5 w-3.5" />
                   IVE : {ive.score}/100 — {ive.rank}<sup>e</sup>/{ive.brandsCount}
                 </Badge>
@@ -182,7 +265,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
       </Card>
 
       {/* ---------- KPIs ---------- */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Note moyenne"
           value={`${own.avgRating}/5`}
@@ -195,6 +278,14 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
           value={num(own.reviewsCount)}
           icon={MessageSquareQuote}
           sub={`${own.stationsWithReviews} stations notées`}
+        />
+        <KpiCard
+          label="Taux de réponse"
+          value={`${own.responseRate} %`}
+          icon={MessageSquareReply}
+          tone="success"
+          trend={{ value: Math.round((own.responseRate - market.responseRate) * 10) / 10, label: " pts vs marché" }}
+          sub={`${num(own.repliesCount)} réponses${own.avgReplyDelayHours != null ? ` · délai moy. ${own.avgReplyDelayHours.toString().replace(".", ",")} h` : ""}`}
         />
         <KpiCard
           label="Rang concurrentiel"
@@ -410,20 +501,47 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
         </Card>
       </div>
 
-      {/* ---------- Flux d'avis récents ---------- */}
+      {/* ---------- Flux d'avis récents + gestion des réponses ---------- */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Quote className="h-4 w-4 text-muted-foreground" aria-hidden />
-            Derniers avis clients ({num(own.reviewsCount)} au total)
-          </CardTitle>
-          <CardDescription>Les 20 avis les plus récents sur vos stations.</CardDescription>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Quote className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Derniers avis clients ({num(own.reviewsCount)} au total)
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Répondez officiellement aux avis : votre réponse est publiée sur l’app mobile, visible par tous les clients.
+              </CardDescription>
+            </div>
+            <ToggleGroup
+              type="single"
+              value={reviewFilter}
+              onValueChange={v => { if (v) setReviewFilter(v as ReviewFilter) }}
+              variant="outline"
+              size="sm"
+              aria-label="Filtrer les avis"
+            >
+              <ToggleGroupItem value="all" className="gap-1.5">Tous ({own.recentReviews.length})</ToggleGroupItem>
+              <ToggleGroupItem value="pending" className="gap-1.5 data-[state=on]:border-amber-400 data-[state=on]:bg-amber-50 data-[state=on]:text-amber-700 dark:data-[state=on]:bg-amber-950 dark:data-[state=on]:text-amber-400">
+                À traiter ({reviewFlow.pending})
+              </ToggleGroupItem>
+              <ToggleGroupItem value="replied" className="gap-1.5 data-[state=on]:border-emerald-400 data-[state=on]:bg-emerald-50 data-[state=on]:text-emerald-700 dark:data-[state=on]:bg-emerald-950 dark:data-[state=on]:text-emerald-400">
+                Traités ({reviewFlow.replied})
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </CardHeader>
         <CardContent>
           <ScrollArea className="max-h-96 pr-3">
             <div className="space-y-2.5">
-              {own.recentReviews.map(r => (
-                <article key={r.id} className="rounded-lg border p-3">
+              {reviewFlow.list.map(r => (
+                <article
+                  key={r.id}
+                  className={`rounded-lg border p-3 transition-colors hover:bg-muted/30 ${
+                    r.replyText ? "border-emerald-200/70 dark:border-emerald-900/60" : "border-amber-200/70 dark:border-amber-900/50"
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary"
@@ -432,6 +550,16 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                     </span>
                     <span className="text-sm font-semibold">{r.author}</span>
                     <Stars value={r.rating} className="h-3 w-3" />
+                    {!r.replyText && (
+                      <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                        À traiter
+                      </Badge>
+                    )}
+                    {r.replyText && (
+                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+                        <MessageSquareReply className="h-3 w-3" aria-hidden /> Répondu
+                      </Badge>
+                    )}
                     <span className="ms-auto text-xs text-muted-foreground" title={new Date(r.createdAt).toLocaleString("fr-FR")}>
                       {relDays(r.createdAt)}
                     </span>
@@ -442,11 +570,105 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                   <p className="mt-1.5 text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">{r.stationName}</span> · {r.gouvernorat}
                   </p>
+
+                  {/* Réponse officielle publiée */}
+                  {r.replyText && r.repliedAt && replyingTo !== r.id && (
+                    <div className="mt-2 rounded-lg border-l-2 border-emerald-500 bg-emerald-50/60 px-3 py-2 dark:bg-emerald-950/40">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                        <MessageSquareReply className="h-3 w-3 shrink-0" aria-hidden />
+                        <span className="truncate">Réponse officielle · {r.repliedBy}</span>
+                        <span className="ms-auto flex shrink-0 items-center gap-1 font-normal text-emerald-700/70 dark:text-emerald-400/70">
+                          <Clock className="h-3 w-3" aria-hidden />
+                          {relDays(r.repliedAt)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm leading-relaxed">{r.replyText}</p>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  {replyingTo !== r.id && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {r.replyText ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2.5 text-xs"
+                            onClick={() => { setReplyingTo(r.id); setReplyText(r.replyText ?? "") }}
+                          >
+                            <Pencil className="h-3 w-3" aria-hidden /> Modifier la réponse
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2.5 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
+                            disabled={sending}
+                            onClick={() => removeReply(r.id)}
+                          >
+                            <Trash2 className="h-3 w-3" aria-hidden /> Retirer
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 border-emerald-300 px-2.5 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                          onClick={() => { setReplyingTo(r.id); setReplyText("") }}
+                        >
+                          <MessageSquareReply className="h-3 w-3" aria-hidden /> Répondre à ce client
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Éditeur de réponse */}
+                  {replyingTo === r.id && (
+                    <div className="mt-2.5 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-2.5 dark:border-emerald-900 dark:bg-emerald-950/30">
+                      <Textarea
+                        value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        placeholder="Votre réponse officielle — remerciez, expliquez les actions correctives engagées…"
+                        rows={3}
+                        maxLength={600}
+                        className="resize-none bg-background text-sm"
+                        aria-label={`Réponse de l’enseigne à l’avis de ${r.author}`}
+                      />
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                          {replyText.length}/600 · min. 10 caractères
+                        </span>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2.5 text-xs"
+                            onClick={() => { setReplyingTo(null); setReplyText("") }}
+                          >
+                            Annuler
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-7 gap-1.5 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
+                            disabled={sending || replyText.trim().length < 10}
+                            onClick={() => submitReply(r.id)}
+                          >
+                            {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Send className="h-3.5 w-3.5" aria-hidden />}
+                            {r.replyText ? "Mettre à jour" : "Publier la réponse"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </article>
               ))}
-              {own.recentReviews.length === 0 && (
+              {reviewFlow.list.length === 0 && (
                 <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  Aucun avis reçu pour l’instant — encouragez vos clients à noter vos stations depuis l’app mobile.
+                  {reviewFilter === "pending"
+                    ? "Bravo — tous les avis récents ont reçu une réponse officielle. 🎉"
+                    : reviewFilter === "replied"
+                      ? "Aucun avis répondu pour l’instant — commencez par les avis « À traiter »."
+                      : "Aucun avis reçu pour l’instant — encouragez vos clients à noter vos stations depuis l’app mobile."}
                 </p>
               )}
             </div>

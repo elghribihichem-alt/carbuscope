@@ -142,6 +142,7 @@ export const fr = {
   "station.reviewsTitle": "Avis des automobilistes",
   "station.reviewsVerified": "{n} avis vérifiés · communauté CarbuScope",
   "station.noReviews": "Pas encore d'avis — soyez le premier à en laisser un !",
+  "station.brandReply": "Réponse officielle de l’enseigne",
   "station.nearby": "Au alentour",
   "station.foot": "Fiche {code} · coordonnées {lat} / {lng}",
   "station.routeToast": "Itinéraire transmis à Google Maps / Waze",

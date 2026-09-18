@@ -303,3 +303,25 @@ Work Log:
 
 Stage Summary:
 - Les 3 demandes utilisateur sont livrées et vérifiées E2E navigateur. Priorités suivantes recommandées : réponse de l'enseigne aux avis (C.2.6+), widget comparaison de stations sur carte réelle, export PDF réputation, correction du warning Radix DialogTitle sur station-detail-dialog, délai moyen de modération (champ updatedAt à ajouter au modèle Contribution).
+
+---
+Task ID: 15
+Agent: orchestrator (Z.ai Code) — cron QA 15 min
+Task: QA de routine + « Réponses de l'enseigne aux avis » (C.2.6+) + délai moyen de modération + correctif Radix DialogTitle
+
+Work Log:
+- QA initial : serveur 200 (next-server ~2,0 Go RSS, sous contrôle), 9 endpoints API 200, sweep navigateur 4 modes (carte réelle Esri + popup clic marqueur, portail Avis & réputation, back-office Stats plateforme, mobile B2C), 0 erreur console.
+- Prisma : Review + replyText/repliedAt/repliedBy (réponse officielle enseigne) ; Contribution + updatedAt (délai de modération). `bun run db:push` + régénération client.
+- INCIDENT résolu : le serveur dev gardait l'ANCIEN client Prisma en mémoire → /api/stats/reputation 500 (PrismaClientValidationError sur replyText). Correctif : kill + relance `(setsid bun run dev …)` → 200.
+- Seed one-shot `prisma/seed-replies.ts` : 1 195 réponses d'enseigne réalistes (ton adapté à la note : remerciement / prise en charge / excuses + actions correctives, délai 6 h → 5 j), updatedAt sur les 2 contributions résolues.
+- API : GET /api/stations/[id] + GET /api/reviews renvoient les champs de réponse ; NOUVEAU POST/DELETE `/api/reviews/[id]/reply` (validation 10-600 caractères, repliedBy = « Équipe {enseigne} ») ; /api/stats/reputation → own.repliesCount/responseRate/avgReplyDelayHours + market.responseRate + responseRate par enseigne (brandComparison) + réponses dans recentReviews ; /api/stats/platform → moderation.avgDelayHours + resolvedCount ; PATCH /api/contributions pose updatedAt à chaque changement de statut.
+- Portail (`portal-reviews.tsx`) : 5e KPI « Taux de réponse » (delta vs marché + délai moyen) ; badge synthèse ; flux d'avis enrichi — filtre ToggleGroup « Tous / À traiter (n) / Traités (n) », cartes à bordure colorée selon statut (ambre = à traiter, émeraude = répondu), bloc « Réponse officielle · Équipe X » (filet gauche émeraude, horodatage relatif), boutons Répondre / Modifier / Retirer, éditeur inline Textarea + compteur 0/600 + Annuler/Publier (spinner), mises à jour optimistes via setStats + toasts.
+- Mobile (`station-screen.tsx`) : la réponse officielle est visible par le CONSOMMATEUR sous chaque avis (bloc émeraude, clé i18n station.brandReply traduite dans les 5 langues fr/en/it/es/ar).
+- Back-office (`bo-stats.tsx`) : badge « Délai moyen : X j/h (n traitées) » dans l'entonnoir de modération (title explicatif).
+- Correctif Radix : station-detail-dialog émettait « Missing Description/Title for DialogContent » pendant les états chargement/erreur → sr-only DialogTitle + DialogDescription ajoutés aux deux branches. Vérifié console vide après clear + réouverture.
+- Correctif opportuniste : erreur tsc préexistante api/reviews (`agg._count`) → cast propre.
+- QA E2E agent-browser : réponse publiée depuis le portail (textarea → Publier → bloc « Réponse officielle » affiché + compteur À traiter 11→10 + 0 erreur console) ; boucle complète vérifiée : POST /api/reviews/[id]/reply sur « Station Tunis Centre » (Ahmed T.) → fiche mobile recharge → « Official reply from the brand · Équipe Station Tunis Centre » affiché dans l'app (i18n EN actif) ; back-office « Délai moyen : 3 j (2 traitées) » ; mode sombre vérifié (bg oklab émeraude 950/40, filet émeraude) ; VLM : synthèse réputation propre, aucun glitch.
+- `bun run lint` : 0 erreur. Navigateur fermé (1,7 Go libres). next-server ~1,97 Go RSS.
+
+Stage Summary:
+- La boucle de réputation est bouclée de bout en bout : le client laisse un avis (mobile), l'enseigne répond officiellement (portail), la réponse est publiée sur l'app mobile, et le pilotage se fait par KPI (taux de réponse, délai moyen, comparaison concurrentielle). Le back-office mesure désormais le délai réel de modération (updatedAt horodaté à chaque VALIDATE/REJECT). Warning Radix résolu. Reste recommandé : alertes « chute de note d'une station » (portail), export PDF réputation, widget comparaison sur carte réelle, taux de réponse intégré au calcul IVE (poids à arbitrer).

@@ -4,7 +4,7 @@
 // Photo, identité, services, horaires, note + avis récents (lazy fetch),
 // actions Itinéraire / Signaler / Avis, favori (B.2.7), stations à proximité.
 
-import { BadgeCheck, Clock3, Flag, Heart, MapPin, Navigation, Share2, Star } from "lucide-react"
+import { BadgeCheck, Clock3, Flag, Heart, MapPin, MessageSquareReply, Navigation, Share2, Star } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -206,6 +206,16 @@ export function StationScreen({ api }: { api: AppApi }) {
                       <StarRating value={r.rating} size="xs" />
                     </div>
                     <p className="mt-1.5 line-clamp-3 text-[12px] leading-snug text-slate-600">{r.comment}</p>
+                    {r.replyText && (
+                      <div className="mt-2 rounded-lg border-l-2 border-emerald-500 bg-emerald-50/70 px-2.5 py-1.5 dark:bg-emerald-950/40">
+                        <p className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          <MessageSquareReply className="h-3 w-3 shrink-0" aria-hidden />
+                          {t("station.brandReply")}
+                          {r.repliedBy && <span className="font-normal text-emerald-600/80 dark:text-emerald-400/70">· {r.repliedBy}</span>}
+                        </p>
+                        <p className="mt-0.5 line-clamp-4 text-[11px] leading-snug text-emerald-900 dark:text-emerald-100">{r.replyText}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

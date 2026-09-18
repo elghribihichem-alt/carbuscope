@@ -86,6 +86,10 @@ model Review {
   comment   String
   criteria  Json? // { propreté, accueil, rapidité, services }
   createdAt DateTime @default(now())
+  // Réponse officielle de l'enseigne (C.2.6+ — gestion de la réputation)
+  replyText String?
+  repliedAt DateTime?
+  repliedBy String?
 }
 
 model Alert {
@@ -188,6 +192,8 @@ model Contribution {
   lat             Float?
   lng             Float?
   createdAt       DateTime @default(now())
+  // Date du dernier changement de statut (délai moyen de modération en back-office)
+  updatedAt       DateTime?
 }
 
 model User {

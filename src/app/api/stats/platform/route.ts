@@ -27,7 +27,7 @@ export async function GET() {
       },
     }),
     db.review.findMany({ select: { author: true, rating: true, createdAt: true } }),
-    db.contribution.findMany({ select: { type: true, status: true, author: true, createdAt: true } }),
+    db.contribution.findMany({ select: { type: true, status: true, author: true, createdAt: true, updatedAt: true } }),
     db.alert.findMany({ select: { type: true, severity: true } }),
     db.user.findMany({ select: { role: true, active: true, name: true } }),
     db.report.findMany({ select: { status: true, type: true } }),
@@ -91,6 +91,11 @@ export async function GET() {
   const resolutionRate = contributions.length
     ? Math.round(((byStatus.VALIDATED + byStatus.REJECTED) / contributions.length) * 1000) / 10
     : 0
+  // Délai moyen de modération : createdAt → updatedAt sur les contributions traitées
+  const resolved = contributions.filter(c => c.updatedAt && c.status !== "PENDING")
+  const avgDelayHours = resolved.length
+    ? Math.round((resolved.reduce((s, c) => s + (c.updatedAt!.getTime() - c.createdAt.getTime()) / 3600_000, 0) / resolved.length) * 10) / 10
+    : null
 
   // ---------- Alertes ----------
   const alertsBySeverity: Record<string, number> = { CRITICAL: 0, MEDIUM: 0, INFO: 0 }
@@ -126,6 +131,8 @@ export async function GET() {
       byStatus,
       byType,
       resolutionRate,
+      avgDelayHours,
+      resolvedCount: resolved.length,
       topContributors,
     },
     alerts: {

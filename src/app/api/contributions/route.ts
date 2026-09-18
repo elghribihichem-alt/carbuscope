@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest) {
     const status = nextCount >= 3 ? "VALIDATED" : "PENDING"
     const updated = await db.contribution.update({
       where: { id: c.id },
-      data: { validationCount: nextCount, status },
+      data: { validationCount: nextCount, status, updatedAt: new Date() },
     })
     if (status === "VALIDATED" && c.stationCode && c.type === "CLOSED") {
       const st = await db.station.findUnique({ where: { code: c.stationCode } })
@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (body.action === "REJECT") {
-    await db.contribution.update({ where: { id: c.id }, data: { status: "REJECTED" } })
+    await db.contribution.update({ where: { id: c.id }, data: { status: "REJECTED", updatedAt: new Date() } })
     return NextResponse.json({ ok: true, status: "REJECTED" })
   }
 

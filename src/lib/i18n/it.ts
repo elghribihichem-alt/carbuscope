@@ -143,6 +143,7 @@ export const it: Partial<Dict> = {
   "station.reviewsTitle": "Recensioni degli automobilisti",
   "station.reviewsVerified": "{n} recensioni verificate · community CarbuScope",
   "station.noReviews": "Ancora nessuna recensione — sii il primo a lasciarne una!",
+  "station.brandReply": "Risposta ufficiale dell’insegna",
   "station.nearby": "Nei dintorni",
   "station.foot": "Scheda {code} · coordinate {lat} / {lng}",
   "station.routeToast": "Indicazioni inviate a Google Maps / Waze",

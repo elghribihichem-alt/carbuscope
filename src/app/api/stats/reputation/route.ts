@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
     db.review.findMany({
       select: {
         id: true, author: true, rating: true, comment: true, criteria: true, createdAt: true,
+        replyText: true, repliedAt: true, repliedBy: true,
         station: {
           select: { code: true, name: true, gouvernorat: true, brand: { select: { slug: true, name: true, color: true } } },
         },
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest) {
   type BrandAgg = {
     slug: string; name: string; color: string
     reviews: number; ratingSum: number
+    replies: number; replyDelaySum: number
     stations: number; active: number; open24or7: number; fresh90: number
     dist: Record<number, number>
     criteriaSum: Record<string, { sum: number; n: number }>
@@ -68,7 +70,8 @@ export async function GET(req: NextRequest) {
   }
   const aggs = new Map<string, BrandAgg>()
   const init = (slug: string, name: string, color: string): BrandAgg => ({
-    slug, name, color, reviews: 0, ratingSum: 0, stations: 0, active: 0, open24or7: 0, fresh90: 0,
+    slug, name, color, reviews: 0, ratingSum: 0, replies: 0, replyDelaySum: 0,
+    stations: 0, active: 0, open24or7: 0, fresh90: 0,
     dist: {}, criteriaSum: {}, monthAvg: new Map(),
   })
   for (const b of brands) aggs.set(b.slug, init(b.slug, b.name, b.color))
@@ -91,6 +94,10 @@ export async function GET(req: NextRequest) {
     if (!a) continue
     a.reviews++
     a.ratingSum += r.rating
+    if (r.replyText && r.repliedAt) {
+      a.replies++
+      a.replyDelaySum += Math.max(0, r.repliedAt.getTime() - r.createdAt.getTime()) / 3600_000
+    }
     a.dist[r.rating] = (a.dist[r.rating] ?? 0) + 1
     const crit = (r.criteria ?? {}) as Record<string, unknown>
     for (const [key, val] of Object.entries(crit)) {
@@ -134,6 +141,7 @@ export async function GET(req: NextRequest) {
         reviewsCount: a.reviews,
         stationsCount: a.stations,
         shareOfVoice: totalReviews ? Math.round((a.reviews / totalReviews) * 1000) / 10 : 0,
+        responseRate: a.reviews ? Math.round((a.replies / a.reviews) * 1000) / 10 : 0,
         valueIndex: Math.round(ive.total),
       }
     })
@@ -210,6 +218,9 @@ export async function GET(req: NextRequest) {
   const recentReviews = ownReviews.slice(0, 20).map(r => ({
     id: r.id, author: r.author, rating: r.rating, comment: r.comment,
     createdAt: r.createdAt.toISOString(),
+    replyText: r.replyText,
+    repliedAt: r.repliedAt?.toISOString() ?? null,
+    repliedBy: r.repliedBy,
     stationName: r.station.name, stationCode: r.station.code, gouvernorat: r.station.gouvernorat,
   }))
 
@@ -219,12 +230,19 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.score - a.score)
   const rank = iveRanking.findIndex(x => x.slug === brand.slug) + 1
 
+  // Taux de réponse marché
+  const marketReplies = reviews.filter(r => r.replyText && r.repliedAt).length
+  const marketResponseRate = totalReviews ? Math.round((marketReplies / totalReviews) * 1000) / 10 : 0
+
   return NextResponse.json({
     fetchedAt: new Date().toISOString(),
     brand: { slug: brand.slug, name: brand.name, color: brand.color },
     own: {
       avgRating: round1(own.reviews ? own.ratingSum / own.reviews : 0),
       reviewsCount: own.reviews,
+      repliesCount: own.replies,
+      responseRate: own.reviews ? Math.round((own.replies / own.reviews) * 1000) / 10 : 0,
+      avgReplyDelayHours: own.replies ? round1(own.replyDelaySum / own.replies) : null,
       stationsWithReviews: ownStations.filter(s => s.reviewsCount > 0).length,
       stationsTotal: own.stations,
       shareOfVoice: totalReviews ? Math.round((own.reviews / totalReviews) * 1000) / 10 : 0,
@@ -238,6 +256,7 @@ export async function GET(req: NextRequest) {
     market: {
       avgRating: round1(marketAvg),
       reviewsCount: totalReviews,
+      responseRate: marketResponseRate,
       distribution: marketDistribution,
       criteria: marketCriteria,
       trend: { months: months.map(monthLabel), values: marketTrend.map(round1) },

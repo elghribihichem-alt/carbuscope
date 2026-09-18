@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   Users, MessageSquarePlus, Target, CheckCircle2, Store, PieChart as PieIcon, BarChart3,
-  ShieldAlert, TimerReset, FileBarChart2, Gauge, Quote,
+  ShieldAlert, TimerReset, FileBarChart2, Gauge, Quote, Clock,
 } from "lucide-react"
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis,
@@ -389,9 +389,21 @@ export function BoStats() {
                   })}
                 </div>
                 <div className="border-t pt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Top contributeurs (signalements)
-                  </p>
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span>Top contributeurs (signalements)</span>
+                    {p.moderation.avgDelayHours != null && (
+                      <span
+                        className="ms-auto flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                        title="Délai moyen entre le dépôt d’une contribution et sa résolution (validation ou rejet)"
+                      >
+                        <Clock className="h-3 w-3" aria-hidden />
+                        Délai moyen : {p.moderation.avgDelayHours >= 48
+                          ? `${Math.round(p.moderation.avgDelayHours / 24)} j`
+                          : `${p.moderation.avgDelayHours.toString().replace(".", ",")} h`}
+                        <span className="font-normal text-emerald-700/70 dark:text-emerald-400/70">({p.moderation.resolvedCount} traitées)</span>
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-1.5">
                     {p.moderation.topContributors.map((c, i) => (
                       <div key={c.author} className="flex items-center gap-2.5 rounded-lg border bg-muted/20 p-2">

@@ -101,11 +101,15 @@ export function StationDetailDialog({
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
         {errorMsg ? (
           <div className="py-8 text-center">
+            <DialogTitle className="sr-only">Fiche indisponible</DialogTitle>
+            <DialogDescription className="sr-only">Erreur de chargement de la fiche station</DialogDescription>
             <p className="font-semibold text-red-600 dark:text-red-400">Fiche indisponible</p>
             <p className="mt-1 text-sm text-muted-foreground">{errorMsg}</p>
           </div>
         ) : !s ? (
           <div className="flex flex-col items-center gap-3 py-14 text-muted-foreground">
+            <DialogTitle className="sr-only">Chargement de la fiche station</DialogTitle>
+            <DialogDescription className="sr-only">Chargement en cours des informations de la station</DialogDescription>
             <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
             <p className="text-sm">Chargement de la fiche station…</p>
           </div>

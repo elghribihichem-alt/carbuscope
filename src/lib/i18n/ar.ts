@@ -143,6 +143,7 @@ export const ar: Partial<Dict> = {
   "station.reviewsTitle": "تقييمات السائقين",
   "station.reviewsVerified": "{n} تقييم موثّق · مجتمع CarbuScope",
   "station.noReviews": "لا تقييمات بعد — كن أول من يكتب تقييمًا!",
+  "station.brandReply": "الرد الرسمي من العلامة التجارية",
   "station.nearby": "في الجوار",
   "station.foot": "البطاقة {code} · الإحداثيات {lat} / {lng}",
   "station.routeToast": "تم إرسال الاتجاهات إلى Google Maps / Waze",

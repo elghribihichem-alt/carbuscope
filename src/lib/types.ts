@@ -50,6 +50,10 @@ export type ReviewDTO = {
   comment: string
   criteria: Record<string, number> | null
   createdAt: string
+  // Réponse officielle de l'enseigne (C.2.6+)
+  replyText?: string | null
+  repliedAt?: string | null
+  repliedBy?: string | null
 }
 
 export type HistoryDTO = {
@@ -318,6 +322,7 @@ export type ReputationBrandRow = {
   reviewsCount: number
   stationsCount: number
   shareOfVoice: number // % des avis du marché
+  responseRate: number // % d'avis avec réponse officielle de l'enseigne
   valueIndex: number // IVE 0-100
 }
 
@@ -327,6 +332,9 @@ export type ReputationStats = {
   own: {
     avgRating: number
     reviewsCount: number
+    repliesCount: number
+    responseRate: number
+    avgReplyDelayHours: number | null
     stationsWithReviews: number
     stationsTotal: number
     shareOfVoice: number
@@ -341,6 +349,9 @@ export type ReputationStats = {
       rating: number
       comment: string
       createdAt: string
+      replyText: string | null
+      repliedAt: string | null
+      repliedBy: string | null
       stationName: string
       stationCode: string
       gouvernorat: string
@@ -349,6 +360,7 @@ export type ReputationStats = {
   market: {
     avgRating: number
     reviewsCount: number
+    responseRate: number
     distribution: { rating: number; count: number }[]
     criteria: { key: string; label: string; value: number }[]
     trend: { months: string[]; values: number[] }
@@ -380,6 +392,8 @@ export type PlatformStats = {
     byStatus: Record<string, number>
     byType: Record<string, number>
     resolutionRate: number
+    avgDelayHours: number | null // délai moyen de traitement (createdAt → updatedAt)
+    resolvedCount: number
     topContributors: { author: string; count: number }[]
   }
   alerts: {

@@ -44,6 +44,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       comment: r.comment,
       criteria: r.criteria as Record<string, number> | null,
       createdAt: r.createdAt.toISOString(),
+      replyText: r.replyText,
+      repliedAt: r.repliedAt?.toISOString() ?? null,
+      repliedBy: r.repliedBy,
     })),
     history: history.map(h => ({
       id: h.id,
