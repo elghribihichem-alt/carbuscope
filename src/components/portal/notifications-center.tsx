@@ -6,6 +6,7 @@
 // global. Boucle de fermeture recommandée par la task 20.
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { io, type Socket } from "socket.io-client"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import {
-  Bell, BellRing, CheckCheck, TrendingDown, Radar, Inbox, MailCheck, Loader2, MapPin, Banknote, ArrowRight,
+  Bell, BellRing, CheckCheck, TrendingDown, Radar, Inbox, MailCheck, Loader2, MapPin, Banknote, ArrowRight, Wifi, WifiOff,
 } from "lucide-react"
 import type { NotificationDTO } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -44,6 +45,7 @@ export function NotificationsCenter({ brandSlug, onNavigate }: { brandSlug: stri
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [markingAll, setMarkingAll] = useState(false)
+  const [live, setLive] = useState(false)
   const prevUnread = useRef(0)
 
   const refresh = useCallback(async (silent = false) => {
@@ -64,10 +66,37 @@ export function NotificationsCenter({ brandSlug, onNavigate }: { brandSlug: stri
 
   useEffect(() => {
     void refresh()
-    // Léger polling (45 s) : le badge reste vivant pendant qu'un moteur tourne côté back-office.
+    // Léger polling (45 s) : filet de sécurité si le relais WebSocket est injoignable.
     const id = setInterval(() => void refresh(true), 45_000)
     return () => clearInterval(id)
   }, [refresh])
+
+  // Relais WebSocket (mini-service :3036) : les notifications arrivent EN DIRECT
+  // quand le moteur de veille déclenche ou qu'un décret est publié — le polling
+  // 45 s reste en repli. Connexion via la passerelle (XTransformPort), path "/".
+  useEffect(() => {
+    let disposed = false
+    const socket: Socket = io("/?XTransformPort=3036", {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+      timeout: 8000,
+    })
+    socket.on("connect", () => {
+      setLive(true)
+      socket.emit("subscribe", brandSlug)
+    })
+    socket.on("disconnect", () => { if (!disposed) setLive(false) })
+    socket.on("notification", (payload: { brandSlug?: string; kind?: string; title?: string }) => {
+      if (payload?.brandSlug && payload.brandSlug !== brandSlug) return
+      void refresh(true)
+    })
+    return () => {
+      disposed = true
+      socket.disconnect()
+    }
+  }, [brandSlug, refresh])
 
   // Toast discret quand de nouvelles notifications arrivent pendant la session.
   useEffect(() => {
@@ -294,8 +323,23 @@ export function NotificationsCenter({ brandSlug, onNavigate }: { brandSlug: stri
         {/* Pied du centre */}
         <div className="flex items-center justify-between px-4 py-2.5">
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <Radar className="h-3 w-3" aria-hidden />
-            Alimenté par le moteur de veille CarbuScope
+            {live ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" title="Relais WebSocket connecté — notifications instantanées">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 [animation-duration:1.8s]" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                <Wifi className="h-3 w-3" aria-hidden />Temps réel
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-muted-foreground/70" title="Relais injoignable — rafraîchissement toutes les 45 s">
+                <WifiOff className="h-3 w-3" aria-hidden />45 s
+              </span>
+            )}
+            <span className="ml-1 inline-flex items-center gap-1">
+              <Radar className="h-3 w-3" aria-hidden />
+              Moteur de veille CarbuScope
+            </span>
           </p>
           <Button
             variant="ghost"

@@ -10,10 +10,13 @@ import * as L from "leaflet"
 import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, useMap } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import { useTheme } from "next-themes"
-import { Gauge, Star, Clock, GitCompareArrows, Pin } from "lucide-react"
+import {
+  Gauge, Star, Clock, GitCompareArrows, Pin, MapPin, Navigation, ShieldCheck,
+  History, ChevronDown, ChevronRight, Loader2, MessageSquare,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import type { StationDTO, RoadDTO, ProjectDTO } from "@/lib/types"
+import type { StationDTO, StationDetail, RoadDTO, ProjectDTO } from "@/lib/types"
 import { SERVICE_LABELS } from "@/lib/types"
 import { SERVICE_ICONS } from "./tunisia-map"
 
@@ -35,6 +38,8 @@ export interface OsmMapProps {
   onCompare?: (s: StationDTO) => void
   /** Codes des stations actuellement épinglées dans le comparateur */
   compareCodes?: string[]
+  /** Fiche détaillée (avis, historique, concurrents proches) — chargée par le wrapper au fil de la sélection */
+  detail?: StationDetail | null
 }
 
 // Tunisie : lat 30.2→37.6, lng 7.5→11.9 (marges incluses)
@@ -274,80 +279,228 @@ function DeclutteredStations({
   )
 }
 
-/** Mini-fiche station rendue dans la popup Leaflet */
-function StationMiniCard({ s, isOwn, onViewDetail, onCompare, isPinned }: { s: StationDTO; isOwn: boolean; onViewDetail?: (s: StationDTO) => void; onCompare?: (s: StationDTO) => void; isPinned: boolean }) {
-  const svcIcons = s.services.slice(0, 7)
+/** Lien d'itinéraire réel (Google Maps Directions) vers la station */
+export function stationDirectionsUrl(s: StationDTO) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`
+}
+
+const DATE_FR = (d: string | Date) =>
+  new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(d))
+
+function Stars({ n, size = "h-3 w-3" }: { n: number; size?: string }) {
   return (
-    <div className="min-w-[218px] space-y-2">
-      <div className="flex items-start gap-2">
-        <span className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-ring/20" style={{ background: s.brandColor }} />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-tight">{s.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {s.brandName}{isOwn ? " (moi)" : ""} · {s.gouvernorat}
-          </p>
+    <span className="inline-flex items-center gap-0.5" aria-label={`${n} sur 5`}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star key={i} className={`${size} ${i <= Math.round(n) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`} />
+      ))}
+    </span>
+  )
+}
+
+/**
+ * Fiche station riche rendue dans la popup Leaflet (parité avec l'ancienne fiche
+ * « schéma », et au-delà) : photo, adresse/GPS/horaires, badges, services avec
+ * libellés, certification terrain, concurrents proches avec distance, derniers
+ * avis, historique repliable, actions Fiche complète / Comparer / Itinéraire.
+ * Le détail (avis/historique/concurrents) arrive de façon asynchrone : squelette
+ * pulsé en attendant.
+ */
+function StationRichCard({ s, detail, isOwn, onViewDetail, onCompare, isPinned }: {
+  s: StationDTO
+  detail?: StationDetail | null
+  isOwn: boolean
+  onViewDetail?: (s: StationDTO) => void
+  onCompare?: (s: StationDTO) => void
+  isPinned: boolean
+}) {
+  const [showHistory, setShowHistory] = useState(false)
+  const nearby = detail?.nearby?.slice(0, 3) ?? []
+  const reviews = detail?.reviews?.slice(0, 2) ?? []
+  const history = detail?.history ?? []
+  const hasDetail = !!detail
+  return (
+    <div className="w-[286px] sm:w-[312px]">
+      {/* ---------- Corps scrollable ---------- */}
+      <div className="cs-popup-scroll max-h-[min(58vh,430px)] overflow-y-auto">
+        {/* En-tête enseigne */}
+        <div className="sticky top-0 z-[1] flex items-start gap-2 border-b bg-muted/50 px-3 py-2 pr-8 backdrop-blur">
+          <span className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-ring/20" style={{ background: s.brandColor }} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold leading-tight">{s.name}</p>
+            <p className="truncate text-[11px] text-muted-foreground">
+              {s.brandName}{isOwn ? " (moi)" : ""} · <span className="font-mono">{s.code}</span>
+            </p>
+          </div>
         </div>
-        {isPinned && (
-          <Badge variant="outline" className="gap-0.5 border-emerald-500/60 bg-emerald-500/10 px-1.5 py-0 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
-            <Pin className="h-2.5 w-2.5" aria-hidden />Comparateur
-          </Badge>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-1">
-        <Badge variant={s.status === "ACTIVE" ? "default" : s.status === "CLOSED" ? "outline" : "secondary"} className="px-1.5 py-0 text-[10px]">
-          {STATUS_LABEL[s.status] ?? s.status}
-        </Badge>
-        {s.traffic > 0 && (
-          <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
-            <Gauge className="h-3 w-3" />{NUM.format(s.traffic)} véh/j
-          </Badge>
-        )}
-        {s.rating > 0 && (
-          <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />{s.rating.toFixed(1)}
-            {s.reviewsCount > 0 && <span className="text-muted-foreground">({s.reviewsCount})</span>}
-          </Badge>
-        )}
-        {(s.open24 || s.open7j) && (
-          <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
-            <Clock className="h-3 w-3" />{s.open24 ? "24h/24" : "7j/7"}
-          </Badge>
-        )}
-      </div>
-      {svcIcons.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-t pt-1.5">
-          {svcIcons.map(key => {
-            const Icon = SERVICE_ICONS[key]
-            const label = SERVICE_LABELS[key] ?? key
-            return Icon ? (
-              <span key={key} title={label} className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                <Icon className="h-3.5 w-3.5" />
-              </span>
+
+        <div className="space-y-2.5 p-3">
+          {s.photoUrl && (
+            <img src={s.photoUrl} alt={`Photo ${s.name}`} className="h-28 w-full rounded-lg border object-cover" />
+          )}
+
+          {/* Localisation & horaires */}
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <p className="flex items-start gap-1.5"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{s.address}</p>
+            <p className="font-mono text-[10px]">GPS {s.lat.toFixed(4)}, {s.lng.toFixed(4)}</p>
+            <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 shrink-0" />
+              {s.open24 ? "Ouverte 24h/24" : s.open7j ? "7j/7" : "Horaires de jour"}
+              <span className="text-muted-foreground/60">· {s.delegation}, {s.gouvernorat}</span>
+            </p>
+          </div>
+
+          {/* Badges indicateur */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant={s.status === "ACTIVE" ? "default" : s.status === "RENOVATION" ? "secondary" : "outline"}
+              className={`px-1.5 py-0 text-[10px] ${s.status === "RENOVATION" ? "border-amber-500 text-amber-600 dark:text-amber-400" : s.status === "PROJECT" ? "border-dashed" : ""}`}>
+              {STATUS_LABEL[s.status] ?? s.status}
+            </Badge>
+            {s.traffic > 0 && (
+              <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
+                <Gauge className="h-3 w-3" />{NUM.format(s.traffic)} véh/j
+              </Badge>
+            )}
+            {s.rating > 0 && (
+              <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />{s.rating.toFixed(1)}
+                {s.reviewsCount > 0 && <span className="text-muted-foreground">({s.reviewsCount})</span>}
+              </Badge>
+            )}
+            {isPinned && (
+              <Badge variant="outline" className="gap-0.5 border-emerald-500/60 bg-emerald-500/10 px-1.5 py-0 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                <Pin className="h-2.5 w-2.5" aria-hidden />Comparateur
+              </Badge>
+            )}
+          </div>
+
+          {/* Services (libellés complets, comme l'ancienne fiche) */}
+          {s.services.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Services</p>
+              <div className="flex flex-wrap gap-1">
+                {s.services.slice(0, 9).map(key => {
+                  const Icon = SERVICE_ICONS[key]
+                  return (
+                    <span key={key} title={SERVICE_LABELS[key] ?? key} className="inline-flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-[10px]">
+                      {Icon && <Icon className="h-3 w-3" />}{SERVICE_LABELS[key] ?? key}
+                    </span>
+                  )
+                })}
+                {s.services.length > 9 && <span className="text-[10px] text-muted-foreground">+{s.services.length - 9}</span>}
+              </div>
+            </div>
+          )}
+
+          {/* Certification terrain (A.3.3) */}
+          <div className="rounded-lg border bg-muted/30 p-2 text-[11px]">
+            <p className="flex items-center gap-1.5 font-medium"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              Dernière vérification : {DATE_FR(s.lastVerified)}
+            </p>
+            <p className="ml-5 text-muted-foreground">{s.verifiedBy} · {hasDetail ? "fiche certifiée" : "source terrain"}</p>
+          </div>
+
+          {/* Derniers avis (enrichissement : la fiche complète n'est plus nécessaire pour un aperçu réputation) */}
+          {hasDetail ? (
+            reviews.length > 0 ? (
+              <div>
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <MessageSquare className="h-3.5 w-3.5" />Derniers avis
+                </p>
+                <div className="space-y-1.5">
+                  {reviews.map(r => (
+                    <div key={r.id} className="rounded-lg border bg-muted/30 px-2 py-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <Stars n={r.rating} />
+                        <span className="shrink-0 text-[10px] text-muted-foreground">{DATE_FR(r.createdAt)}</span>
+                      </div>
+                      <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug">{r.comment}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                        — {r.author}
+                        {r.replyText && <span className="ml-1 font-medium text-emerald-600 dark:text-emerald-400">· réponse enseigne ✓</span>}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : null
-          })}
-          {s.services.length > 7 && <span className="text-[10px] text-muted-foreground">+{s.services.length - 7}</span>}
-        </div>
-      )}
-      {(onViewDetail || onCompare) && (
-        <div className="grid grid-cols-2 gap-1.5">
-          {onViewDetail && (
-            <Button size="sm" className="h-7 text-xs" onClick={() => onViewDetail(s)}>
-              Voir la fiche
-            </Button>
+          ) : (
+            <div className="space-y-1.5" aria-hidden>
+              <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+              <div className="h-12 animate-pulse rounded-lg bg-muted" />
+            </div>
           )}
-          {onCompare && (
-            <Button
-              size="sm" variant={isPinned ? "secondary" : "outline"}
-              className={`h-7 gap-1 text-xs ${isPinned ? "border border-emerald-500/50 text-emerald-700 dark:text-emerald-400" : ""}`}
-              aria-pressed={isPinned}
-              onClick={() => onCompare(s)}
-            >
-              <GitCompareArrows className="h-3.5 w-3.5" aria-hidden />
-              {isPinned ? "Retirer" : "Comparer"}
-            </Button>
+
+          {/* Concurrents proches (espionnage terrain, ancienne fiche) */}
+          {hasDetail && nearby.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Concurrents proches</p>
+              <div className="space-y-1">
+                {nearby.map(n => (
+                  <div key={n.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: n.brandColor }} />
+                      <span className="truncate">{n.name}</span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{n.distanceKm.toFixed(1)} km</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Historique repliable (traçabilité des modifications) */}
+          {hasDetail && history.length > 0 && (
+            <div className="rounded-lg border">
+              <button className="flex w-full items-center justify-between px-2 py-1.5 text-xs font-medium" onClick={() => setShowHistory(v => !v)}>
+                <span className="flex items-center gap-1.5"><History className="h-3.5 w-3.5" />Historique ({history.length})</span>
+                {showHistory ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              </button>
+              {showHistory && (
+                <div className="cs-popup-scroll max-h-28 space-y-1 overflow-y-auto border-t px-2 py-1.5 text-[10px]">
+                  {history.map(h => (
+                    <p key={h.id} className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{h.field}</span> : {h.oldValue} → {h.newValue}
+                      <span className="ml-1">({h.author}, {DATE_FR(h.createdAt)})</span>
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Chargement du détail */}
+          {!hasDetail && (
+            <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />Chargement des détails (avis, historique, concurrents)…
+            </p>
           )}
         </div>
-      )}
+      </div>
+
+      {/* ---------- Actions ---------- */}
+      <div className="flex gap-2 border-t p-2">
+        {onViewDetail && (
+          <Button size="sm" className="h-7 flex-1 text-xs" onClick={() => onViewDetail(s)}>
+            Fiche complète
+          </Button>
+        )}
+        {onCompare ? (
+          <Button
+            size="sm" variant={isPinned ? "secondary" : "outline"}
+            aria-pressed={isPinned}
+            className={`h-7 flex-1 gap-1 text-xs ${isPinned ? "border border-emerald-500/50 text-emerald-700 dark:text-emerald-400" : ""}`}
+            onClick={() => onCompare(s)}
+          >
+            <GitCompareArrows className="h-3.5 w-3.5" aria-hidden />
+            {isPinned ? "Retirer" : "Comparer"}
+          </Button>
+        ) : (
+          <Button asChild size="sm" variant="outline" className="h-7 flex-1 gap-1 text-xs">
+            <a href={stationDirectionsUrl(s)} target="_blank" rel="noreferrer">
+              <Navigation className="h-3.5 w-3.5" aria-hidden />Itinéraire
+            </a>
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -357,7 +510,7 @@ export function OSMMap({
   layers = { stations: true, roads: true, traffic: false, projects: false },
   ownBrandSlug, selectedCode, onSelect, onViewDetail,
   background = "auto", focusCode, fitTo,
-  onCompare, compareCodes = [],
+  onCompare, compareCodes = [], detail = null,
 }: OsmMapProps) {
   const { resolvedTheme } = useTheme()
   const tileKey: Exclude<OsmBackground, "auto"> =
@@ -478,17 +631,21 @@ export function OSMMap({
           />
         )}
 
-        {/* Fiche popup de la station sélectionnée */}
+        {/* Fiche popup riche de la station sélectionnée (photo, avis, historique,
+            concurrents — parité avec l'ancienne fiche du mode schéma) */}
         {selected && (
           <Popup
             key={selected.code}
             position={[selected.lat, selected.lng]}
             autoPan={false}
             closeButton
-            maxWidth={280}
+            minWidth={286}
+            maxWidth={316}
+            className="cs-station-popup"
           >
-            <StationMiniCard
+            <StationRichCard
               s={selected}
+              detail={detail && detail.station.code === selected.code ? detail : null}
               isOwn={!!ownBrandSlug && selected.brandSlug === ownBrandSlug}
               onViewDetail={onViewDetail}
               onCompare={onCompare}

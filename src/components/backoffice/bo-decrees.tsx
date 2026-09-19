@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   Banknote, Scale, Send, Loader2, RotateCcw, Fuel, Flame, Cylinder, CalendarClock,
-  ScrollText, BellRing, CheckCircle2, TrendingUp, TrendingDown, Minus, Info, ShieldAlert,
+  ScrollText, BellRing, CheckCircle2, TrendingUp, TrendingDown, Minus, Info, ShieldAlert, Trash2,
   type LucideIcon,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +23,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import type { FuelPricesResponse, FuelPriceDTO, FuelType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -105,6 +109,36 @@ export function BoDecrees() {
   }, [data])
 
   const current = currentByFuel[fuel]
+
+  // Suppression d'un décret erroné (T24) — confirmation obligatoire, refus
+  // serveur si dernier décret d'un carburant. Compte par carburant côté client
+  // pour désactiver visuellement les boutons concernés.
+  const countByFuel = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const d of data?.history ?? []) m.set(d.fuelType, (m.get(d.fuelType) ?? 0) + 1)
+    return m
+  }, [data])
+
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const deleteDecree = useCallback(async (d: FuelPriceDTO) => {
+    setDeletingId(d.id)
+    try {
+      const r = await fetch(`/api/prices/${d.id}`, { method: "DELETE" })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`)
+      toast.success("Décret retiré du registre", {
+        description: j.fallbackPriceMillimes != null
+          ? `Prix en vigueur recalculé sur le décret précédent : ${(j.fallbackPriceMillimes / 1000).toFixed(3).replace(".", ",")} DT.`
+          : "Le registre chronologique a été mis à jour.",
+      })
+      setLastResult(null)
+      setReloadKey(k => k + 1)
+    } catch (e) {
+      toast.error("Suppression refusée", { description: e instanceof Error ? e.message : "Erreur inattendue." })
+    } finally {
+      setDeletingId(null)
+    }
+  }, [])
 
   // Pré-remplissage intelligent au changement de carburant : prix proposé =
   // décret en vigueur + 25 millimes (révision typique), marge inchangée.
@@ -557,6 +591,7 @@ export function BoDecrees() {
                   <TableHead className="text-right">Δ</TableHead>
                   <TableHead className="text-right">Marge</TableHead>
                   <TableHead>Contexte</TableHead>
+                  <TableHead className="w-[3.5rem] text-center">Purger</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -600,6 +635,61 @@ export function BoDecrees() {
                       </TableCell>
                       <TableCell className="max-w-[16rem] truncate text-xs text-muted-foreground" title={d.decreeNote ?? undefined}>
                         {d.decreeNote ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {(countByFuel.get(d.fuelType) ?? 0) > 1 ? (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={deletingId === d.id}
+                                aria-label={`Retirer le décret ${Meta.label} du ${fmtDateFr(d.effectiveAt)} (${fmtPrice(d.priceMillimes)} DT)`}
+                                title="Retirer ce décret du registre (décret erroné)"
+                                className="h-7 w-7 text-muted-foreground/70 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-red-500/40 dark:hover:bg-red-950 dark:hover:text-red-400"
+                              >
+                                {deletingId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Trash2 className="h-3.5 w-3.5" aria-hidden />}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Retirer ce décret du registre ?</AlertDialogTitle>
+                                <AlertDialogDescription asChild>
+                                  <div className="space-y-2 text-sm text-muted-foreground">
+                                    <p>
+                                      Décret <span className="font-semibold text-foreground">{Meta.label}</span> du{" "}
+                                      <span className="font-semibold text-foreground">{fmtDateFr(d.effectiveAt)}</span> — prix{" "}
+                                      <span className="font-semibold tabular-nums text-foreground">{fmtPrice(d.priceMillimes)} DT</span>, marge{" "}
+                                      <span className="font-semibold tabular-nums text-foreground">{fmtPrice(d.marginMillimes)} DT/L</span>.
+                                    </p>
+                                    <p>
+                                      Cette purge est irréversible. Si ce décret était le plus récent de son carburant,
+                                      le prix en vigueur retombera sur le décret précédent — les enseignes ne sont PAS
+                                      renotifiées (une publication de correction le fera proprement).
+                                    </p>
+                                  </div>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500/50"
+                                  onClick={() => void deleteDecree(d)}
+                                >
+                                  <Trash2 className="mr-1 h-4 w-4" aria-hidden />
+                                  Retirer du registre
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        ) : (
+                          <span
+                            className="inline-block h-3.5 w-3.5 text-muted-foreground/30"
+                            title="Dernier décret de ce carburant — suppression interdite (référence de prix obligatoire)"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   )

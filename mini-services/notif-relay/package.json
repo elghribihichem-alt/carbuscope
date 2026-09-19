@@ -1,0 +1,12 @@
+{
+  "name": "notif-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CarbuScope — relais WebSocket temps réel des notifications enseigne (veille + décrets)",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1"
+  }
+}

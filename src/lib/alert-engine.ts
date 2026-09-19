@@ -1,5 +1,6 @@
 import { db } from "@/lib/db"
 import { computeWatchlist, type WatchEntry } from "@/lib/watchlist"
+import { relayNotifications } from "@/lib/notif-relay"
 import type { AlertRunDetail, AlertRunExample } from "@/lib/types"
 
 // Moteur périodique de veille des notes (C.2.6+) — cœur partagé :
@@ -211,11 +212,20 @@ export async function runAlertEngine(mode: "MANUAL" | "SCHEDULED" = "MANUAL"): P
     },
   })
 
-  // Écriture des notifications in-app après la trace de passe (runId disponible).
+  // Écriture des notifications in-app après la trace de passe (runId disponible)
+  // + relais WebSocket : les portails enseigne connectés les reçoivent en direct.
   if (triggeredNotifications.length > 0) {
     await db.notification.createMany({
       data: triggeredNotifications.map(n => ({ ...n, alertRunId: run.id, kind: "WATCHLIST" })),
     })
+    void relayNotifications(
+      triggeredNotifications.map(n => ({
+        ...n,
+        kind: "WATCHLIST",
+        alertRunId: run.id,
+        createdAt: now.toISOString(),
+      })),
+    )
   }
 
   return { ...run, details }

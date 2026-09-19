@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { relayNotifications } from "@/lib/notif-relay"
 import type { FuelPriceCurrent, FuelPriceDTO, FuelPricesResponse, FuelType } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
@@ -190,6 +191,16 @@ export async function POST(req: NextRequest) {
         deltaPoints: null,
       })),
     })
+    // Relais WebSocket : les portails enseigne connectés voient le décret instantanément.
+    void relayNotifications(
+      brands.map(b => ({
+        brandSlug: b.slug,
+        kind: "DECREE",
+        title,
+        body: lines.join("\n"),
+        createdAt: new Date().toISOString(),
+      })),
+    )
   }
 
   return NextResponse.json(

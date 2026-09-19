@@ -322,7 +322,11 @@ export function StationScreen({ api }: { api: AppApi }) {
       <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-3 pb-3 pt-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
         <Button
           className="h-11 w-full rounded-xl bg-emerald-600 text-[13.5px] font-bold text-white shadow-md hover:bg-emerald-700"
-          onClick={() => toast.success(t("station.routeToast"), { description: t("station.routeToastDesc", { name: s.name, km: fmtKm(s.distanceKm), min: driveMinutes(s.distanceKm) }) })}
+          onClick={() => {
+            // Itinéraire réel (Google Maps Directions) + estimation maison en toast
+            toast.success(t("station.routeToast"), { description: t("station.routeToastDesc", { name: s.name, km: fmtKm(s.distanceKm), min: driveMinutes(s.distanceKm) }) })
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`, "_blank", "noopener,noreferrer")
+          }}
         >
           <Navigation className="h-4 w-4" />
           {t("map.route")}

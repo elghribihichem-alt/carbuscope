@@ -512,6 +512,7 @@ export function TunisiaMap({
           fitTo={fitTo}
           onCompare={onCompare}
           compareCodes={compareCodes}
+          detail={activeDetail}
         />
       ) : (
       <svg ref={svgRef} viewBox={`0 0 ${MAP_W} ${MAP_H}`} preserveAspectRatio="xMidYMid meet"

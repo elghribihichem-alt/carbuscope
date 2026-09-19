@@ -267,6 +267,27 @@
   color: var(--foreground);
   background: transparent;
 }
+
+/* Popup fiche station RICHE : la carte gère son propre padding (en-tête collant,
+   corps scrollable, barre d'actions) — marges Leaflet neutralisées. */
+.cs-station-popup .leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0;
+  width: auto !important;
+}
+.cs-station-popup .leaflet-popup-content-wrapper {
+  overflow: hidden;
+  padding: 0;
+}
+.cs-station-popup .leaflet-popup-close-button {
+  z-index: 5;
+  padding: 0.4rem 0.4rem 0 0;
+}
+/* Scroll interne fin et discret */
+.cs-popup-scroll {
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
 .leaflet-tooltip {
   background: var(--popover);
   color: var(--popover-foreground);
