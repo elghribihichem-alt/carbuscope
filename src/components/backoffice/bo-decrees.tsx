@@ -5,6 +5,7 @@
 // vérification visuelle avant publication (Δ vs décret en vigueur), trace au
 // registre et notification automatique de toutes les enseignes (cloche du
 // portail) — la plateforme devient la source officielle de la donnée prix.
+// T27 : registre en multi-vues DataViews — Tableau / Cartes / Arborescence (par carburant).
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -18,11 +19,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Skeleton } from "@/components/ui/skeleton"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -74,6 +73,28 @@ type DecreeResponse = {
   prevPriceMillimes: number | null
 }
 
+// ---------- Registre (DataViews) ----------
+
+/** Ligne enrichie du registre : prix précédent + Δ vs décret précédent du carburant. */
+type DecreeRow = FuelPriceDTO & { prevPrice: number | null; deltaPrev: number | null }
+
+/** Variation vs décret précédent : rouge (hausse) / émeraude (baisse) / ardoise (stable). */
+function DecreeDelta({ delta }: { delta: number | null }) {
+  if (delta === null) return <span className="text-xs text-muted-foreground">—</span>
+  return (
+    <span className={cn(
+      "text-xs font-semibold tabular-nums",
+      delta > 0
+        ? "text-red-600 dark:text-red-400"
+        : delta < 0
+          ? "text-emerald-600 dark:text-emerald-400"
+          : "text-muted-foreground",
+    )}>
+      {delta > 0 ? "+" : ""}{delta} m
+    </span>
+  )
+}
+
 // ---------- Onglet ----------
 
 export function BoDecrees() {
@@ -117,6 +138,23 @@ export function BoDecrees() {
     const m = new Map<string, number>()
     for (const d of data?.history ?? []) m.set(d.fuelType, (m.get(d.fuelType) ?? 0) + 1)
     return m
+  }, [data])
+
+  // Registre chronologique inversé (plus récent d'abord) + enrichissement :
+  // Δ vs décret précédent du même carburant, calculé UNE fois à partir de
+  // l'ordre chronologique (indépendant du tri courant de la vue) — même règle
+  // que l'onglet B2B « Prix & marges ». Badge « en vigueur » : le décret courant
+  // d'un carburant est le plus récent de son historique.
+  const decreeRows = useMemo<DecreeRow[]>(() => {
+    const desc = [...(data?.history ?? [])].sort(
+      (a, b) => new Date(b.effectiveAt).getTime() - new Date(a.effectiveAt).getTime()
+    )
+    const prevPrice = new Map<string, number>()
+    return desc.map(d => {
+      const p = prevPrice.get(d.fuelType) ?? null
+      prevPrice.set(d.fuelType, d.priceMillimes)
+      return { ...d, prevPrice: p, deltaPrev: p === null ? null : d.priceMillimes - p }
+    })
   }, [data])
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -220,14 +258,123 @@ export function BoDecrees() {
   }
   if (!data) return <TabSkeleton title="Chargement du registre des décrets…" />
 
-  // Registre chronologique inversé (plus récent d'abord) + badge « en vigueur » :
-  // le décret courant d'un carburant est le plus récent de son historique.
-  const historyDesc = [...data.history].sort(
-    (a, b) => new Date(b.effectiveAt).getTime() - new Date(a.effectiveAt).getTime()
-  )
   const currentKeys = new Set(
     data.current.map(c => `${c.fuelType}|${c.effectiveAt}`)
   )
+
+  // Cellule « Purger » : AlertDialog de confirmation intact — désactivée
+  // visuellement pour le dernier décret d'un carburant (référence obligatoire).
+  const renderPurge = (d: DecreeRow) => {
+    const Meta = FUEL_META[d.fuelType as FuelType] ?? FUEL_META.ESSENCE
+    if ((countByFuel.get(d.fuelType) ?? 0) <= 1) {
+      return (
+        <span
+          className="inline-block h-3.5 w-3.5 text-muted-foreground/30"
+          title="Dernier décret de ce carburant — suppression interdite (référence de prix obligatoire)"
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+        </span>
+      )
+    }
+    return (
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={deletingId === d.id}
+            aria-label={`Retirer le décret ${Meta.label} du ${fmtDateFr(d.effectiveAt)} (${fmtPrice(d.priceMillimes)} DT)`}
+            title="Retirer ce décret du registre (décret erroné)"
+            className="h-7 w-7 text-muted-foreground/70 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-red-500/40 dark:hover:bg-red-950 dark:hover:text-red-400"
+          >
+            {deletingId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Trash2 className="h-3.5 w-3.5" aria-hidden />}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Retirer ce décret du registre ?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Décret <span className="font-semibold text-foreground">{Meta.label}</span> du{" "}
+                  <span className="font-semibold text-foreground">{fmtDateFr(d.effectiveAt)}</span> — prix{" "}
+                  <span className="font-semibold tabular-nums text-foreground">{fmtPrice(d.priceMillimes)} DT</span>, marge{" "}
+                  <span className="font-semibold tabular-nums text-foreground">{fmtPrice(d.marginMillimes)} DT/L</span>.
+                </p>
+                <p>
+                  Cette purge est irréversible. Si ce décret était le plus récent de son carburant,
+                  le prix en vigueur retombera sur le décret précédent — les enseignes ne sont PAS
+                  renotifiées (une publication de correction le fera proprement).
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500/50"
+              onClick={() => void deleteDecree(d)}
+            >
+              <Trash2 className="mr-1 h-4 w-4" aria-hidden />
+              Retirer du registre
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    )
+  }
+
+  // Colonnes — la colonne « Purger » (actions) reste présente dans les 3 vues.
+  const columns: DataViewColumn<DecreeRow>[] = [
+    {
+      key: "date", header: "Date", className: "w-[7rem] whitespace-nowrap",
+      sortValue: (d) => new Date(d.effectiveAt).getTime(),
+      render: (d) => <span className="text-xs tabular-nums">{fmtDateFr(d.effectiveAt)}</span>,
+    },
+    {
+      key: "fuelType", header: "Carburant", className: "w-[10rem]",
+      sortValue: (d) => (FUEL_META[d.fuelType as FuelType] ?? FUEL_META.ESSENCE).label,
+      render: (d) => {
+        const Meta = FUEL_META[d.fuelType as FuelType] ?? FUEL_META.ESSENCE
+        return (
+          <Badge variant="outline" className={cn("gap-1 text-[11px]", Meta.chip)}>
+            {Meta.label}
+            {currentKeys.has(`${d.fuelType}|${d.effectiveAt}`) && (
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400">· en vigueur</span>
+            )}
+          </Badge>
+        )
+      },
+    },
+    {
+      key: "priceMillimes", header: "Prix", align: "right",
+      sortValue: (d) => d.priceMillimes,
+      render: (d) => <span className="text-sm font-semibold tabular-nums">{fmtPrice(d.priceMillimes)}</span>,
+    },
+    {
+      key: "delta", header: "Δ", align: "right",
+      sortValue: (d) => d.deltaPrev ?? 0,
+      render: (d) => <DecreeDelta delta={d.deltaPrev} />,
+    },
+    {
+      key: "marginMillimes", header: "Marge", align: "right",
+      sortValue: (d) => d.marginMillimes,
+      render: (d) => <span className="text-xs tabular-nums text-muted-foreground">{fmtPrice(d.marginMillimes)} DT</span>,
+    },
+    {
+      key: "decreeNote", header: "Contexte", className: "max-w-[16rem]",
+      sortValue: (d) => d.decreeNote ?? "",
+      render: (d) => (
+        <span className="block truncate text-xs text-muted-foreground" title={d.decreeNote ?? undefined}>
+          {d.decreeNote ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "purge", header: "Purger", align: "center", className: "w-[3.5rem]",
+      render: (d) => renderPurge(d),
+    },
+  ]
 
   const DeltaIcon = delta === null || delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown
 
@@ -566,7 +713,8 @@ export function BoDecrees() {
                 Registre des décrets
               </CardTitle>
               <CardDescription>
-                Historique chronologique complet — {data.totals.decrees} décrets publiés depuis 2021.
+                Historique chronologique complet — {data.totals.decrees} décrets publiés depuis 2021 · 3 modes
+                d&apos;affichage.
               </CardDescription>
             </div>
             <Button
@@ -581,122 +729,81 @@ export function BoDecrees() {
           </div>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="max-h-96 pr-3">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
-                <TableRow>
-                  <TableHead className="w-[7rem]">Date</TableHead>
-                  <TableHead className="w-[8rem]">Carburant</TableHead>
-                  <TableHead className="text-right">Prix</TableHead>
-                  <TableHead className="text-right">Δ</TableHead>
-                  <TableHead className="text-right">Marge</TableHead>
-                  <TableHead>Contexte</TableHead>
-                  <TableHead className="w-[3.5rem] text-center">Purger</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historyDesc.map(d => {
-                  const prev = historyDesc
-                    .slice(historyDesc.indexOf(d) + 1)
-                    .reverse()
-                    .find(x => x.fuelType === d.fuelType)
-                  const deltaPrev = prev ? d.priceMillimes - prev.priceMillimes : null
-                  const Meta = FUEL_META[d.fuelType as FuelType] ?? FUEL_META.ESSENCE
-                  return (
-                    <TableRow key={d.id} className={cn(currentKeys.has(`${d.fuelType}|${d.effectiveAt}`) && "bg-emerald-50/40 dark:bg-emerald-950/20")}>
-                      <TableCell className="whitespace-nowrap text-xs tabular-nums">
-                        {fmtDateFr(d.effectiveAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn("gap-1 text-[11px]", Meta.chip)}>
-                          {Meta.label}
-                          {currentKeys.has(`${d.fuelType}|${d.effectiveAt}`) && (
-                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">· en vigueur</span>
-                          )}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm font-semibold tabular-nums">
+          <DataViews
+            viewKey="bo-decrees"
+            columns={columns}
+            rows={decreeRows}
+            rowKey={(d) => d.id}
+            emptyMessage="Aucun décret au registre."
+            maxHeightClassName="max-h-96"
+            nested={{
+              groupKey: (d) => d.fuelType,
+              groupLabel: (gk, grows) => {
+                const Meta = FUEL_META[gk as FuelType] ?? FUEL_META.ESSENCE
+                const latest = grows.reduce<DecreeRow | null>(
+                  (acc, r) => (!acc || r.effectiveAt > acc.effectiveAt ? r : acc), null
+                )
+                return (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <Meta.icon className="h-3.5 w-3.5" aria-hidden />
+                    {Meta.label}
+                    <span className="ml-1 text-[11px] font-normal text-primary/70">
+                      — {grows.length} décret{grows.length > 1 ? "s" : ""} · en vigueur :{" "}
+                      {latest ? `${fmtPrice(latest.priceMillimes)} ${Meta.unit} depuis le ${fmtDateFr(latest.effectiveAt)}` : "—"}
+                    </span>
+                  </span>
+                )
+              },
+              groupSortValue: (_gk, grows) => grows.length,
+              hideColumnKeyInGroups: "fuelType",
+              defaultOpen: "first",
+            }}
+            renderCard={(d) => {
+              const Meta = FUEL_META[d.fuelType as FuelType] ?? FUEL_META.ESSENCE
+              const inForce = currentKeys.has(`${d.fuelType}|${d.effectiveAt}`)
+              return (
+                <Card className="overflow-hidden">
+                  <div className={cn("flex items-center justify-between gap-2 border-b px-4 py-2.5", Meta.chip)}>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                      <Meta.icon className="h-3.5 w-3.5" aria-hidden /> {Meta.label}
+                      {inForce && <span>· en vigueur</span>}
+                    </span>
+                    <span className="text-[11px] tabular-nums">{fmtDateFr(d.effectiveAt)}</span>
+                  </div>
+                  <CardContent className="p-4">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-2xl font-black tabular-nums">
                         {fmtPrice(d.priceMillimes)}
-                      </TableCell>
-                      <TableCell className={cn(
-                        "text-right text-xs font-semibold tabular-nums",
-                        deltaPrev === null
-                          ? "text-muted-foreground"
-                          : deltaPrev > 0
-                            ? "text-red-600 dark:text-red-400"
-                            : deltaPrev < 0
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-muted-foreground"
-                      )}>
-                        {deltaPrev === null ? "—" : `${deltaPrev > 0 ? "+" : ""}${deltaPrev} m`}
-                      </TableCell>
-                      <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                        {fmtPrice(d.marginMillimes)} DT
-                      </TableCell>
-                      <TableCell className="max-w-[16rem] truncate text-xs text-muted-foreground" title={d.decreeNote ?? undefined}>
-                        {d.decreeNote ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {(countByFuel.get(d.fuelType) ?? 0) > 1 ? (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={deletingId === d.id}
-                                aria-label={`Retirer le décret ${Meta.label} du ${fmtDateFr(d.effectiveAt)} (${fmtPrice(d.priceMillimes)} DT)`}
-                                title="Retirer ce décret du registre (décret erroné)"
-                                className="h-7 w-7 text-muted-foreground/70 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-red-500/40 dark:hover:bg-red-950 dark:hover:text-red-400"
-                              >
-                                {deletingId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Trash2 className="h-3.5 w-3.5" aria-hidden />}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Retirer ce décret du registre ?</AlertDialogTitle>
-                                <AlertDialogDescription asChild>
-                                  <div className="space-y-2 text-sm text-muted-foreground">
-                                    <p>
-                                      Décret <span className="font-semibold text-foreground">{Meta.label}</span> du{" "}
-                                      <span className="font-semibold text-foreground">{fmtDateFr(d.effectiveAt)}</span> — prix{" "}
-                                      <span className="font-semibold tabular-nums text-foreground">{fmtPrice(d.priceMillimes)} DT</span>, marge{" "}
-                                      <span className="font-semibold tabular-nums text-foreground">{fmtPrice(d.marginMillimes)} DT/L</span>.
-                                    </p>
-                                    <p>
-                                      Cette purge est irréversible. Si ce décret était le plus récent de son carburant,
-                                      le prix en vigueur retombera sur le décret précédent — les enseignes ne sont PAS
-                                      renotifiées (une publication de correction le fera proprement).
-                                    </p>
-                                  </div>
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction
-                                  className="bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500/50"
-                                  onClick={() => void deleteDecree(d)}
-                                >
-                                  <Trash2 className="mr-1 h-4 w-4" aria-hidden />
-                                  Retirer du registre
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        ) : (
-                          <span
-                            className="inline-block h-3.5 w-3.5 text-muted-foreground/30"
-                            title="Dernier décret de ce carburant — suppression interdite (référence de prix obligatoire)"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </ScrollArea>
+                        <span className="ml-1 text-xs font-medium text-muted-foreground">{Meta.unit}</span>
+                      </p>
+                      <DecreeDelta delta={d.deltaPrev} />
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t pt-3">
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Prix précédent</dt>
+                        <dd className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                          {d.prevPrice !== null ? `${fmtPrice(d.prevPrice)} ${Meta.unit}` : "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Marge détaillant</dt>
+                        <dd className="mt-0.5 text-xs tabular-nums text-muted-foreground">{fmtPrice(d.marginMillimes)} DT</dd>
+                      </div>
+                    </dl>
+                    {d.decreeNote && (
+                      <p className="mt-2 truncate text-[11px] italic text-muted-foreground/80" title={d.decreeNote}>
+                        « {d.decreeNote} »
+                      </p>
+                    )}
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+                      <span className="text-[11px] text-muted-foreground">Décret du registre :</span>
+                      {renderPurge(d)}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            }}
+          />
         </CardContent>
       </Card>
     </div>

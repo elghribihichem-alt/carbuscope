@@ -7,7 +7,7 @@ import { useAppStore } from "@/store/app-store"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ShieldCheck, LayoutDashboard, Store, PlugZap, Building2, Star } from "lucide-react"
+import { ShieldCheck, LayoutDashboard, Store, PlugZap, Building2, Star, Footprints } from "lucide-react"
 import type { BrandDTO } from "@/lib/types"
 import { num } from "@/components/settings/settings-shared"
 import { PortalDashboard } from "./portal-dashboard"
@@ -15,6 +15,7 @@ import { PortalStations } from "./portal-stations"
 import { PortalPromotions } from "./portal-promotions"
 import { PortalApi } from "./portal-api"
 import { PortalReviews } from "./portal-reviews"
+import { PortalTerrain } from "./portal-terrain"
 import { NotificationsCenter } from "./notifications-center"
 
 export function PortalView() {
@@ -86,9 +87,9 @@ export function PortalView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne du portail (4 onglets) — contrôlée pour le deep-link */}
+      {/* Navigation interne du portail (5 onglets) — contrôlée pour le deep-link */}
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-4 sm:w-auto">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 lg:w-auto">
           <TabsTrigger value="dashboard" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <LayoutDashboard className="h-4 w-4" aria-hidden /> Tableau de bord
           </TabsTrigger>
@@ -97,6 +98,9 @@ export function PortalView() {
           </TabsTrigger>
           <TabsTrigger value="stations" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <Store className="h-4 w-4" aria-hidden /> Mes stations
+          </TabsTrigger>
+          <TabsTrigger value="terrain" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <Footprints className="h-4 w-4" aria-hidden /> Veille terrain
           </TabsTrigger>
           <TabsTrigger value="api" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <PlugZap className="h-4 w-4" aria-hidden /> API &amp; promotions
@@ -111,6 +115,9 @@ export function PortalView() {
         </TabsContent>
         <TabsContent value="stations" className="mt-0 space-y-4">
           <PortalStations brandSlug={brandSlug} />
+        </TabsContent>
+        <TabsContent value="terrain" className="mt-0 space-y-4">
+          <PortalTerrain brandSlug={brandSlug} key={brandSlug} />
         </TabsContent>
         <TabsContent value="api" className="mt-0 space-y-4">
           <PortalPromotions brandName={brandName} />

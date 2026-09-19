@@ -26,12 +26,12 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { ErrorState, TabSkeleton } from "@/components/shell/loading"
@@ -190,6 +190,92 @@ export function ReportsTab() {
     setReports((prev) => (prev ? prev.filter((x) => x.id !== r.id) : prev))
     toast.success("Rapport supprimé", { description: `« ${r.name} » retiré de la liste (l'historique serveur est conservé).` })
   }
+
+  // Colonnes des rapports récents (DataViews : Tableau / Cartes / Arborescence par type)
+  const reportColumns: DataViewColumn<ReportDTO>[] = [
+    {
+      key: "name", header: "Rapport",
+      sortValue: (r) => r.name,
+      className: "max-w-56",
+      render: (r) => <span className="block truncate text-xs font-medium" title={r.name}>{r.name}</span>,
+    },
+    {
+      key: "type", header: "Type",
+      sortValue: (r) => REPORT_TYPE_LABELS[r.type] ?? r.type,
+      render: (r) => (
+        <Badge variant="outline" className={cn("text-[11px]", REPORT_TYPE_BADGES[r.type] ?? "")}>
+          {REPORT_TYPE_LABELS[r.type] ?? r.type}
+        </Badge>
+      ),
+    },
+    {
+      key: "period", header: "Période",
+      sortValue: (r) => r.period,
+      render: (r) => <span className="text-xs">{r.period}</span>,
+    },
+    {
+      key: "scope", header: "Périmètre",
+      sortValue: (r) => r.scope,
+      render: (r) => <span className="text-xs">{r.scope}</span>,
+    },
+    {
+      key: "format", header: "Format",
+      sortValue: (r) => r.format,
+      render: (r) => {
+        const FormatIcon = FORMAT_ICONS[r.format] ?? FileText
+        return (
+          <Badge variant="outline" className="gap-1 text-[11px]">
+            <FormatIcon className="h-3 w-3" />
+            {r.format}
+          </Badge>
+        )
+      },
+    },
+    {
+      key: "sizeKb", header: "Taille", align: "right",
+      sortValue: (r) => r.sizeKb,
+      render: (r) => <span className="text-xs tabular-nums">{r.sizeKb} Ko</span>,
+    },
+    {
+      key: "createdAt", header: "Date",
+      sortValue: (r) => new Date(r.createdAt).getTime(),
+      render: (r) => (
+        <span className="whitespace-nowrap text-xs tabular-nums">
+          {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+        </span>
+      ),
+    },
+    {
+      key: "generatedBy", header: "Généré par",
+      sortValue: (r) => r.generatedBy,
+      render: (r) => <span className="text-xs text-muted-foreground">{r.generatedBy}</span>,
+    },
+    {
+      key: "actions", header: "Actions", align: "right",
+      render: (r) => (
+        <div className="flex justify-end gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={() => handleDownload(r)}
+            aria-label={`Télécharger ${r.name}`}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-muted-foreground hover:text-red-600"
+            onClick={() => handleDelete(r)}
+            aria-label={`Supprimer ${r.name}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ]
 
   const toggleSchedule = (s: ReportScheduleDTO) => {
     const next = !s.active
@@ -388,7 +474,7 @@ export function ReportsTab() {
         </CardContent>
       </Card>
 
-      {/* A.8.2 — Rapports récents */}
+      {/* A.8.2 — Rapports récents (DataViews : Tableau / Cartes / Arborescence par type) */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold">
@@ -398,83 +484,103 @@ export function ReportsTab() {
               {reports.length}
             </Badge>
           </CardTitle>
+          <CardDescription className="text-xs">
+            Rapports générés sur la plateforme · 3 modes d&apos;affichage
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {reports.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
-              Aucun rapport. Générez votre premier rapport avec le générateur ci-dessus.
-            </p>
-          ) : (
-            <div className="max-h-[26rem] overflow-auto rounded-lg border">
-              <Table className="min-w-[900px]">
-                <TableHeader className="sticky top-0 z-10 bg-card">
-                  <TableRow>
-                    <TableHead className="text-xs">Rapport</TableHead>
-                    <TableHead className="text-xs">Type</TableHead>
-                    <TableHead className="text-xs">Période</TableHead>
-                    <TableHead className="text-xs">Périmètre</TableHead>
-                    <TableHead className="text-xs">Format</TableHead>
-                    <TableHead className="text-right text-xs">Taille</TableHead>
-                    <TableHead className="text-xs">Date</TableHead>
-                    <TableHead className="text-xs">Généré par</TableHead>
-                    <TableHead className="w-20 text-right text-xs">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reports.map((r) => {
-                    const FormatIcon = FORMAT_ICONS[r.format] ?? FileText
-                    return (
-                      <TableRow key={r.id}>
-                        <TableCell className="max-w-56 py-2">
-                          <p className="truncate text-xs font-medium">{r.name}</p>
-                        </TableCell>
-                        <TableCell className="py-2">
-                          <Badge variant="outline" className={cn("text-[11px]", REPORT_TYPE_BADGES[r.type] ?? "")}>
-                            {REPORT_TYPE_LABELS[r.type] ?? r.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-2 text-xs">{r.period}</TableCell>
-                        <TableCell className="py-2 text-xs">{r.scope}</TableCell>
-                        <TableCell className="py-2">
+          <DataViews
+            viewKey="reports-list"
+            columns={reportColumns}
+            rows={reports}
+            rowKey={(r) => r.id}
+            emptyMessage="Aucun rapport. Générez votre premier rapport avec le générateur ci-dessus."
+            maxHeightClassName="max-h-[26rem]"
+            nested={{
+              groupKey: (r) => r.type,
+              groupLabel: (gk, grows) => {
+                const TypeIcon = REPORT_TYPES.find((t) => t.value === gk)?.icon ?? FileText
+                const latest = grows.reduce<ReportDTO | null>(
+                  (acc, r) => (!acc || new Date(r.createdAt) > new Date(acc.createdAt) ? r : acc), null,
+                )
+                return (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <TypeIcon className="h-3.5 w-3.5" aria-hidden />
+                    {REPORT_TYPE_LABELS[gk] ?? gk}
+                    <span className="ml-1 text-[11px] font-normal text-primary/70">
+                      — {grows.length} rapport{grows.length > 1 ? "s" : ""}
+                      {latest ? ` · plus récent : ${new Date(latest.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                    </span>
+                  </span>
+                )
+              },
+              groupSortValue: (_gk, grows) => grows.length,
+              hideColumnKeyInGroups: "type",
+              defaultOpen: "first",
+            }}
+            renderCard={(r) => {
+              const FormatIcon = FORMAT_ICONS[r.format] ?? FileText
+              return (
+                <Card className="overflow-hidden">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 text-sm font-semibold leading-snug" title={r.name}>{r.name}</p>
+                      <Badge variant="outline" className={cn("shrink-0 text-[11px]", REPORT_TYPE_BADGES[r.type] ?? "")}>
+                        {REPORT_TYPE_LABELS[r.type] ?? r.type}
+                      </Badge>
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted-foreground">{r.period} · {r.scope}</p>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t pt-3">
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Format</dt>
+                        <dd className="mt-0.5">
                           <Badge variant="outline" className="gap-1 text-[11px]">
                             <FormatIcon className="h-3 w-3" />
                             {r.format}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="py-2 text-right text-xs tabular-nums">{r.sizeKb} Ko</TableCell>
-                        <TableCell className="py-2 text-xs tabular-nums">
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Taille</dt>
+                        <dd className="mt-0.5 text-xs tabular-nums">{r.sizeKb} Ko</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Date</dt>
+                        <dd className="mt-0.5 text-xs tabular-nums">
                           {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                        </TableCell>
-                        <TableCell className="py-2 text-xs text-muted-foreground">{r.generatedBy}</TableCell>
-                        <TableCell className="py-2">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() => handleDownload(r)}
-                              aria-label={`Télécharger ${r.name}`}
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                              onClick={() => handleDelete(r)}
-                              aria-label={`Supprimer ${r.name}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Généré par</dt>
+                        <dd className="mt-0.5 text-xs text-muted-foreground">{r.generatedBy}</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-3 flex justify-end gap-1 border-t pt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5"
+                        onClick={() => handleDownload(r)}
+                        aria-label={`Télécharger ${r.name}`}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Télécharger
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                        onClick={() => handleDelete(r)}
+                        aria-label={`Supprimer ${r.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            }}
+          />
         </CardContent>
       </Card>
 

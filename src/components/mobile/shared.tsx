@@ -17,6 +17,7 @@ import { relativeDate } from "@/lib/i18n"
 export type Screen =
   | "map" | "search" | "promos" | "fidelite" | "profil"
   | "fiche" | "signalement" | "avis" | "alertes" | "comparateur"
+  | "agent-login" | "agent-home" | "agent-mission" | "agent-report" | "agent-success"
 
 export type StationWithDist = StationDTO & { distanceKm: number }
 

@@ -271,3 +271,74 @@ model User {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 }
+
+// ---- Module veille terrain (T28) : agents par zone, missions de contrôle
+// des stations de son enseigne (fiche propriétaire) et missions de veille
+// concurrentielle (fiche concurrent), rapports de visite remontés depuis
+// l'application mobile « Espace agent ».
+
+model FieldAgent {
+  id        String    @id @default(cuid())
+  code      String    @unique // code d'accès agent (connexion mobile)
+  name      String
+  phone     String    @default("")
+  brandSlug String // enseigne employeur ("" = agent plateforme)
+  zone      String // gouvernorat sous responsabilité
+  active    Boolean   @default(true)
+  missions  Mission[]
+  reports   VisitReport[]
+  createdAt DateTime  @default(now())
+}
+
+model Mission {
+  id           String        @id @default(cuid())
+  title        String
+  type         String // CONTROLE | VEILLE_CONCURRENT
+  brandSlug    String // enseigne commanditaire (fiche propriétaire)
+  agentId      String?
+  agent        FieldAgent?   @relation(fields: [agentId], references: [id])
+  zone         String
+  status       String        @default("PLANIFIEE") // PLANIFIEE | EN_COURS | TERMINEE | ANNULEE
+  dueDate      DateTime?
+  instructions String        @default("")
+  tasks        MissionTask[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model MissionTask {
+  id            String        @id @default(cuid())
+  missionId     String
+  mission       Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  stationCode   String? // station cible (mission de contrôle)
+  stationName   String
+  competitorSlug String? // enseigne observée (mission de veille)
+  targetLabel   String // libellé lisible de la cible
+  lat           Float?
+  lng           Float?
+  taskType      String        @default("CONTROLE_STATION") // CONTROLE_STATION | VEILLE_CONCURRENT
+  status        String        @default("TODO") // TODO | FAITE | ANOMALIE
+  order         Int           @default(0)
+  reports       VisitReport[]
+}
+
+model VisitReport {
+  id                   String       @id @default(cuid())
+  taskId               String
+  task                 MissionTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agentId              String
+  agent                FieldAgent   @relation(fields: [agentId], references: [id])
+  stationCode          String?
+  // Prix observés en pompe (millimes) — veille concurrentielle ou anomalie
+  gazolePrice          Int?
+  essencePrice         Int?
+  gplPrice             Int?
+  queueMinutes         Int? // file d'attente constatée
+  staffCount           Int? // personnel en poste
+  cleanliness          Int? // propreté 1-5
+  complianceScore      Int? // conformité enseigne 0-100
+  anomalies            String       @default("") // anomalies constatées (texte libre)
+  competitorPractices  String? // pratiques concurrentes observées
+  notes                String       @default("")
+  createdAt            DateTime     @default(now())
+}

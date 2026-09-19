@@ -1,6 +1,8 @@
 'use client'
 
 // A.9 — Paramètres : API (clé, quotas, documentation, usage 7 jours)
+// T27 : quotas en DataViews — 2 lignes statiques sans statut : regroupement
+// artificiel écarté → 2 modes (Tableau / Cartes).
 
 import { useState } from "react"
 import { toast } from "sonner"
@@ -12,9 +14,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
 import { copyText, generateKeySuffix, maskedApiKey } from "@/components/settings/settings-shared"
+
+type QuotaRow = { quota: string; limite: string }
+
+const QUOTA_COLUMNS: DataViewColumn<QuotaRow>[] = [
+  {
+    key: "quota", header: "Quota",
+    sortValue: (q) => q.quota,
+    render: (q) => <span className="text-sm">{q.quota}</span>,
+  },
+  {
+    key: "limite", header: "Limite", align: "right",
+    sortValue: (q) => q.limite,
+    render: (q) => <span className="text-sm font-medium tabular-nums">{q.limite}</span>,
+  },
+]
+
+const API_QUOTAS: QuotaRow[] = [
+  { quota: "Requêtes mensuelles", limite: "10 000 / mois" },
+  { quota: "Rafale (burst)", limite: "60 / min" },
+]
 
 // Usage mock sur 7 jours (requêtes/jour, quota 10 000/mois)
 const USAGE_7J = [
@@ -109,25 +131,14 @@ export function SettingsApiCard() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Quotas */}
-          <div className="overflow-hidden rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Quota</TableHead>
-                  <TableHead className="text-right">Limite</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Requêtes mensuelles</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">10 000 / mois</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Rafale (burst)</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">60 / min</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+          <div>
+            <DataViews
+              viewKey="settings-api-quotas"
+              columns={QUOTA_COLUMNS}
+              rows={API_QUOTAS}
+              rowKey={(q) => q.quota}
+              emptyMessage="Aucun quota configuré."
+            />
           </div>
 
           {/* Usage 7 jours (mock) */}

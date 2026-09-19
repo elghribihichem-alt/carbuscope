@@ -6,6 +6,8 @@
 // passe SCHEDULED quotidienne 08:00 Tunis — état de santé live), rapport
 // détaillé par passe (filtrable par enseigne, imprimable), historique,
 // agrégats et tableau par enseigne.
+// T27 : rapport de passe + tableau par enseigne en multi-vues DataViews
+// (Tableau / Cartes / Arborescence — par sévérité pour le rapport).
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
@@ -23,15 +25,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { KpiCard } from "@/components/shell/kpi-card"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
-import type { AlertRunDTO, AlertRunDetail, WatchlistOverviewResponse } from "@/lib/types"
+import type { AlertRunDTO, AlertRunDetail, BrandAlertsRow, WatchlistOverviewResponse } from "@/lib/types"
 import { fmtDateTime, relDays } from "@/components/settings/settings-shared"
 import { cn } from "@/lib/utils"
 
@@ -58,6 +58,9 @@ const STATUS_META: Record<string, { label: string; dot: string; cls: string }> =
     cls: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400",
   },
 }
+
+/** Ordre de sévérité des groupes (rapport de passe, vue arborescence). */
+const STATUS_RANK: Record<string, number> = { TRIGGERED: 0, STABLE: 1, SKIPPED: 2 }
 
 const fr1 = (n: number) => n.toFixed(1).replace(".", ",")
 
@@ -144,6 +147,102 @@ function statusBadge(status: string) {
     </Badge>
   )
 }
+
+// Colonnes du tableau consolidé « Alertes programmées par enseigne » (statique).
+// Une ligne = une enseigne : aucun regroupement pertinent → 2 modes (Tableau / Cartes).
+const BRAND_COLUMNS: DataViewColumn<BrandAlertsRow>[] = [
+  {
+    key: "name", header: "Enseigne",
+    sortValue: (b) => b.name,
+    render: (b) => (
+      <div className="flex items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-muted-foreground/10"
+          style={{ backgroundColor: b.color }}
+          aria-hidden
+        />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{b.name}</p>
+          <p className="text-[10px] text-muted-foreground">{b.activeEmails} destinataire{b.activeEmails > 1 ? "s" : ""}</p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    key: "alerts", header: "Alertes", align: "center",
+    sortValue: (b) => b.alertsActive,
+    render: (b) => (
+      <span>
+        <span className="font-semibold tabular-nums">{b.alertsActive}</span>
+        <span className="text-muted-foreground">/{b.alertsTotal}</span>
+      </span>
+    ),
+  },
+  {
+    key: "watchlist", header: "Watchlist", align: "center",
+    sortValue: (b) => b.watchlistCount,
+    render: (b) => (
+      <Badge
+        variant="outline"
+        className={cn(
+          "gap-1 tabular-nums",
+          b.watchlistCount > 5
+            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400"
+            : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400",
+        )}
+      >
+        <TrendingDown className="h-3 w-3" aria-hidden /> {b.watchlistCount}
+      </Badge>
+    ),
+  },
+  {
+    key: "worstDrop", header: "Pire chute",
+    sortValue: (b) => b.worstDropDelta ?? Number.NEGATIVE_INFINITY,
+    render: (b) => b.worstDropName ? (
+      <div className="flex flex-col">
+        <span className="max-w-44 truncate text-xs">{b.worstDropName}</span>
+        <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">
+          −{fr1(b.worstDropDelta ?? 0)} pt
+        </span>
+      </div>
+    ) : (
+      <span className="text-xs text-muted-foreground">—</span>
+    ),
+  },
+  {
+    key: "frequencies", header: "Fréquences", align: "center",
+    sortValue: (b) => b.immediate * 100 + b.daily * 10 + b.weekly,
+    render: (b) => (
+      <div className="flex flex-wrap justify-center gap-1">
+        {b.immediate > 0 && (
+          <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+            {b.immediate} × immédiat
+          </Badge>
+        )}
+        {b.daily > 0 && (
+          <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+            {b.daily} × quotidien
+          </Badge>
+        )}
+        {b.weekly > 0 && (
+          <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+            {b.weekly} × hebdo
+          </Badge>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: "totalTriggers", header: "Déclenchements", align: "right",
+    sortValue: (b) => b.totalTriggers,
+    render: (b) => <span className="font-semibold tabular-nums">{b.totalTriggers}</span>,
+  },
+  {
+    key: "lastTriggeredAt", header: "Dernier envoi", align: "right",
+    sortValue: (b) => (b.lastTriggeredAt ? new Date(b.lastTriggeredAt).getTime() : 0),
+    render: (b) => <span className="text-xs text-muted-foreground">{relDays(b.lastTriggeredAt)}</span>,
+  },
+]
 
 export function BoAlerts() {
   const [data, setData] = useState<WatchlistOverviewResponse | null>(null)
@@ -241,6 +340,113 @@ export function BoAlerts() {
       alertes: r.triggeredAlerts,
     }))
   }, [data])
+
+  // Colonnes du rapport de passe — l'aperçu email (dépliable) reste
+  // accessible dans les 3 vues via la colonne dédiée / le pied de carte.
+  const runColumns: DataViewColumn<AlertRunDetail>[] = [
+    {
+      key: "brand", header: "Enseigne",
+      sortValue: (d) => d.brandName,
+      render: (d) => (
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-muted-foreground/10"
+            style={{ backgroundColor: d.brandColor }}
+            aria-hidden
+          />
+          {d.brandName}
+        </span>
+      ),
+    },
+    {
+      key: "stationLabel", header: "Périmètre",
+      sortValue: (d) => d.stationLabel,
+      render: (d) => (
+        <span className="block max-w-[200px] truncate text-xs text-muted-foreground" title={d.stationLabel}>
+          {d.stationLabel}
+        </span>
+      ),
+    },
+    {
+      key: "frequency", header: "Fréquence",
+      sortValue: (d) => FREQ_META[d.frequency]?.label ?? d.frequency,
+      render: (d) => freqChip(d.frequency),
+    },
+    {
+      key: "status", header: "Statut",
+      sortValue: (d) => STATUS_META[d.status]?.label ?? d.status,
+      render: (d) => statusBadge(d.status),
+    },
+    {
+      key: "exceedCount", header: "Stations", align: "right",
+      sortValue: (d) => (d.status === "TRIGGERED" ? d.exceedCount : -1),
+      render: (d) => d.status === "TRIGGERED" ? (
+        <span className="font-semibold tabular-nums">{d.exceedCount}</span>
+      ) : (
+        <span className="text-xs text-muted-foreground">—</span>
+      ),
+    },
+    {
+      key: "examples", header: "Exemples de chutes",
+      sortValue: (d) => d.examples.length,
+      render: (d) => {
+        if (d.examples.length === 0 || d.status === "STABLE") {
+          return <span className="text-xs text-muted-foreground">—</span>
+        }
+        return (
+          <div className="flex max-w-64 flex-wrap gap-1.5">
+            {d.examples.map(ex => (
+              <span
+                key={ex.name}
+                className="inline-flex items-center gap-1 rounded-md border border-red-200/70 bg-white/70 px-1.5 py-0.5 text-[10px] text-red-700 dark:border-red-900/60 dark:bg-slate-900/60 dark:text-red-400"
+                title={`${ex.name} (${ex.gouvernorat}) — ${fr1(ex.previousRating)} → ${fr1(ex.currentRating)}`}
+              >
+                <TrendingDown className="h-3 w-3" aria-hidden />
+                <span className="max-w-36 truncate">{ex.name}</span>
+                <span className="font-semibold tabular-nums">−{fr1(ex.delta)}</span>
+              </span>
+            ))}
+            {d.exceedCount > d.examples.length && (
+              <span className="text-[10px] text-muted-foreground">
+                +{d.exceedCount - d.examples.length} autre{d.exceedCount - d.examples.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      key: "preview", header: "Aperçu email", align: "right",
+      render: (d) => {
+        const hasEmail = d.status === "TRIGGERED" && !!d.preview
+        if (!hasEmail) return <span className="text-xs text-muted-foreground">—</span>
+        const open = previewAlertId === d.alertId
+        return (
+          <div className="min-w-[8.5rem]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPreviewAlertId(prev => (prev === d.alertId ? null : d.alertId))}
+              aria-expanded={open}
+              className={cn(
+                "h-7 gap-1.5 px-2 text-[11px] transition-all focus-visible:ring-2 focus-visible:ring-emerald-500",
+                open && "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
+              )}
+            >
+              <Eye className="h-3 w-3" aria-hidden />
+              Aperçu email
+              <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} aria-hidden />
+            </Button>
+            {open && (
+              <div className="w-[min(24rem,70vw)] text-left">
+                <EmailPreview detail={d} />
+              </div>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
 
   const runEngine = useCallback(async () => {
     if (running) return
@@ -629,21 +835,46 @@ export function BoAlerts() {
                     Sélectionnez une passe dans l&apos;historique ou exécutez le moteur.
                   </p>
                 )}
-                {selectedRun && filteredDetails.length === 0 && (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    {brandFilter === "ALL"
-                      ? "Aucune alerte active lors de cette passe."
-                      : "Aucune alerte pour l’enseigne filtrée lors de cette passe."}
-                  </p>
-                )}
-                {filteredDetails.map(d => (
-                  <RunDetailRow
-                    key={d.alertId}
-                    detail={d}
-                    previewOpen={previewAlertId === d.alertId}
-                    onTogglePreview={() => setPreviewAlertId(prev => (prev === d.alertId ? null : d.alertId))}
+                {selectedRun && (
+                  <DataViews
+                    viewKey="bo-alerts-run-report"
+                    columns={runColumns}
+                    rows={filteredDetails}
+                    rowKey={(d) => d.alertId}
+                    emptyMessage={
+                      brandFilter === "ALL"
+                        ? "Aucune alerte active lors de cette passe."
+                        : "Aucune alerte pour l’enseigne filtrée lors de cette passe."
+                    }
+                    nested={{
+                      groupKey: (d) => d.status,
+                      groupLabel: (gk, grows) => {
+                        const m = STATUS_META[gk] ?? { label: gk, dot: "bg-slate-400", cls: "" }
+                        const emails = grows.filter(d => d.status === "TRIGGERED").length
+                        const stations = grows.reduce((a, d) => a + (d.status === "TRIGGERED" ? d.exceedCount : 0), 0)
+                        return (
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            <span className={cn("h-2 w-2 rounded-full", m.dot)} aria-hidden />
+                            {m.label}
+                            <span className="ml-1 text-[11px] font-normal text-primary/70">
+                              — {grows.length} alerte{grows.length > 1 ? "s" : ""} · {emails} email{emails > 1 ? "s" : ""} · {stations} station{stations > 1 ? "s" : ""}
+                            </span>
+                          </span>
+                        )
+                      },
+                      groupSortValue: (gk) => STATUS_RANK[gk] ?? 9,
+                      hideColumnKeyInGroups: "status",
+                      defaultOpen: "first",
+                    }}
+                    renderCard={(d) => (
+                      <RunDetailRow
+                        detail={d}
+                        previewOpen={previewAlertId === d.alertId}
+                        onTogglePreview={() => setPreviewAlertId(prev => (prev === d.alertId ? null : d.alertId))}
+                      />
+                    )}
                   />
-                ))}
+                )}
               </CardContent>
             </Card>
 
@@ -691,7 +922,7 @@ export function BoAlerts() {
                 <CardTitle className="text-base">Alertes programmées par enseigne</CardTitle>
                 <CardDescription className="mt-0.5 text-xs">
                   Vue consolidée des {t?.alertsTotal ?? 0} alertes de veille actives sur la plateforme —
-                  périmètres, fréquences et déclenchements
+                  périmètres, fréquences et déclenchements · 2 modes d&apos;affichage
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -710,96 +941,81 @@ export function BoAlerts() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="pl-4">Enseigne</TableHead>
-                    <TableHead className="text-center">Alertes</TableHead>
-                    <TableHead className="text-center">Watchlist</TableHead>
-                    <TableHead>Pire chute</TableHead>
-                    <TableHead className="text-center">Fréquences</TableHead>
-                    <TableHead className="text-right">Déclenchements</TableHead>
-                    <TableHead className="pr-4 text-right">Dernier envoi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.brands.map(b => (
-                    <TableRow
-                      key={b.slug}
-                      className="transition-colors hover:bg-muted/50 focus-within:bg-muted/50"
-                    >
-                      <TableCell className="pl-4">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-muted-foreground/10"
-                            style={{ backgroundColor: b.color }}
-                            aria-hidden
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{b.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{b.activeEmails} destinataire{b.activeEmails > 1 ? "s" : ""}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="font-semibold tabular-nums">{b.alertsActive}</span>
-                        <span className="text-muted-foreground">/{b.alertsTotal}</span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "gap-1 tabular-nums",
-                            b.watchlistCount > 5
-                              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400"
-                              : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400",
-                          )}
-                        >
-                          <TrendingDown className="h-3 w-3" aria-hidden /> {b.watchlistCount}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {b.worstDropName ? (
-                          <div className="flex flex-col">
-                            <span className="max-w-44 truncate text-xs">{b.worstDropName}</span>
-                            <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">
-                              −{fr1(b.worstDropDelta ?? 0)} pt
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+          <CardContent>
+            <DataViews
+              viewKey="bo-alerts-brands"
+              columns={BRAND_COLUMNS}
+              rows={data.brands}
+              rowKey={(b) => b.slug}
+              emptyMessage="Aucune enseigne suivie par la veille."
+              renderCard={(b) => (
+                <Card className="overflow-hidden">
+                  <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2.5">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-muted-foreground/10"
+                      style={{ backgroundColor: b.color }}
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{b.name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {b.activeEmails} destinataire{b.activeEmails > 1 ? "s" : ""} en file d&apos;envoi
+                      </p>
+                    </div>
+                  </div>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-2xl font-black tabular-nums leading-none">
+                        {b.alertsActive}
+                        <span className="text-sm font-medium text-muted-foreground">/{b.alertsTotal} alertes</span>
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "gap-1 tabular-nums",
+                          b.watchlistCount > 5
+                            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400"
+                            : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400",
                         )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex flex-wrap justify-center gap-1">
-                          {b.immediate > 0 && (
-                            <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
-                              {b.immediate} × immédiat
-                            </Badge>
-                          )}
-                          {b.daily > 0 && (
-                            <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
-                              {b.daily} × quotidien
-                            </Badge>
-                          )}
-                          {b.weekly > 0 && (
-                            <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
-                              {b.weekly} × hebdo
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">{b.totalTriggers}</TableCell>
-                      <TableCell className="pr-4 text-right text-xs text-muted-foreground">
-                        {relDays(b.lastTriggeredAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      >
+                        <TrendingDown className="h-3 w-3" aria-hidden /> {b.watchlistCount}
+                      </Badge>
+                    </div>
+                    {b.worstDropName && (
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+                        <span className="min-w-0 truncate text-xs text-muted-foreground" title={b.worstDropName}>
+                          Pire chute : {b.worstDropName}
+                        </span>
+                        <span className="shrink-0 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                          −{fr1(b.worstDropDelta ?? 0)} pt
+                        </span>
+                      </div>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-1 border-t pt-3">
+                      {b.immediate > 0 && (
+                        <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+                          {b.immediate} × immédiat
+                        </Badge>
+                      )}
+                      {b.daily > 0 && (
+                        <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+                          {b.daily} × quotidien
+                        </Badge>
+                      )}
+                      {b.weekly > 0 && (
+                        <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+                          {b.weekly} × hebdo
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-3 flex items-center justify-between gap-2 border-t pt-3 text-[11px] text-muted-foreground">
+                      <span className="font-semibold tabular-nums text-foreground/80">{b.totalTriggers} déclenchement{b.totalTriggers > 1 ? "s" : ""}</span>
+                      <span>Dernier envoi : {relDays(b.lastTriggeredAt)}</span>
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            />
           </CardContent>
         </Card>
       )}
@@ -915,6 +1131,27 @@ export function BoAlerts() {
   )
 }
 
+// Aperçu de l'email tel qu'envoyé (objet, destinataire, corps) — partagé entre
+// la vue cartes (RunDetailRow) et la colonne « Aperçu » des vues tableau/arbo.
+function EmailPreview({ detail }: { detail: AlertRunDetail }) {
+  return (
+    <div className="mt-2.5 animate-in fade-in slide-in-from-top-1 rounded-lg border bg-background p-3">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold">
+        <Mail className="h-3 w-3 text-emerald-600" aria-hidden />
+        Objet : <span className="font-normal">{detail.subject}</span>
+      </p>
+      <p className="mb-1 text-[10px] text-muted-foreground">
+        Destinataire : {detail.email}
+      </p>
+      <ScrollArea className="h-40 rounded-md bg-muted/60 p-2.5">
+        <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-foreground/90">
+          {detail.preview}
+        </pre>
+      </ScrollArea>
+    </div>
+  )
+}
+
 // Ligne de détail d'une passe : statut, périmètre, exemples de chutes, aperçu email.
 function RunDetailRow({
   detail,
@@ -998,22 +1235,7 @@ function RunDetailRow({
       )}
 
       {/* Email tel qu'envoyé */}
-      {previewOpen && hasEmail && (
-        <div className="mt-2.5 animate-in fade-in slide-in-from-top-1 rounded-lg border bg-background p-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold">
-            <Mail className="h-3 w-3 text-emerald-600" aria-hidden />
-            Objet : <span className="font-normal">{detail.subject}</span>
-          </p>
-          <p className="mb-1 text-[10px] text-muted-foreground">
-            Destinataire : {detail.email}
-          </p>
-          <ScrollArea className="h-40 rounded-md bg-muted/60 p-2.5">
-            <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-foreground/90">
-              {detail.preview}
-            </pre>
-          </ScrollArea>
-        </div>
-      )}
+      {previewOpen && hasEmail && <EmailPreview detail={detail} />}
     </div>
   )
 }

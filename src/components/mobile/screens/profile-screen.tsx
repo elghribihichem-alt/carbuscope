@@ -3,8 +3,9 @@
 // CarbuScope Mobile — Écran Profil (B.2.7 + B.3.2 + B.3.4)
 // Réputation (points, niveau « Contributeur fiable »), badges, historique,
 // préférences (enseignes & services favoris), sélection de langue (5 langues).
+// + Carte « Espace agent — veille terrain » (T28) en tête d'écran.
 
-import { Award, BadgeCheck, Camera, Crown, Globe, Heart, Languages, MapPin, Medal, Settings2, Sparkles, Star, ThumbsUp, X } from "lucide-react"
+import { Award, BadgeCheck, Camera, ChevronRight, Crown, Footprints, Globe, Heart, Languages, MapPin, Medal, Settings2, Sparkles, Star, ThumbsUp, X } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
@@ -12,6 +13,7 @@ import { LANGS, useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { AppApi } from "../shared"
 import { BrandDot, ScreenHeader, SectionTitle, fmtKm, fmtNote } from "../shared"
+import type { AgentSummary } from "../agent-shared"
 import { useFavoritesStore } from "../favorites-store"
 
 const FAV_SERVICES = ["lavage", "cafe", "recharge", "atm", "vidange"]
@@ -25,7 +27,13 @@ const BADGE_DEFS: { key: "profile.badge1" | "profile.badge2" | "profile.badge3" 
   { key: "profile.badge4", icon: ThumbsUp, tint: "border-slate-200 bg-slate-50 text-slate-600" },
 ]
 
-export function ProfileScreen({ api }: { api: AppApi }) {
+export function ProfileScreen({
+  api, agent, onOpenAgent,
+}: {
+  api: AppApi
+  agent: AgentSummary | null
+  onOpenAgent: () => void
+}) {
   const { t, lang, isAuto, setLang, setAuto, svc } = useI18n()
   const favBrands = useFavoritesStore(st => st.favBrands)
   const favServices = useFavoritesStore(st => st.favServices)
@@ -36,6 +44,8 @@ export function ProfileScreen({ api }: { api: AppApi }) {
 
   // Stations favorites résolues depuis les données chargées (persistées par id)
   const favoriteStations = api.allStations.filter(s => stationIds.includes(s.id))
+  // Enseigne de l'agent connecté (carte « Espace agent »)
+  const agentBrand = api.brands.find(b => b.slug === agent?.brandSlug)
 
   const visited = api.nearby.slice(1, 4)
   const visitMeta = [
@@ -51,6 +61,45 @@ export function ProfileScreen({ api }: { api: AppApi }) {
       <ScreenHeader title={t("profile.title")} subtitle={t("profile.subtitle")} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-3 pb-6">
+        {/* Espace agent — veille terrain (T28) : connexion par code agent */}
+        <button
+          type="button"
+          onClick={onOpenAgent}
+          aria-label="Ouvrir l'espace agent — veille terrain"
+          className="relative w-full overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-700 via-emerald-800 to-emerald-900 p-4 text-start text-white shadow-lg shadow-emerald-900/15 ring-1 ring-emerald-600/40 transition-transform active:scale-[0.985]"
+        >
+          <span aria-hidden className="absolute -end-8 -top-12 h-32 w-32 rounded-full bg-white/10" />
+          <span aria-hidden className="absolute -start-10 -bottom-14 h-36 w-36 rounded-full bg-white/5" />
+          <span className="relative flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+              <Footprints className="h-5 w-5 text-emerald-50" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-extrabold leading-tight">Espace agent</span>
+              <span className="mt-0.5 block text-[10.5px] leading-snug text-emerald-100/85">
+                Missions de contrôle et veille concurrentielle de votre enseigne
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-white/70 rtl:rotate-180" />
+          </span>
+          <span className="relative mt-3 flex items-center gap-2">
+            {agent ? (
+              <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-white/15 px-2 py-0.5 text-[9.5px] font-bold text-emerald-50">
+                <BrandDot color={agentBrand?.color ?? "#34d399"} />
+                <span className="truncate">Agent {agentBrand?.name ?? agent.brandSlug} · {agent.name}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[9.5px] font-bold text-emerald-50">
+                <Footprints className="h-3 w-3" />
+                Ex : Agent TotalEnergies
+              </span>
+            )}
+            <span className="ms-auto shrink-0 rounded-full bg-white px-3 py-1 text-[10.5px] font-extrabold text-emerald-800">
+              {agent ? "Ouvrir" : "Se connecter"}
+            </span>
+          </span>
+        </button>
+
         {/* Identité + réputation (B.2.7 / B.3.2) */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-3">

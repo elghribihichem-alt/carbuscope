@@ -1,0 +1,509 @@
+   521→                                    variant="outline"
+   522→                                    className={cn(
+   523→                                      "h-4.5 px-1.5 py-0 text-[10px]",
+   524→                                      run.mode === "SCHEDULED"
+   525→                                        ? "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400"
+   526→                                        : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400",
+   527→                                    )}
+   528→                                  >
+   529→                                    {run.mode === "SCHEDULED" ? "Planifiée" : "Manuelle"}
+   530→                                  </Badge>
+   531→                                  {justRanId === run.id && (
+   532→                                    <Badge className="h-4.5 animate-in fade-in slide-in-from-left-2 px-1.5 py-0 text-[10px]">
+   533→                                      À l&apos;instant
+   534→                                    </Badge>
+   535→                                  )}
+   536→                                </div>
+   537→                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+   538→                                  <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950 dark:text-red-400">
+   539→                                    <Mail className="h-3 w-3" aria-hidden /> {shownTriggered} email{shownTriggered > 1 ? "s" : ""}
+   540→                                  </span>
+   541→                                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+   542→                                    <TrendingDown className="h-3 w-3" aria-hidden /> {shownFlagged} station{shownFlagged > 1 ? "s" : ""}
+   543→                                  </span>
+   544→                                  {brandFilter === "ALL" && (
+   545→                                    <span className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
+   546→                                      <Clock className="h-3 w-3" aria-hidden /> {run.durationMs} ms
+   547→                                    </span>
+   548→                                  )}
+   549→                                  {brandFilter === "ALL" && run.skippedAlerts > 0 && (
+   550→                                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+   551→                                      <PauseCircle className="h-3 w-3" aria-hidden /> {run.skippedAlerts} non due{run.skippedAlerts > 1 ? "s" : ""}
+   552→                                    </span>
+   553→                                  )}
+   554→                                  {brandDetails && (
+   555→                                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+   556→                                      périmètre filtré
+   557→                                    </span>
+   558→                                  )}
+   559→                                </div>
+   560→                              </div>
+   561→                            </div>
+   562→                          </button>
+   563→                        )
+   564→                      })}
+   565→                    </div>
+   566→                  </ScrollArea>
+   567→                </div>
+   568→              </CardContent>
+   569→            </Card>
+   570→          </div>
+   571→
+   572→          {/* ---------- Rapport de passe sélectionnée ---------- */}
+   573→          <div className="space-y-4 lg:col-span-3">
+   574→            <Card>
+   575→              <CardHeader className="pb-4">
+   576→                <div className="flex flex-wrap items-center justify-between gap-2">
+   577→                  <div className="flex items-center gap-2.5">
+   578→                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+   579→                      <Zap className="h-4 w-4" aria-hidden />
+   580→                    </div>
+   581→                    <div>
+   582→                      <CardTitle className="text-base leading-tight">Rapport de passe</CardTitle>
+   583→                      <CardDescription className="mt-0.5 text-xs">
+   584→                        {selectedRun
+   585→                          ? `${fmtDateTime(selectedRun.ranAt)} — ${selectedRun.mode === "SCHEDULED" ? "passe planifiée" : "passe manuelle"}${brandFilter !== "ALL" ? " · enseigne filtrée" : ""}`
+   586→                          : "Aucune passe sélectionnée"}
+   587→                      </CardDescription>
+   588→                    </div>
+   589→                  </div>
+   590→                  {selectedRun && (
+   591→                    <div className="flex flex-wrap items-center gap-1.5">
+   592→                      {brandFilter !== "ALL" && (
+   593→                        <Badge
+   594→                          variant="outline"
+   595→                          className="gap-1 border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+   596→                        >
+   597→                          {data.brands.find(b => b.slug === brandFilter)?.name ?? brandFilter} · {filteredDetails.length} ligne{filteredDetails.length > 1 ? "s" : ""}
+   598→                        </Badge>
+   599→                      )}
+   600→                      <Badge variant="outline" className="gap-1 tabular-nums">
+   601→                        <Store className="h-3 w-3" aria-hidden /> {selectedRun.brandsCovered} enseignes
+   602→                      </Badge>
+   603→                      <Badge variant="outline" className="gap-1 tabular-nums">
+   604→                        <BellRing className="h-3 w-3" aria-hidden /> {selectedRun.evaluatedAlerts} évaluées
+   605→                      </Badge>
+   606→                      <Badge variant="outline" className="gap-1 tabular-nums">
+   607→                        <Mail className="h-3 w-3" aria-hidden /> {selectedRun.emailsQueued} email{selectedRun.emailsQueued > 1 ? "s" : ""}
+   608→                      </Badge>
+   609→                      <Badge variant="outline" className="gap-1 tabular-nums">
+   610→                        <Clock className="h-3 w-3" aria-hidden /> {selectedRun.durationMs} ms
+   611→                      </Badge>
+   612→                      <Button
+   613→                        variant="outline"
+   614→                        size="sm"
+   615→                        onClick={printReport}
+   616→                        disabled={printOpen}
+   617→                        className="h-7 gap-1.5 px-2 text-[11px] transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:border-emerald-800 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
+   618→                        aria-label="Imprimer le rapport de passe (PDF via impression navigateur)"
+   619→                      >
+   620→                        <Printer className="h-3 w-3" aria-hidden /> Rapport PDF
+   621→                      </Button>
+   622→                    </div>
+   623→                  )}
+   624→                </div>
+   625→              </CardHeader>
+   626→              <CardContent className="space-y-2">
+   627→                {!selectedRun && (
+   628→                  <p className="py-8 text-center text-sm text-muted-foreground">
+   629→                    Sélectionnez une passe dans l&apos;historique ou exécutez le moteur.
+   630→                  </p>
+   631→                )}
+   632→                {selectedRun && filteredDetails.length === 0 && (
+   633→                  <p className="py-8 text-center text-sm text-muted-foreground">
+   634→                    {brandFilter === "ALL"
+   635→                      ? "Aucune alerte active lors de cette passe."
+   636→                      : "Aucune alerte pour l’enseigne filtrée lors de cette passe."}
+   637→                  </p>
+   638→                )}
+   639→                {filteredDetails.map(d => (
+   640→                  <RunDetailRow
+   641→                    key={d.alertId}
+   642→                    detail={d}
+   643→                    previewOpen={previewAlertId === d.alertId}
+   644→                    onTogglePreview={() => setPreviewAlertId(prev => (prev === d.alertId ? null : d.alertId))}
+   645→                  />
+   646→                ))}
+   647→              </CardContent>
+   648→            </Card>
+   649→
+   650→            {/* Mini graphique : volume de stations signalées par passe */}
+   651→            {chartData.length >= 2 && (
+   652→              <Card>
+   653→                <CardHeader className="pb-2">
+   654→                  <CardTitle className="text-sm">Volume signalé par passe</CardTitle>
+   655→                  <CardDescription className="text-xs">
+   656→                    Stations en perte de vitesse détectées (barres) et alertes déclenchées (courbe) sur les{" "}
+   657→                    {chartData.length} dernières passes
+   658→                  </CardDescription>
+   659→                </CardHeader>
+   660→                <CardContent className="h-40">
+   661→                  <ResponsiveContainer width="100%" height="100%">
+   662→                    <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
+   663→                      <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+   664→                      <XAxis dataKey="date" tick={{ ...AXIS_STYLE, fontSize: 10 }} tickLine={false} axisLine={false} />
+   665→                      <YAxis yAxisId="left" tick={{ ...AXIS_STYLE, fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+   666→                      <YAxis yAxisId="right" orientation="right" tick={{ ...AXIS_STYLE, fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={26} />
+   667→                      <Tooltip
+   668→                        contentStyle={tooltipStyle()}
+   669→                        formatter={(value: number | string, name: string) => [
+   670→                          value,
+   671→                          name === "stations" ? "Stations signalées" : "Alertes déclenchées",
+   672→                        ]}
+   673→                      />
+   674→                      <Bar yAxisId="left" dataKey="stations" fill="#d97706" radius={[3, 3, 0, 0]} maxBarSize={26} />
+   675→                      <Line yAxisId="right" type="monotone" dataKey="alertes" stroke="#059669" strokeWidth={2} dot={{ r: 2.5, fill: "#059669" }} />
+   676→                    </ComposedChart>
+   677→                  </ResponsiveContainer>
+   678→                </CardContent>
+   679→              </Card>
+   680→            )}
+   681→          </div>
+   682→        </div>
+   683→      )}
+   684→
+   685→      {/* ---------- Tableau consolidé par enseigne ---------- */}
+   686→      {data && data.brands.length > 0 && (
+   687→        <Card>
+   688→          <CardHeader className="pb-3">
+   689→            <div className="flex flex-wrap items-center justify-between gap-2">
+   690→              <div>
+   691→                <CardTitle className="text-base">Alertes programmées par enseigne</CardTitle>
+   692→                <CardDescription className="mt-0.5 text-xs">
+   693→                  Vue consolidée des {t?.alertsTotal ?? 0} alertes de veille actives sur la plateforme —
+   694→                  périmètres, fréquences et déclenchements
+   695→                </CardDescription>
+   696→              </div>
+   697→              <div className="flex items-center gap-2">
+   698→                <Badge variant="outline" className="gap-1">
+   699→                  <BellRing className="h-3 w-3" aria-hidden /> {t?.alertsActive ?? 0} actives
+   700→                </Badge>
+   701→                <Button
+   702→                  variant="outline"
+   703→                  size="sm"
+   704→                  onClick={() => exportAlertsCsv(data)}
+   705→                  className="h-7 gap-1.5 px-2 text-[11px] transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:border-emerald-800 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
+   706→                  aria-label="Exporter l'inventaire consolidé des alertes en CSV"
+   707→                >
+   708→                  <Download className="h-3 w-3" aria-hidden /> Exporter CSV
+   709→                </Button>
+   710→              </div>
+   711→            </div>
+   712→          </CardHeader>
+   713→          <CardContent className="p-0">
+   714→            <div className="overflow-x-auto">
+   715→              <Table>
+   716→                <TableHeader>
+   717→                  <TableRow className="hover:bg-transparent">
+   718→                    <TableHead className="pl-4">Enseigne</TableHead>
+   719→                    <TableHead className="text-center">Alertes</TableHead>
+   720→                    <TableHead className="text-center">Watchlist</TableHead>
+   721→                    <TableHead>Pire chute</TableHead>
+   722→                    <TableHead className="text-center">Fréquences</TableHead>
+   723→                    <TableHead className="text-right">Déclenchements</TableHead>
+   724→                    <TableHead className="pr-4 text-right">Dernier envoi</TableHead>
+   725→                  </TableRow>
+   726→                </TableHeader>
+   727→                <TableBody>
+   728→                  {data.brands.map(b => (
+   729→                    <TableRow
+   730→                      key={b.slug}
+   731→                      className="transition-colors hover:bg-muted/50 focus-within:bg-muted/50"
+   732→                    >
+   733→                      <TableCell className="pl-4">
+   734→                        <div className="flex items-center gap-2">
+   735→                          <span
+   736→                            className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-muted-foreground/10"
+   737→                            style={{ backgroundColor: b.color }}
+   738→                            aria-hidden
+   739→                          />
+   740→                          <div className="min-w-0">
+   741→                            <p className="truncate text-sm font-medium">{b.name}</p>
+   742→                            <p className="text-[10px] text-muted-foreground">{b.activeEmails} destinataire{b.activeEmails > 1 ? "s" : ""}</p>
+   743→                          </div>
+   744→                        </div>
+   745→                      </TableCell>
+   746→                      <TableCell className="text-center">
+   747→                        <span className="font-semibold tabular-nums">{b.alertsActive}</span>
+   748→                        <span className="text-muted-foreground">/{b.alertsTotal}</span>
+   749→                      </TableCell>
+   750→                      <TableCell className="text-center">
+   751→                        <Badge
+   752→                          variant="outline"
+   753→                          className={cn(
+   754→                            "gap-1 tabular-nums",
+   755→                            b.watchlistCount > 5
+   756→                              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400"
+   757→                              : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400",
+   758→                          )}
+   759→                        >
+   760→                          <TrendingDown className="h-3 w-3" aria-hidden /> {b.watchlistCount}
+   761→                        </Badge>
+   762→                      </TableCell>
+   763→                      <TableCell>
+   764→                        {b.worstDropName ? (
+   765→                          <div className="flex flex-col">
+   766→                            <span className="max-w-44 truncate text-xs">{b.worstDropName}</span>
+   767→                            <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">
+   768→                              −{fr1(b.worstDropDelta ?? 0)} pt
+   769→                            </span>
+   770→                          </div>
+   771→                        ) : (
+   772→                          <span className="text-xs text-muted-foreground">—</span>
+   773→                        )}
+   774→                      </TableCell>
+   775→                      <TableCell className="text-center">
+   776→                        <div className="flex flex-wrap justify-center gap-1">
+   777→                          {b.immediate > 0 && (
+   778→                            <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+   779→                              {b.immediate} × immédiat
+   780→                            </Badge>
+   781→                          )}
+   782→                          {b.daily > 0 && (
+   783→                            <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+   784→                              {b.daily} × quotidien
+   785→                            </Badge>
+   786→                          )}
+   787→                          {b.weekly > 0 && (
+   788→                            <Badge variant="outline" className="px-1 py-0 text-[10px] tabular-nums">
+   789→                              {b.weekly} × hebdo
+   790→                            </Badge>
+   791→                          )}
+   792→                        </div>
+   793→                      </TableCell>
+   794→                      <TableCell className="text-right font-semibold tabular-nums">{b.totalTriggers}</TableCell>
+   795→                      <TableCell className="pr-4 text-right text-xs text-muted-foreground">
+   796→                        {relDays(b.lastTriggeredAt)}
+   797→                      </TableCell>
+   798→                    </TableRow>
+   799→                  ))}
+   800→                </TableBody>
+   801→              </Table>
+   802→            </div>
+   803→          </CardContent>
+   804→        </Card>
+   805→      )}
+   806→
+   807→      {/* ---------- Rapport de passe imprimable (T20 — PDF navigateur) ---------- */}
+   808→      {typeof document !== "undefined" && selectedRun && createPortal(
+   809→        <div id="cs-run-print" className="hidden bg-white text-slate-900">
+   810→          <style>{RUN_PRINT_CSS}</style>
+   811→          <div className="mx-auto max-w-[720px] px-2 py-6 font-sans text-[11px] leading-relaxed">
+   812→            {/* En-tête */}
+   813→            <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
+   814→              <div className="flex items-center gap-3">
+   815→                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-lg font-black text-white">
+   816→                  C
+   817→                </div>
+   818→                <div>
+   819→                  <p className="text-base font-black tracking-tight">CarbuScope — Rapport de passe de veille</p>
+   820→                  <p className="text-[10px] text-slate-500">
+   821→                    Back-office plateforme · Moteur de veille des notes (C.2.6+)
+   822→                  </p>
+   823→                </div>
+   824→              </div>
+   825→              <div className="text-right text-[10px] text-slate-500">
+   826→                <p className="font-semibold text-slate-800">{fmtDateTime(selectedRun.ranAt)}</p>
+   827→                <p>{selectedRun.mode === "SCHEDULED" ? "Passe planifiée (08:00 Tunis)" : "Passe manuelle"}</p>
+   828→              </div>
+   829→            </div>
+   830→
+   831→            {/* Synthèse chiffrée */}
+   832→            <div className="mt-4 grid grid-cols-5 gap-2">
+   833→              {[
+   834→                { k: "Enseignes couvertes", v: selectedRun.brandsCovered },
+   835→                { k: "Alertes évaluées", v: selectedRun.evaluatedAlerts },
+   836→                { k: "Alertes déclenchées", v: selectedRun.triggeredAlerts },
+   837→                { k: "Stations signalées", v: selectedRun.stationsFlagged },
+   838→                { k: "Durée", v: `${selectedRun.durationMs} ms` },
+   839→              ].map(c => (
+   840→                <div key={c.k} className="rounded-md border border-slate-200 bg-slate-50 p-2 text-center">
+   841→                  <p className="text-base font-black tabular-nums text-slate-900">{c.v}</p>
+   842→                  <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-500">{c.k}</p>
+   843→                </div>
+   844→              ))}
+   845→            </div>
+   846→
+   847→            {/* Tableau par alerte */}
+   848→            <p className="mt-5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+   849→              Détail par alerte {brandFilter !== "ALL" && `— périmètre : ${data?.brands.find(b => b.slug === brandFilter)?.name ?? brandFilter}`}
+   850→            </p>
+   851→            <table className="mt-1.5 w-full border-collapse text-[10px]">
+   852→              <thead>
+   853→                <tr className="border-b border-slate-300 bg-slate-100 text-left">
+   854→                  <th className="px-2 py-1.5 font-bold">Enseigne</th>
+   855→                  <th className="px-2 py-1.5 font-bold">Périmètre</th>
+   856→                  <th className="px-2 py-1.5 font-bold">Fréquence</th>
+   857→                  <th className="px-2 py-1.5 font-bold">Statut</th>
+   858→                  <th className="px-2 py-1.5 text-right font-bold">Stations</th>
+   859→                  <th className="px-2 py-1.5 font-bold">Exemples de chutes</th>
+   860→                </tr>
+   861→              </thead>
+   862→              <tbody>
+   863→                {filteredDetails.map(d => (
+   864→                  <tr key={d.alertId} className="border-b border-slate-200 align-top">
+   865→                    <td className="px-2 py-1.5">
+   866→                      <span className="font-semibold" style={{ color: d.brandColor }}>{d.brandName}</span>
+   867→                    </td>
+   868→                    <td className="px-2 py-1.5">{d.stationLabel}</td>
+   869→                    <td className="px-2 py-1.5">{FREQ_META[d.frequency]?.label ?? d.frequency}</td>
+   870→                    <td className="px-2 py-1.5">
+   871→                      <span
+   872→                        className="rounded px-1.5 py-0.5 font-semibold"
+   873→                        style={{
+   874→                          backgroundColor: d.status === "TRIGGERED" ? "#fee2e2" : d.status === "STABLE" ? "#d1fae5" : "#f1f5f9",
+   875→                          color: d.status === "TRIGGERED" ? "#b91c1c" : d.status === "STABLE" ? "#047857" : "#475569",
+   876→                        }}
+   877→                      >
+   878→                        {STATUS_META[d.status]?.label ?? d.status}
+   879→                      </span>
+   880→                    </td>
+   881→                    <td className="px-2 py-1.5 text-right font-bold tabular-nums">
+   882→                      {d.status === "TRIGGERED" ? d.exceedCount : "—"}
+   883→                    </td>
+   884→                    <td className="px-2 py-1.5 text-slate-600">
+   885→                      {d.examples.length > 0
+   886→                        ? d.examples.map(ex => `${ex.name} (${ex.gouvernorat}) : ${fr1(ex.previousRating)} → ${fr1(ex.currentRating)} (−${fr1(ex.delta)} pt)`).join(" ; ")
+   887→                        : "—"}
+   888→                    </td>
+   889→                  </tr>
+   890→                ))}
+   891→                {filteredDetails.length === 0 && (
+   892→                  <tr>
+   893→                    <td colSpan={6} className="px-2 py-4 text-center text-slate-500">
+   894→                      Aucune alerte {brandFilter !== "ALL" ? "pour l'enseigne filtrée " : ""}lors de cette passe.
+   895→                    </td>
+   896→                  </tr>
+   897→                )}
+   898→              </tbody>
+   899→            </table>
+   900→
+   901→            {/* Pied méthodologique */}
+   902→            <div className="mt-6 border-t border-slate-300 pt-2.5 text-[9px] leading-relaxed text-slate-500">
+   903→              <p>
+   904→                Méthodologie : la passe évalue chaque alerte active contre la watchlist recalculée (chute ≥ seuil
+   905→                sur avis ≤ 90 j). Les fréquences sont honorées — un digest déjà envoyé n&apos;est pas re-notifié.
+   906→                Chaque alerte déclenchée met un email en file et laisse une notification in-app à l&apos;enseigne.
+   907→                Document généré depuis le back-office CarbuScope — données de démonstration.
+   908→              </p>
+   909→            </div>
+   910→          </div>
+   911→        </div>,
+   912→        document.body,
+   913→      )}
+   914→    </div>
+   915→  )
+   916→}
+   917→
+   918→// Ligne de détail d'une passe : statut, périmètre, exemples de chutes, aperçu email.
+   919→function RunDetailRow({
+   920→  detail,
+   921→  previewOpen,
+   922→  onTogglePreview,
+   923→}: {
+   924→  detail: AlertRunDetail
+   925→  previewOpen: boolean
+   926→  onTogglePreview: () => void
+   927→}) {
+   928→  const hasEmail = detail.status === "TRIGGERED" && !!detail.preview
+   929→  return (
+   930→    <div
+   931→      className={cn(
+   932→        "rounded-lg border p-3 transition-all",
+   933→        detail.status === "TRIGGERED"
+   934→          ? "border-red-200 bg-red-50/40 hover:border-red-300 dark:border-red-900/70 dark:bg-red-950/30"
+   935→          : detail.status === "SKIPPED"
+   936→            ? "border-dashed border-slate-200 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/40"
+   937→            : "border-emerald-200 bg-emerald-50/30 hover:border-emerald-300 dark:border-emerald-800 dark:bg-emerald-950/20",
+   938→        previewOpen && "shadow-sm",
+   939→      )}
+   940→    >
+   941→      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+   942→        <span
+   943→          className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-muted-foreground/10"
+   944→          style={{ backgroundColor: detail.brandColor }}
+   945→          aria-hidden
+   946→        />
+   947→        <span className="text-xs font-semibold">{detail.brandName}</span>
+   948→        <span className="min-w-0 truncate text-xs text-muted-foreground">
+   949→          {detail.stationLabel}
+   950→        </span>
+   951→        {freqChip(detail.frequency)}
+   952→        {statusBadge(detail.status)}
+   953→        <span className="ml-auto flex items-center gap-1.5">
+   954→          {detail.status === "TRIGGERED" && (
+   955→            <Badge variant="outline" className="tabular-nums">
+   956→              {detail.exceedCount} station{detail.exceedCount > 1 ? "s" : ""}
+   957→            </Badge>
+   958→          )}
+   959→          {hasEmail && (
+   960→            <Button
+   961→              variant="outline"
+   962→              size="sm"
+   963→              onClick={onTogglePreview}
+   964→              aria-expanded={previewOpen}
+   965→              className={cn(
+   966→                "h-7 gap-1.5 px-2 text-[11px] transition-all focus-visible:ring-2 focus-visible:ring-emerald-500",
+   967→                previewOpen && "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
+   968→              )}
+   969→            >
+   970→              <Eye className="h-3 w-3" aria-hidden />
+   971→              Aperçu email
+   972→              <ChevronDown className={cn("h-3 w-3 transition-transform", previewOpen && "rotate-180")} aria-hidden />
+   973→            </Button>
+   974→          )}
+   975→        </span>
+   976→      </div>
+   977→
+   978→      {/* Exemples de chutes détectées */}
+   979→      {detail.examples.length > 0 && detail.status !== "STABLE" && (
+   980→        <div className="mt-2 flex flex-wrap gap-1.5">
+   981→          {detail.examples.map(ex => (
+   982→            <span
+   983→              key={ex.name}
+   984→              className="inline-flex items-center gap-1 rounded-md border border-red-200/70 bg-white/70 px-1.5 py-0.5 text-[10px] text-red-700 dark:border-red-900/60 dark:bg-slate-900/60 dark:text-red-400"
+   985→              title={`${ex.name} (${ex.gouvernorat}) — ${fr1(ex.previousRating)} → ${fr1(ex.currentRating)}`}
+   986→            >
+   987→              <TrendingDown className="h-3 w-3" aria-hidden />
+   988→              <span className="max-w-36 truncate">{ex.name}</span>
+   989→              <span className="font-semibold tabular-nums">−{fr1(ex.delta)}</span>
+   990→            </span>
+   991→          ))}
+   992→          {detail.exceedCount > detail.examples.length && (
+   993→            <span className="text-[10px] text-muted-foreground">
+   994→              +{detail.exceedCount - detail.examples.length} autre{detail.exceedCount - detail.examples.length > 1 ? "s" : ""}
+   995→            </span>
+   996→          )}
+   997→        </div>
+   998→      )}
+   999→
+  1000→      {/* Email tel qu'envoyé */}
+  1001→      {previewOpen && hasEmail && (
+  1002→        <div className="mt-2.5 animate-in fade-in slide-in-from-top-1 rounded-lg border bg-background p-3">
+  1003→          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold">
+  1004→            <Mail className="h-3 w-3 text-emerald-600" aria-hidden />
+  1005→            Objet : <span className="font-normal">{detail.subject}</span>
+  1006→          </p>
+  1007→          <p className="mb-1 text-[10px] text-muted-foreground">
+  1008→            Destinataire : {detail.email}
+  1009→          </p>
+  1010→          <ScrollArea className="h-40 rounded-md bg-muted/60 p-2.5">
+  1011→            <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-foreground/90">
+  1012→              {detail.preview}
+  1013→            </pre>
+  1014→          </ScrollArea>
+  1015→        </div>
+  1016→      )}
+  1017→    </div>
+  1018→  )
+  1019→}
+  1020→
+  1021→// Prochaine passe : « demain 08:00 » / « aujourd'hui 08:00 ».
+  1022→function fmtNextPass(iso: string): string {
+  1023→  const d = new Date(iso)
+  1024→  const today = new Date()
+  1025→  const isTomorrow = d.getDate() === today.getDate() + 1
+  1026→    || (today.getDate() === new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() && d.getDate() === 1)
+  1027→  return `${isTomorrow ? "demain" : "aujourd'hui"} 08:00`
+  1028→}
+  1029→

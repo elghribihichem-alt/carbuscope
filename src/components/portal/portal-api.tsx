@@ -1,6 +1,8 @@
 'use client'
 
 // C.2.4 — API de synchronisation : endpoint REST, clé API, quotas, exemples
+// T27 : quotas en DataViews — 3 lignes statiques sans statut ni périmètre :
+// regroupement artificiel écarté → 2 modes (Tableau / Cartes).
 
 import { useState } from "react"
 import { toast } from "sonner"
@@ -8,7 +10,7 @@ import { KeyRound, Copy, RefreshCcw, Terminal, Braces, PlugZap, BookOpen } from 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { copyText, generateKeySuffix, maskedApiKey } from "@/components/settings/settings-shared"
 
 const ENDPOINT = "https://api.carbuscope.tn/v1/stations/sync"
@@ -36,6 +38,27 @@ const RESPONSE_SAMPLE = `{
   "workflow": "verification_coherence",
   "syncedAt": "2026-09-18T10:32:00Z"
 }`
+
+type QuotaRow = { quota: string; limite: string }
+
+const QUOTA_COLUMNS: DataViewColumn<QuotaRow>[] = [
+  {
+    key: "quota", header: "Quota",
+    sortValue: (q) => q.quota,
+    render: (q) => <span className="text-sm">{q.quota}</span>,
+  },
+  {
+    key: "limite", header: "Limite", align: "right",
+    sortValue: (q) => q.limite,
+    render: (q) => <span className="text-sm font-medium tabular-nums">{q.limite}</span>,
+  },
+]
+
+const API_QUOTAS: QuotaRow[] = [
+  { quota: "Requêtes mensuelles", limite: "10 000 / mois" },
+  { quota: "Limite de débit (rafale)", limite: "60 req/min" },
+  { quota: "Format des échanges", limite: "JSON (UTF-8)" },
+]
 
 function CodeBlock({ title, code, icon: Icon }: { title: string; code: string; icon: React.ComponentType<{ className?: string }> }) {
   return (
@@ -146,29 +169,14 @@ export function PortalApi({ brandName }: { brandName: string }) {
               </p>
             </div>
 
-            <div className="overflow-hidden rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Quota</TableHead>
-                    <TableHead className="text-right">Limite</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>Requêtes mensuelles</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">10 000 / mois</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Limite de débit (rafale)</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">60 req/min</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Format des échanges</TableCell>
-                    <TableCell className="text-right font-medium">JSON (UTF-8)</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+            <div>
+              <DataViews
+                viewKey="portal-api-quotas"
+                columns={QUOTA_COLUMNS}
+                rows={API_QUOTAS}
+                rowKey={(q) => q.quota}
+                emptyMessage="Aucun quota configuré."
+              />
             </div>
           </div>
 

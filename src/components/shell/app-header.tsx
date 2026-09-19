@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -26,6 +26,19 @@ export function AppHeader() {
   const { theme, setTheme } = useTheme()
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [alerts, setAlerts] = useState<AlertDTO[]>([])
+  const headerRef = useRef<HTMLElement>(null)
+
+  // Publie la hauteur réelle de l'en-tête (peut passer à 2 lignes selon la largeur)
+  // pour que la navigation d'onglets se colle SOUS lui sans être recouverte.
+  useLayoutEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const set = () => document.documentElement.style.setProperty("--cs-header-h", `${Math.round(el.getBoundingClientRect().height)}px`)
+    set()
+    const ro = new ResizeObserver(set)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     fetch("/api/brands").then(r => r.json()).then(d => setBrands(d.brands ?? [])).catch(() => {})
@@ -44,7 +57,7 @@ export function AppHeader() {
   const currentBrand = brands.find(b => b.slug === brandSlug)
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
+    <header ref={headerRef} className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
         {/* Identité */}
         <div className="flex items-center gap-2.5">

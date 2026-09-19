@@ -568,3 +568,108 @@ export type PlatformStats = {
     byStatus: { status: string; count: number }[]
   }
 }
+
+// ---- Module veille terrain (T28) : agents de zone, missions, rapports ----
+
+export type MissionType = "CONTROLE" | "VEILLE_CONCURRENT"
+export type MissionStatus = "PLANIFIEE" | "EN_COURS" | "TERMINEE" | "ANNULEE"
+export type MissionTaskStatus = "TODO" | "FAITE" | "ANOMALIE"
+
+export type FieldAgentDTO = {
+  id: string
+  code: string
+  name: string
+  phone: string
+  brandSlug: string
+  zone: string
+  active: boolean
+  createdAt: string
+  // statistiques dérivées
+  missionsTotal: number
+  missionsOpen: number
+  missionsDone: number
+  reportsCount: number
+}
+
+export type MissionTaskDTO = {
+  id: string
+  missionId: string
+  stationCode: string | null
+  stationName: string
+  competitorSlug: string | null
+  targetLabel: string
+  lat: number | null
+  lng: number | null
+  taskType: string
+  status: MissionTaskStatus
+  order: number
+  lastReport: VisitReportDTO | null
+}
+
+export type MissionDTO = {
+  id: string
+  title: string
+  type: MissionType
+  brandSlug: string
+  agentId: string | null
+  agentName: string | null
+  agentCode: string | null
+  zone: string
+  status: MissionStatus
+  dueDate: string | null
+  instructions: string
+  createdAt: string
+  tasksTotal: number
+  tasksDone: number
+  tasksAnomaly: number
+}
+
+export type MissionDetailDTO = MissionDTO & {
+  tasks: MissionTaskDTO[]
+}
+
+export type VisitReportDTO = {
+  id: string
+  taskId: string
+  agentId: string
+  agentName: string | null
+  stationCode: string | null
+  gazolePrice: number | null
+  essencePrice: number | null
+  gplPrice: number | null
+  queueMinutes: number | null
+  staffCount: number | null
+  cleanliness: number | null
+  complianceScore: number | null
+  anomalies: string
+  competitorPractices: string | null
+  notes: string
+  createdAt: string
+}
+
+export type MissionsResponse = {
+  missions: MissionDTO[]
+  total: number
+  agents: FieldAgentDTO[]
+}
+
+export type FieldAgentsResponse = {
+  agents: FieldAgentDTO[]
+}
+
+export type VisitReportInput = {
+  taskId: string
+  agentCode: string
+  stationCode?: string | null
+  gazolePrice?: number | null
+  essencePrice?: number | null
+  gplPrice?: number | null
+  queueMinutes?: number | null
+  staffCount?: number | null
+  cleanliness?: number | null
+  complianceScore?: number | null
+  anomalies?: string
+  competitorPractices?: string | null
+  notes?: string
+  anomaly?: boolean // true → la tâche passe en ANOMALIE au lieu de FAITE
+}

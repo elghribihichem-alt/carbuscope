@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   ServerCog, ShieldAlert, Database, TimerReset, UserCog, BarChart3, MapPin, Inbox, Radar, Banknote,
+  ClipboardList,
 } from "lucide-react"
-import type { ContributionDTO } from "@/lib/types"
+import type { ContributionDTO, MissionDTO } from "@/lib/types"
 import { BoModeration } from "./bo-moderation"
 import { BoSovereign } from "./bo-sovereign"
 import { BoFreshness } from "./bo-freshness"
@@ -17,6 +18,7 @@ import { BoAgents } from "./bo-agents"
 import { BoStats } from "./bo-stats"
 import { BoAlerts } from "./bo-alerts"
 import { BoDecrees } from "./bo-decrees"
+import { BoMissions } from "./bo-missions"
 
 export function BackofficeView() {
   // File de modération partagée : badge d'onglet + onglet Modération
@@ -39,6 +41,21 @@ export function BackofficeView() {
   useEffect(() => {
     void loadPending()
   }, [loadPending, reloadKey])
+
+  // Compteur de missions ouvertes (badge de l'onglet « Missions terrain »)
+  const [openMissions, setOpenMissions] = useState<number | null>(null)
+
+  useEffect(() => {
+    const ac = new AbortController()
+    fetch("/api/missions", { signal: ac.signal })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: { missions?: MissionDTO[] }) => {
+        const n = (j.missions ?? []).filter(m => m.status === "PLANIFIEE" || m.status === "EN_COURS").length
+        setOpenMissions(n)
+      })
+      .catch(() => {})
+    return () => ac.abort()
+  }, [])
 
   const pendingCount = pending?.length ?? null
   const moderationLoading = pending === null && !pendingError
@@ -81,9 +98,9 @@ export function BackofficeView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne (7 onglets) */}
+      {/* Navigation interne (8 onglets) */}
       <Tabs defaultValue="moderation" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-7">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
           <TabsTrigger value="moderation" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <ShieldAlert className="h-4 w-4" aria-hidden /> Modération
             <Badge
@@ -110,6 +127,15 @@ export function BackofficeView() {
           </TabsTrigger>
           <TabsTrigger value="decrees" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <Banknote className="h-4 w-4" aria-hidden /> Prix &amp; décrets
+          </TabsTrigger>
+          <TabsTrigger value="missions" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <ClipboardList className="h-4 w-4" aria-hidden /> Missions
+            <Badge
+              className="ml-0.5 h-4 min-w-4 rounded-full px-1 text-[10px] tabular-nums"
+              variant={(openMissions ?? 0) > 0 ? "default" : "secondary"}
+            >
+              {openMissions ?? "…"}
+            </Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -138,6 +164,9 @@ export function BackofficeView() {
         </TabsContent>
         <TabsContent value="decrees" className="mt-0 space-y-4">
           <BoDecrees />
+        </TabsContent>
+        <TabsContent value="missions" className="mt-0 space-y-4">
+          <BoMissions />
         </TabsContent>
       </Tabs>
     </div>

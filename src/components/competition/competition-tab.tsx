@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { ErrorState, TabSkeleton } from "@/components/shell/loading"
 import { ServiceChips } from "@/components/stations/service-chip"
@@ -41,6 +41,36 @@ function distanceBadge(km: number): { label: string; cls: string } {
 function fmtKm(km: number): string {
   return `${km.toFixed(1).replace(".", ",")} km`
 }
+
+/** Colonne des zones sous-desservies (DataViews : Tableau / Cartes). */
+type ZoneRow = { gouvernorat: string; stations: number; expected: number; deficit: number }
+
+const ZONE_COLUMNS: DataViewColumn<ZoneRow>[] = [
+  {
+    key: "gouvernorat", header: "Gouvernorat",
+    sortValue: (z) => z.gouvernorat,
+    render: (z) => <span className="text-sm font-medium">{z.gouvernorat}</span>,
+  },
+  {
+    key: "stations", header: "Stations", align: "right",
+    sortValue: (z) => z.stations,
+    render: (z) => <span className="text-sm tabular-nums">{num(z.stations)}</span>,
+  },
+  {
+    key: "expected", header: "Attendues", align: "right",
+    sortValue: (z) => z.expected,
+    render: (z) => <span className="text-sm tabular-nums text-muted-foreground">{num(z.expected)}</span>,
+  },
+  {
+    key: "deficit", header: "Déficit", align: "right",
+    sortValue: (z) => z.deficit,
+    render: (z) => (
+      <Badge variant="outline" className="tabular-nums text-red-600 dark:text-red-400">
+        −{num(z.deficit)}
+      </Badge>
+    ),
+  },
+]
 
 export function CompetitionTab() {
   const brandSlug = useAppStore((s) => s.brandSlug)
@@ -100,6 +130,75 @@ export function CompetitionTab() {
     [shown]
   )
   const topZone = zones[0] ?? null
+
+  // Colonnes des concurrents proches (DataViews : Tableau / Cartes / Arborescence par enseigne)
+  const nearbyColumns: DataViewColumn<CompetitionStats["nearby"][number]>[] = [
+    {
+      key: "myStation", header: "Ma station",
+      sortValue: (n) => n.myStation,
+      render: (n) => (
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600" aria-hidden />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{n.myStation}</p>
+            <p className="font-mono text-[10px] text-muted-foreground">{n.myCode}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "competitorBrand", header: "Enseigne",
+      sortValue: (n) => n.competitorBrand,
+      hideInCards: true,
+      render: (n) => (
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: n.competitorColor }} aria-hidden />
+          <span className="truncate">{n.competitorBrand}</span>
+        </span>
+      ),
+    },
+    {
+      key: "nearestCompetitor", header: "Concurrent le plus proche",
+      sortValue: (n) => n.nearestCompetitor,
+      render: (n) => (
+        <span className="block max-w-[220px] truncate text-sm font-medium" title={n.nearestCompetitor}>
+          {n.nearestCompetitor}
+        </span>
+      ),
+    },
+    {
+      key: "distance", header: "Distance",
+      sortValue: (n) => n.distanceKm,
+      render: (n) => {
+        const d = distanceBadge(n.distanceKm)
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-sm font-medium tabular-nums">{fmtKm(n.distanceKm)}</span>
+            <Badge variant="outline" className={d.cls}>{d.label}</Badge>
+          </div>
+        )
+      },
+    },
+    {
+      key: "differentiators", header: "Services différenciants",
+      sortValue: (n) => n.differentiators.length,
+      render: (n) =>
+        n.differentiators.length > 0 ? (
+          <ServiceChips services={n.differentiators} max={4} showLabels />
+        ) : (
+          <span className="text-xs italic text-muted-foreground">Parité de services</span>
+        ),
+    },
+    {
+      key: "status", header: "Statut",
+      sortValue: (n) => NEARBY_STATUS_LABELS[n.status] ?? n.status,
+      render: (n) => (
+        <Badge variant="outline" className={NEARBY_STATUS_STYLES[n.status] ?? ""}>
+          {NEARBY_STATUS_LABELS[n.status] ?? n.status}
+        </Badge>
+      ),
+    },
+  ]
 
   // Rayon correspondant réellement aux données affichées (peut différer pendant l'actualisation)
   const shownRadius = stats !== null ? radius : (forBrand?.radius ?? radius)
@@ -241,180 +340,105 @@ export function CompetitionTab() {
               Stations attendues = parc automobile ÷ 1 200 véhicules par station (benchmark national).
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            {zones.length === 0 ? (
-              <p className="px-6 pb-4 text-xs italic text-muted-foreground">
-                Aucune zone sous-desservie détectée à l&apos;échelle nationale.
-              </p>
-            ) : (
-              <div className="max-h-72 overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-background">
-                    <TableRow>
-                      <TableHead>Gouvernorat</TableHead>
-                      <TableHead className="text-right">Stations</TableHead>
-                      <TableHead className="text-right">Attendues</TableHead>
-                      <TableHead className="w-[104px] text-right">Déficit</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {zones.map((z) => (
-                      <TableRow key={z.gouvernorat}>
-                        <TableCell className="font-medium">{z.gouvernorat}</TableCell>
-                        <TableCell className="text-right tabular-nums">{num(z.stations)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">{num(z.expected)}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant="outline" className="tabular-nums text-red-600 dark:text-red-400">
-                            −{num(z.deficit)}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+          <CardContent>
+            <DataViews
+              viewKey="competition-zones"
+              columns={ZONE_COLUMNS}
+              rows={zones}
+              rowKey={(z) => z.gouvernorat}
+              emptyMessage="Aucune zone sous-desservie détectée à l&apos;échelle nationale."
+              maxHeightClassName="max-h-72"
+            />
           </CardContent>
         </Card>
       </div>
 
-      {/* Tableau des concurrents proches (A.5.3) */}
+      {/* Concurrents proches (A.5.3) — DataViews : Tableau / Cartes / Arborescence par enseigne */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Concurrents les plus proches</CardTitle>
           <CardDescription>
-            {shown.nearby.length} sites au plus fort trafic — cliquez sur une ligne pour localiser la station sur la carte.
+            {shown.nearby.length} sites au plus fort trafic — cliquez sur une ligne pour localiser la station sur la
+            carte · 3 modes d&apos;affichage
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
-          {shown.nearby.length === 0 ? (
-            <p className="px-6 pb-4 text-xs italic text-muted-foreground">Aucun concurrent recensé à proximité de vos stations.</p>
-          ) : (
-            <>
-              {/* Tableau (desktop) */}
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Ma station</TableHead>
-                      <TableHead>Concurrent le plus proche</TableHead>
-                      <TableHead className="w-[196px]">Distance</TableHead>
-                      <TableHead>Services différenciants</TableHead>
-                      <TableHead className="w-[128px]">Statut</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {shown.nearby.map((n) => {
-                      const d = distanceBadge(n.distanceKm)
-                      return (
-                        <TableRow
-                          key={n.myCode}
-                          className="cursor-pointer"
-                          onClick={() => locate(n.myCode)}
-                          tabIndex={0}
-                          role="button"
-                          aria-label={`Localiser ${n.myStation} sur la carte`}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault()
-                              locate(n.myCode)
-                            }
-                          }}
-                        >
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600" aria-hidden />
-                              <div className="min-w-0">
-                                <p className="truncate font-medium">{n.myStation}</p>
-                                <p className="font-mono text-[10px] text-muted-foreground">{n.myCode}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: n.competitorColor }} aria-hidden />
-                              <div className="min-w-0">
-                                <p className="truncate font-medium">{n.nearestCompetitor}</p>
-                                <p className="text-[10px] text-muted-foreground">{n.competitorBrand}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-medium tabular-nums">{fmtKm(n.distanceKm)}</span>
-                              <Badge variant="outline" className={d.cls}>{d.label}</Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {n.differentiators.length > 0 ? (
-                              <ServiceChips services={n.differentiators} max={4} showLabels />
-                            ) : (
-                              <span className="text-xs italic text-muted-foreground">Parité de services</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={NEARBY_STATUS_STYLES[n.status] ?? ""}>
-                              {NEARBY_STATUS_LABELS[n.status] ?? n.status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Cartes empilées (mobile) */}
-              <div className="space-y-2 p-3 md:hidden">
-                {shown.nearby.map((n) => {
-                  const d = distanceBadge(n.distanceKm)
-                  return (
-                    <div
-                      key={n.myCode}
-                      className="cursor-pointer rounded-lg border p-3 transition-colors hover:bg-muted/40"
-                      onClick={() => locate(n.myCode)}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Localiser ${n.myStation} sur la carte`}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault()
-                          locate(n.myCode)
-                        }
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="flex items-center gap-2 font-medium">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600" aria-hidden />
-                            <span className="truncate">{n.myStation}</span>
-                          </p>
-                          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: n.competitorColor }} aria-hidden />
-                            <span className="truncate">
-                              {n.nearestCompetitor} · {n.competitorBrand}
-                            </span>
-                          </p>
-                        </div>
-                        <Badge variant="outline" className={NEARBY_STATUS_STYLES[n.status] ?? ""}>
-                          {NEARBY_STATUS_LABELS[n.status] ?? n.status}
-                        </Badge>
+        <CardContent>
+          <DataViews
+            viewKey="competition-nearby"
+            columns={nearbyColumns}
+            rows={shown.nearby}
+            rowKey={(n) => n.myCode}
+            emptyMessage="Aucun concurrent recensé à proximité de vos stations."
+            onRowClick={(n) => locate(n.myCode)}
+            nested={{
+              groupKey: (n) => n.competitorBrand,
+              groupLabel: (gk, grows) => {
+                const color = grows[0]?.competitorColor ?? "#94a3b8"
+                const avg = grows.reduce((s, n) => s + n.distanceKm, 0) / (grows.length || 1)
+                const tensions = grows.filter((n) => n.status === "TENSION").length
+                return (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} aria-hidden />
+                    {gk}
+                    <span className="ml-1 text-[11px] font-normal text-primary/70">
+                      — {grows.length} site{grows.length > 1 ? "s" : ""} · {fmtKm(avg)} de moyenne
+                      {tensions > 0 ? ` · ${tensions} en tension` : ""}
+                    </span>
+                  </span>
+                )
+              },
+              groupSortValue: (_gk, grows) => grows.length,
+              hideColumnKeyInGroups: "competitorBrand",
+              defaultOpen: "first",
+            }}
+            renderCard={(n) => {
+              const d = distanceBadge(n.distanceKm)
+              return (
+                <Card
+                  className="cursor-pointer transition-colors hover:bg-muted/40"
+                  onClick={() => locate(n.myCode)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Localiser ${n.myStation} sur la carte`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      locate(n.myCode)
+                    }
+                  }}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-2 font-medium">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600" aria-hidden />
+                          <span className="truncate">{n.myStation}</span>
+                        </p>
+                        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: n.competitorColor }} aria-hidden />
+                          <span className="truncate">
+                            {n.nearestCompetitor} · {n.competitorBrand}
+                          </span>
+                        </p>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="font-semibold tabular-nums">{fmtKm(n.distanceKm)}</span>
-                        <Badge variant="outline" className={d.cls}>{d.label}</Badge>
-                      </div>
-                      {n.differentiators.length > 0 && (
-                        <div className="mt-2">
-                          <ServiceChips services={n.differentiators} max={4} showLabels />
-                        </div>
-                      )}
+                      <Badge variant="outline" className={NEARBY_STATUS_STYLES[n.status] ?? ""}>
+                        {NEARBY_STATUS_LABELS[n.status] ?? n.status}
+                      </Badge>
                     </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="font-semibold tabular-nums">{fmtKm(n.distanceKm)}</span>
+                      <Badge variant="outline" className={d.cls}>{d.label}</Badge>
+                    </div>
+                    {n.differentiators.length > 0 && (
+                      <div className="mt-2">
+                        <ServiceChips services={n.differentiators} max={4} showLabels />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            }}
+          />
         </CardContent>
       </Card>
     </div>

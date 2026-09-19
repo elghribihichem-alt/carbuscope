@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { KpiCard } from "@/components/shell/kpi-card"
 import type { GovernoratRow } from "@/lib/types"
 import { AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
@@ -131,12 +131,63 @@ export function CalcMultiSites({ governorats, onSave, saving, initial }: CalcMul
     fill: i < 3 ? MEDALS[i] : OTHER_BAR,
   }))
 
+  // Lignes du comparateur : rang figé à l'issue du classement initial.
+  const tableRows = ranked.map((r, i) => ({ ...r, rank: i + 1 }))
+
   const best = ranked[0]
   const avgScore = ranked.length > 0 ? ranked.reduce((s, r) => s + r.score, 0) / ranked.length : 0
   const ecart = ranked.length > 1 ? best.score - ranked[ranked.length - 1].score : 0
 
   const reset = () => setSites(makeDefaultSites(governorats))
   const defaultLabel = `Multi-sites — ${sites.length} candidats (meilleur : ${best?.nom ?? "—"})`
+
+  // Colonnes du comparateur (DataViews : Tableau / Cartes / Arborescence par gouvernorat)
+  const columns: DataViewColumn<(typeof tableRows)[number]>[] = [
+    {
+      key: "rank", header: "Rang",
+      sortValue: (r) => r.rank,
+      render: (r) => (
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: r.rank <= 3 ? MEDALS[r.rank - 1] : "var(--muted)" }}
+            aria-hidden="true"
+          />
+          {r.rank}
+        </span>
+      ),
+    },
+    {
+      key: "nom", header: "Site",
+      sortValue: (r) => r.nom,
+      render: (r) => <span className="text-xs font-medium">{r.nom}</span>,
+    },
+    {
+      key: "gouvernorat", header: "Gouvernorat",
+      sortValue: (r) => r.gouvernorat,
+      render: (r) => <span className="text-xs">{r.gouvernorat}</span>,
+    },
+    {
+      key: "tmj", header: "TMJ", align: "right",
+      sortValue: (r) => r.tmj,
+      render: (r) => <span className="text-xs tabular-nums">{fmtInt(r.tmj)}</span>,
+    },
+    {
+      key: "concurrents", header: "Conc. 5 km", align: "right",
+      sortValue: (r) => r.concurrents,
+      render: (r) => <span className="text-xs tabular-nums">{r.concurrents}</span>,
+    },
+    {
+      key: "invest", header: "Investissement", align: "right",
+      sortValue: (r) => r.invest,
+      render: (r) => <span className="text-xs tabular-nums">{fmtTnd(r.invest)}</span>,
+    },
+    {
+      key: "score", header: "Score", align: "right",
+      sortValue: (r) => r.score,
+      render: (r) => <span className="text-xs font-bold tabular-nums">{r.score}/100</span>,
+    },
+  ]
 
   const handleSave = (label: string) => {
     onSave(
@@ -339,43 +390,67 @@ export function CalcMultiSites({ governorats, onSave, saving, initial }: CalcMul
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-14 text-xs">Rang</TableHead>
-                <TableHead className="text-xs">Site</TableHead>
-                <TableHead className="text-xs">Gouvernorat</TableHead>
-                <TableHead className="text-right text-xs">TMJ</TableHead>
-                <TableHead className="text-right text-xs">Conc. 5 km</TableHead>
-                <TableHead className="text-right text-xs">Investissement</TableHead>
-                <TableHead className="text-right text-xs">Score</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ranked.map((r, i) => (
-                <TableRow key={r.id}>
-                  <TableCell className="py-2 text-xs font-semibold">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: i < 3 ? MEDALS[i] : "var(--muted)" }}
-                        aria-hidden="true"
-                      />
-                      {i + 1}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-2 text-xs font-medium">{r.nom}</TableCell>
-                  <TableCell className="py-2 text-xs">{r.gouvernorat}</TableCell>
-                  <TableCell className="py-2 text-right text-xs tabular-nums">{fmtInt(r.tmj)}</TableCell>
-                  <TableCell className="py-2 text-right text-xs tabular-nums">{r.concurrents}</TableCell>
-                  <TableCell className="py-2 text-right text-xs tabular-nums">{fmtTnd(r.invest)}</TableCell>
-                  <TableCell className="py-2 text-right text-xs font-bold tabular-nums">{r.score}/100</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        {/* Comparateur des sites candidats — 3 modes d'affichage */}
+        <DataViews
+          viewKey="calc-multi-sites"
+          columns={columns}
+          rows={tableRows}
+          rowKey={(r) => r.id}
+          emptyMessage="Ajoutez au moins deux sites candidats pour comparer."
+          nested={{
+            groupKey: (r) => r.gouvernorat,
+            groupLabel: (gk, grows) => {
+              const avg = grows.reduce((s, r) => s + r.score, 0) / (grows.length || 1)
+              const bestRow = grows.reduce((acc, r) => (r.score > acc.score ? r : acc), grows[0])
+              return (
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <MapPinned className="h-3.5 w-3.5 text-primary/70" aria-hidden />
+                  {gk}
+                  <span className="ml-1 text-[11px] font-normal text-primary/70">
+                    — {grows.length} site{grows.length > 1 ? "s" : ""} · score moyen {fmtInt(avg)}/100 · meilleur : {bestRow?.nom ?? "—"}
+                  </span>
+                </span>
+              )
+            },
+            groupSortValue: (_gk, grows) => grows.length,
+            hideColumnKeyInGroups: "gouvernorat",
+            defaultOpen: "first",
+          }}
+          renderCard={(r) => (
+            <Card className="overflow-hidden">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                    style={{ backgroundColor: r.rank <= 3 ? MEDALS[r.rank - 1] : "var(--muted)" }}
+                    aria-hidden="true"
+                  >
+                    {r.rank}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{r.nom}</p>
+                    <p className="text-[11px] text-muted-foreground">{r.gouvernorat}</p>
+                  </div>
+                  <span className="shrink-0 text-sm font-bold tabular-nums">{r.score}/100</span>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-2 border-t pt-3">
+                  <div>
+                    <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">TMJ</dt>
+                    <dd className="mt-0.5 text-xs font-semibold tabular-nums">{fmtInt(r.tmj)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Conc. 5 km</dt>
+                    <dd className="mt-0.5 text-xs font-semibold tabular-nums">{r.concurrents}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Invest.</dt>
+                    <dd className="mt-0.5 text-xs font-semibold tabular-nums">{fmtTnd(r.invest)}</dd>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          )}
+        />
       </ResultsPanel>
 
       <SaveScenarioBar defaultLabel={defaultLabel} initialLabel={initial?.label} saving={saving} onSave={handleSave} onReset={reset} />

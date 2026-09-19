@@ -1,6 +1,7 @@
 'use client'
 
 // A.9 — Paramètres : gestion des utilisateurs (multi-comptes, comptes de démonstration)
+// T27 : multi-vues DataViews — Tableau / Cartes / Arborescence (par rôle).
 
 import { useState } from "react"
 import { toast } from "sonner"
@@ -12,9 +13,10 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
 
 type Compte = {
   id: string
@@ -71,6 +73,51 @@ export function SettingsUsersCard() {
     })
   }
 
+  // Colonnes DataViews — activation (Switch) et révocation présentes dans les 3 vues.
+  const columns: DataViewColumn<Compte>[] = [
+    {
+      key: "nom", header: "Utilisateur",
+      sortValue: (c) => c.nom,
+      render: (c) => <span className="text-sm font-medium">{c.nom}</span>,
+    },
+    {
+      key: "email", header: "E-mail",
+      sortValue: (c) => c.email,
+      render: (c) => <span className="text-sm text-muted-foreground">{c.email}</span>,
+    },
+    {
+      key: "role", header: "Rôle",
+      sortValue: (c) => ROLES[c.role]?.label ?? c.role,
+      render: (c) => {
+        const meta = ROLES[c.role] ?? { label: c.role, cls: "", icon: Users }
+        return (
+          <Badge variant="outline" className={cn("gap-1", meta.cls)}>
+            <meta.icon className="h-3 w-3" aria-hidden /> {meta.label}
+          </Badge>
+        )
+      },
+    },
+    {
+      key: "actif", header: "Actif", align: "center",
+      sortValue: (c) => (c.actif ? 1 : 0),
+      render: (c) => (
+        <Switch
+          checked={c.actif}
+          onCheckedChange={v => toggleActif(c.id, v)}
+          aria-label={`Activer le compte ${c.email}`}
+        />
+      ),
+    },
+    {
+      key: "actions", header: "Actions", align: "right",
+      render: (c) => (
+        <Button size="sm" variant="ghost" onClick={() => revoke(c)} className="gap-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
+          <Ban className="h-3.5 w-3.5" aria-hidden /> Révoquer
+        </Button>
+      ),
+    },
+  ]
+
   return (
     <Card>
       <CardHeader>
@@ -80,7 +127,8 @@ export function SettingsUsersCard() {
               <Users className="h-4 w-4 text-red-600" aria-hidden /> Gestion des utilisateurs
             </CardTitle>
             <CardDescription>
-              Comptes de démonstration multi-rôles — chaque rôle ouvre des onglets distincts (A.1).
+              Comptes de démonstration multi-rôles — chaque rôle ouvre des onglets distincts (A.1) · 3 modes
+              d&apos;affichage.
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setInviteOpen(true)} className="gap-1.5">
@@ -89,54 +137,64 @@ export function SettingsUsersCard() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-hidden rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Utilisateur</TableHead>
-                <TableHead>E-mail</TableHead>
-                <TableHead>Rôle</TableHead>
-                <TableHead className="text-center">Actif</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {comptes.map(c => {
-                const meta = ROLES[c.role] ?? { label: c.role, cls: "", icon: Users }
-                return (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.nom}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`gap-1 ${meta.cls}`}>
-                        <meta.icon className="h-3 w-3" aria-hidden /> {meta.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
+        <DataViews
+          viewKey="settings-users"
+          columns={columns}
+          rows={comptes}
+          rowKey={(c) => c.id}
+          emptyMessage="Aucun compte — invitez vos collaborateurs."
+          nested={{
+            groupKey: (c) => c.role,
+            groupLabel: (gk, grows) => {
+              const meta = ROLES[gk] ?? { label: gk, cls: "", icon: Users }
+              const actifs = grows.filter(c => c.actif).length
+              const Icon = meta.icon
+              return (
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                  {meta.label}
+                  <span className="ml-1 text-[11px] font-normal text-primary/70">
+                    — {grows.length} compte{grows.length > 1 ? "s" : ""} · {actifs} actif{actifs > 1 ? "s" : ""}
+                  </span>
+                </span>
+              )
+            },
+            groupSortValue: (_gk, grows) => grows.length,
+            hideColumnKeyInGroups: "role",
+            defaultOpen: "first",
+          }}
+          renderCard={(c) => {
+            const meta = ROLES[c.role] ?? { label: c.role, cls: "", icon: Users }
+            return (
+              <Card className="overflow-hidden">
+                <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-4 py-2.5">
+                  <p className="min-w-0 truncate text-sm font-semibold">{c.nom}</p>
+                  <Badge variant="outline" className={cn("shrink-0 gap-1", meta.cls)}>
+                    <meta.icon className="h-3 w-3" aria-hidden /> {meta.label}
+                  </Badge>
+                </div>
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">{c.email}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+                    <div className="flex items-center gap-2">
                       <Switch
                         checked={c.actif}
                         onCheckedChange={v => toggleActif(c.id, v)}
                         aria-label={`Activer le compte ${c.email}`}
                       />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" onClick={() => revoke(c)} className="gap-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
-                        <Ban className="h-3.5 w-3.5" aria-hidden /> Révoquer
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-              {comptes.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    Aucun compte — invitez vos collaborateurs.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                      <span className={cn("text-xs font-medium", c.actif ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+                        {c.actif ? "Compte actif" : "Compte suspendu"}
+                      </span>
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => revoke(c)} className="gap-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
+                      <Ban className="h-3.5 w-3.5" aria-hidden /> Révoquer
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          }}
+        />
       </CardContent>
 
       <InviteUserDialog open={inviteOpen} onClose={() => setInviteOpen(false)} onInvite={invite} />

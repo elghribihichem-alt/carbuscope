@@ -6,8 +6,9 @@ import * as React from "react"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Activity, CalendarClock, DoorClosed, DoorOpen, Eye, Hammer, Repeat2, Target, Zap } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { SeverityBadge, ImpactBadge } from "@/components/shell/badges"
 import { MOVEMENT_TYPE_LABELS, type AlertDTO, type BrandDTO, type MovementDTO } from "@/lib/types"
@@ -172,6 +173,40 @@ export function CalcVeille({ brands, onSave, saving, initial }: CalcVeilleProps)
     description: `${b.stationCount} stations · ${b.isIndependents ? "réseau indépendant" : "enseigne structurée"}`,
   }))
 
+  // Colonnes des mouvements (DataViews : Tableau / Cartes / Arborescence par type)
+  const mvtColumns: DataViewColumn<MovementDTO>[] = [
+    {
+      key: "date", header: "Date",
+      sortValue: (m) => new Date(m.date).getTime(),
+      className: "whitespace-nowrap",
+      render: (m) => <span className="text-xs tabular-nums">{fmtDateFr(m.date)}</span>,
+    },
+    {
+      key: "type", header: "Type",
+      sortValue: (m) => MOVEMENT_TYPE_LABELS[m.type] ?? m.type,
+      render: (m) => (
+        <Badge variant="outline" className="text-[11px]" style={{ borderColor: TYPE_COLORS[m.type], color: TYPE_COLORS[m.type] }}>
+          {MOVEMENT_TYPE_LABELS[m.type] ?? m.type}
+        </Badge>
+      ),
+    },
+    {
+      key: "station", header: "Station",
+      sortValue: (m) => m.station,
+      render: (m) => <span className="text-xs font-medium">{m.station}</span>,
+    },
+    {
+      key: "gouvernorat", header: "Gouvernorat",
+      sortValue: (m) => m.gouvernorat,
+      render: (m) => <span className="text-xs">{m.gouvernorat}</span>,
+    },
+    {
+      key: "impact", header: "Impact", align: "right",
+      sortValue: (m) => m.impact,
+      render: (m) => <ImpactBadge impact={m.impact} />,
+    },
+  ]
+
   const reset = () => {
     setBrandName(defaultBrand)
     setPeriodMonths(6)
@@ -330,50 +365,60 @@ export function CalcVeille({ brands, onSave, saving, initial }: CalcVeilleProps)
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-lg border bg-card">
+              {/* Mouvements détectés — DataViews : 3 modes d'affichage, arborescence par type */}
+              <div className="rounded-lg border bg-card">
                 <div className="border-b p-3 pb-2.5">
                   <p className="text-sm font-semibold">Mouvements détectés</p>
                   <p className="text-xs text-muted-foreground">
-                    {inPeriod.length} mouvement{inPeriod.length > 1 ? "s" : ""} de {brandName} sur {periodMonths} mois
+                    {inPeriod.length} mouvement{inPeriod.length > 1 ? "s" : ""} de {brandName} sur {periodMonths} mois · 3 modes
+                    d&apos;affichage
                   </p>
                 </div>
-                <div className="max-h-72 overflow-y-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-card">
-                      <TableRow>
-                        <TableHead className="text-xs">Date</TableHead>
-                        <TableHead className="text-xs">Type</TableHead>
-                        <TableHead className="text-xs">Station</TableHead>
-                        <TableHead className="text-xs">Gouvernorat</TableHead>
-                        <TableHead className="text-right text-xs">Impact</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {inPeriod.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="py-6 text-center text-xs text-muted-foreground">
-                            Aucun mouvement enregistré sur la période sélectionnée.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        inPeriod.map((m) => (
-                          <TableRow key={m.id}>
-                            <TableCell className="py-2 text-xs tabular-nums">{fmtDateFr(m.date)}</TableCell>
-                            <TableCell className="py-2">
-                              <Badge variant="outline" className="text-[11px]" style={{ borderColor: TYPE_COLORS[m.type], color: TYPE_COLORS[m.type] }}>
-                                {MOVEMENT_TYPE_LABELS[m.type] ?? m.type}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="py-2 text-xs font-medium">{m.station}</TableCell>
-                            <TableCell className="py-2 text-xs">{m.gouvernorat}</TableCell>
-                            <TableCell className="py-2 text-right">
-                              <ImpactBadge impact={m.impact} />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                <div className="p-3">
+                  <DataViews
+                    viewKey="calc-veille"
+                    columns={mvtColumns}
+                    rows={inPeriod}
+                    rowKey={(m) => m.id}
+                    emptyMessage="Aucun mouvement enregistré sur la période sélectionnée."
+                    maxHeightClassName="max-h-72"
+                    nested={{
+                      groupKey: (m) => m.type,
+                      groupLabel: (gk, grows) => {
+                        const forts = grows.filter((m) => m.impact === "Fort").length
+                        return (
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full" style={{ background: TYPE_COLORS[gk] ?? "#94a3b8" }} aria-hidden />
+                            {MOVEMENT_TYPE_LABELS[gk] ?? gk}
+                            <span className="ml-1 text-[11px] font-normal text-primary/70">
+                              — {grows.length} mouvement{grows.length > 1 ? "s" : ""}
+                              {forts > 0 ? ` · ${forts} à fort impact` : ""}
+                            </span>
+                          </span>
+                        )
+                      },
+                      groupSortValue: (_gk, grows) => grows.length,
+                      hideColumnKeyInGroups: "type",
+                      defaultOpen: "first",
+                    }}
+                    renderCard={(m) => (
+                      <Card className="overflow-hidden">
+                        <CardContent className="p-3.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge variant="outline" className="text-[11px]" style={{ borderColor: TYPE_COLORS[m.type], color: TYPE_COLORS[m.type] }}>
+                              {MOVEMENT_TYPE_LABELS[m.type] ?? m.type}
+                            </Badge>
+                            <span className="text-[11px] tabular-nums text-muted-foreground">{fmtDateFr(m.date)}</span>
+                          </div>
+                          <p className="mt-2 text-sm font-semibold leading-snug">{m.station}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{m.gouvernorat}</p>
+                          <div className="mt-2 border-t pt-2">
+                            <ImpactBadge impact={m.impact} />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  />
                 </div>
               </div>
             </>

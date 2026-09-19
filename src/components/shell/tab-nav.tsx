@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { LayoutDashboard, Map, Fuel, Crosshair, Calculator, Banknote, Radar, FileText, Settings, Lock } from "lucide-react"
+import { LayoutDashboard, Map, Fuel, Crosshair, Calculator, Banknote, Radar, FileText, Settings, Lock, Target } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAppStore, TAB_ACCESS, type Tab } from "@/store/app-store"
 
@@ -11,6 +11,7 @@ const TABS: { value: Tab; label: string; icon: React.ComponentType<{ className?:
   { value: "stations", label: "Mes stations", icon: Fuel },
   { value: "competition", label: "Concurrence", icon: Crosshair },
   { value: "calculators", label: "Calculateurs", icon: Calculator },
+  { value: "implantation", label: "Implantation", icon: Target },
   { value: "prices", label: "Prix & marges", icon: Banknote },
   { value: "veille", label: "Veille", icon: Radar },
   { value: "reports", label: "Rapports", icon: FileText },
@@ -22,7 +23,7 @@ export function TabNav() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <nav className="sticky top-[57px] z-30 border-b bg-background/95 backdrop-blur" aria-label="Navigation principale">
+      <nav style={{ top: "var(--cs-header-h, 57px)" }} className="sticky z-30 border-b bg-background/95 backdrop-blur" aria-label="Navigation principale">
         <div className="mx-auto flex max-w-[1600px] items-center gap-1 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map(t => {
             const allowed = TAB_ACCESS[t.value].includes(role)

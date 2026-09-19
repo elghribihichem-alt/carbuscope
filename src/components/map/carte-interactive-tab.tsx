@@ -1,7 +1,8 @@
 'use client'
 
 // Module A.3 — Carte interactive : exploration spatiale multi-couches
-// Filtres rapides (enseigne, service, statut, horaires), fiche station,
+// Filtres en accordéon (T27) : recherche, enseignes (saisie semi-automatique),
+// services, statut/horaires, gouvernorat, note & trafic. Fiche station,
 // outils d'analyse spatiale (mesure, rayon de chalandise, polygone, export).
 
 import * as React from "react"
@@ -10,17 +11,23 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Search, RotateCcw, MapPin, Users, GitCompareArrows, Trash2, X } from "lucide-react"
+import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion"
+import { Search, RotateCcw, MapPin, Users, GitCompareArrows, Trash2, X, Star, Gauge } from "lucide-react"
 import { toast } from "sonner"
 import { TunisiaMap, SERVICE_ICONS } from "./tunisia-map"
+import { BrandAutocomplete } from "./brand-autocomplete"
 import { StationDetailDialog } from "@/components/stations/station-detail-dialog"
 import { StationCompareDialog, MAX_COMPARE_STATIONS } from "@/components/stations/station-compare-dialog"
 import { useAppStore } from "@/store/app-store"
 import type { StationDTO, BrandDTO, ServiceDTO } from "@/lib/types"
 import { SERVICE_LABELS } from "@/lib/types"
 import { TabSkeleton } from "@/components/shell/loading"
+import { cn } from "@/lib/utils"
 
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Ouverte" },
@@ -51,13 +58,17 @@ export function CarteInteractiveTab() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  // Filtres
+  // Filtres serveur
   const [brandSel, setBrandSel] = useState<string[]>([])
   const [serviceSel, setServiceSel] = useState<string[]>([])
   const [statusSel, setStatusSel] = useState<string[]>([])
   const [hours, setHours] = useState("ALL")
   const [gov, setGov] = useState("ALL")
   const [search, setSearch] = useState("")
+
+  // Filtres locaux (post-requête) : note minimale & trafic minimum
+  const [ratingMin, setRatingMin] = useState(0)
+  const [trafficMin, setTrafficMin] = useState(0)
 
   useEffect(() => {
     Promise.all([
@@ -93,8 +104,20 @@ export function CarteInteractiveTab() {
     return () => clearTimeout(t)
   }, [query])
 
+  // Application locale des filtres note / trafic
+  const shownStations = useMemo(() => {
+    if (ratingMin === 0 && trafficMin === 0) return stations
+    return stations.filter(s => (s.rating ?? 0) >= ratingMin && (s.traffic ?? 0) >= trafficMin)
+  }, [stations, ratingMin, trafficMin])
+
+  const localActive = (ratingMin > 0 ? 1 : 0) + (trafficMin > 0 ? 1 : 0)
+
   const toggle = (arr: string[], v: string, set: (a: string[]) => void) =>
     set(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
+
+  const toggleBrand = useCallback((slug: string) => {
+    setBrandSel((arr) => arr.includes(slug) ? arr.filter(x => x !== slug) : [...arr, slug])
+  }, [])
 
   // ---- Comparateur ----
   const toggleCompare = useCallback((s: StationDTO) => {
@@ -127,97 +150,190 @@ export function CarteInteractiveTab() {
 
   const resetFilters = useCallback(() => {
     setBrandSel([]); setServiceSel([]); setStatusSel([]); setHours("ALL"); setGov("ALL"); setSearch("")
+    setRatingMin(0); setTrafficMin(0)
   }, [])
 
   const activeFilters =
-    brandSel.length + serviceSel.length + statusSel.length + (hours !== "ALL" ? 1 : 0) + (gov !== "ALL" ? 1 : 0) + (search ? 1 : 0)
+    brandSel.length + serviceSel.length + statusSel.length + (hours !== "ALL" ? 1 : 0) + (gov !== "ALL" ? 1 : 0) + (search ? 1 : 0) + localActive
 
   return (
-    <div className="grid flex-1 gap-0 lg:grid-cols-[270px_1fr]">
-      {/* ---------- Panneau de filtres ---------- */}
+    <div className="grid flex-1 gap-0 lg:grid-cols-[280px_1fr]">
+      {/* ---------- Panneau de filtres (accordéon) ---------- */}
       <aside className="border-b bg-muted/20 lg:border-b-0 lg:border-r">
-        <ScrollArea className="h-auto lg:h-[calc(100vh-106px)] lg:sticky lg:top-[106px]">
-          <div className="space-y-5 p-4">
-            <div>
-              <label htmlFor="recherche-station" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Search className="h-3.5 w-3.5" /> Recherche
-              </label>
-              <Input id="recherche-station" placeholder="Nom, ville, enseigne…" value={search}
-                onChange={e => setSearch(e.target.value)} className="h-9 text-sm" />
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Enseigne {brandSel.length > 0 && <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{brandSel.length}</Badge>}
-              </p>
-              <div className="space-y-1.5">
-                {brands.map(b => (
-                  <label key={b.slug} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-accent">
-                    <Checkbox checked={brandSel.includes(b.slug)} onCheckedChange={() => toggle(brandSel, b.slug, setBrandSel)} />
-                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: b.color }} />
-                    <span className="flex-1 truncate">{b.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{b.stationCount}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Services</p>
-              <div className="grid grid-cols-1 gap-1.5">
-                {services.map(s => (
-                  <label key={s.slug} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-accent">
-                    <Checkbox checked={serviceSel.includes(s.slug)} onCheckedChange={() => toggle(serviceSel, s.slug, setServiceSel)} />
-                    {(() => { const Icon = SERVICE_ICONS[s.slug]; return Icon ? <Icon className="h-3.5 w-3.5 text-muted-foreground" /> : null })()}
-                    <span className="flex-1 truncate">{s.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Statut</p>
-              <div className="flex flex-wrap gap-1.5">
-                {STATUS_OPTIONS.map(s => (
-                  <button key={s.value} onClick={() => toggle(statusSel, s.value, setStatusSel)}
-                    className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${statusSel.includes(s.value) ? "border-emerald-600 bg-emerald-600 text-white" : "hover:bg-accent"}`}>
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Horaires</p>
-              <Select value={hours} onValueChange={setHours}>
-                <SelectTrigger className="h-9 text-sm" aria-label="Filtrer par horaires"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {HOURS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gouvernorat</p>
-              <Select value={gov} onValueChange={setGov}>
-                <SelectTrigger className="h-9 text-sm" aria-label="Filtrer par gouvernorat"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Toute la Tunisie</SelectItem>
-                  {GOVS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center justify-between border-t pt-3">
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" />
-                <span className="font-semibold text-foreground">{total.toLocaleString("fr-FR")}</span> stations
+        <ScrollArea
+          className="h-auto lg:sticky lg:h-[calc(100vh-var(--cs-header-h,57px)-55px)]"
+          style={{ top: "calc(var(--cs-header-h, 57px) + 49px)" }}
+        >
+          <div className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" /> Filtres
               </p>
               {activeFilters > 0 && (
                 <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={resetFilters}>
                   <RotateCcw className="h-3 w-3" /> Réinitialiser ({activeFilters})
                 </Button>
               )}
+            </div>
+
+            <Accordion type="multiple" defaultValue={["recherche", "enseignes"]} className="w-full">
+              {/* --- Recherche libre --- */}
+              <AccordionItem value="recherche" className="border-none">
+                <AccordionTrigger className="rounded-md px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:no-underline [&[data-state=open]>svg]:text-primary">
+                  <span className="flex items-center gap-1.5"><Search className="h-3.5 w-3.5" /> Recherche</span>
+                </AccordionTrigger>
+                <AccordionContent className="px-2 pb-3 pt-1">
+                  <Input id="recherche-station" placeholder="Nom, ville, enseigne…" value={search}
+                    onChange={e => setSearch(e.target.value)} className="h-9 text-sm" />
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Recherche plein texte sur les 1 814 stations du réseau.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* --- Enseignes : saisie semi-automatique + cases --- */}
+              <AccordionItem value="enseignes" className="border-none">
+                <AccordionTrigger className="rounded-md px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:no-underline [&[data-state=open]>svg]:text-primary">
+                  <span className="flex items-center gap-1.5">
+                    Enseignes
+                    {brandSel.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{brandSel.length}</Badge>}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="space-y-2 px-2 pb-3 pt-1">
+                  <BrandAutocomplete brands={brands} selected={brandSel} onToggle={toggleBrand} />
+                  <div className="space-y-1.5 border-t pt-2">
+                    {brands.map(b => (
+                      <label key={b.slug} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-accent">
+                        <Checkbox checked={brandSel.includes(b.slug)} onCheckedChange={() => toggle(brandSel, b.slug, setBrandSel)} />
+                        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: b.color }} />
+                        <span className="flex-1 truncate">{b.name}</span>
+                        <span className="text-[11px] text-muted-foreground">{b.stationCount}</span>
+                      </label>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* --- Services --- */}
+              <AccordionItem value="services" className="border-none">
+                <AccordionTrigger className="rounded-md px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:no-underline [&[data-state=open]>svg]:text-primary">
+                  <span className="flex items-center gap-1.5">
+                    Services
+                    {serviceSel.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{serviceSel.length}</Badge>}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="px-2 pb-3 pt-1">
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {services.map(s => (
+                      <label key={s.slug} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-accent">
+                        <Checkbox checked={serviceSel.includes(s.slug)} onCheckedChange={() => toggle(serviceSel, s.slug, setServiceSel)} />
+                        {(() => { const Icon = SERVICE_ICONS[s.slug]; return Icon ? <Icon className="h-3.5 w-3.5 text-muted-foreground" /> : null })()}
+                        <span className="flex-1 truncate">{s.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* --- Statut & horaires --- */}
+              <AccordionItem value="statut" className="border-none">
+                <AccordionTrigger className="rounded-md px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:no-underline [&[data-state=open]>svg]:text-primary">
+                  <span className="flex items-center gap-1.5">
+                    Statut & horaires
+                    {statusSel.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{statusSel.length}</Badge>}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3 px-2 pb-3 pt-1">
+                  <div className="flex flex-wrap gap-1.5">
+                    {STATUS_OPTIONS.map(s => (
+                      <button key={s.value} onClick={() => toggle(statusSel, s.value, setStatusSel)}
+                        className={cn("rounded-full border px-2.5 py-1 text-xs transition-colors",
+                          statusSel.includes(s.value)
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "hover:bg-accent")}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  <Select value={hours} onValueChange={setHours}>
+                    <SelectTrigger className="h-9 text-sm" aria-label="Filtrer par horaires"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {HOURS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* --- Gouvernorat --- */}
+              <AccordionItem value="gouvernorat" className="border-none">
+                <AccordionTrigger className="rounded-md px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:no-underline [&[data-state=open]>svg]:text-primary">
+                  <span className="flex items-center gap-1.5">
+                    Gouvernorat
+                    {gov !== "ALL" && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">1</Badge>}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="px-2 pb-3 pt-1">
+                  <Select value={gov} onValueChange={setGov}>
+                    <SelectTrigger className="h-9 text-sm" aria-label="Filtrer par gouvernorat"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Toute la Tunisie</SelectItem>
+                      {GOVS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* --- Note & trafic (nouveaux filtres) --- */}
+              <AccordionItem value="performance" className="border-none">
+                <AccordionTrigger className="rounded-md px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:no-underline [&[data-state=open]>svg]:text-primary">
+                  <span className="flex items-center gap-1.5">
+                    <Star className="h-3.5 w-3.5" /> Note & trafic
+                    {localActive > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{localActive}</Badge>}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="space-y-4 px-2 pb-3 pt-1">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1 font-medium"><Star className="h-3.5 w-3.5 text-amber-500" /> Note minimale</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {ratingMin === 0 ? "toutes" : `${ratingMin.toFixed(1)} / 5`}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[ratingMin]} min={0} max={5} step={0.5}
+                      onValueChange={([v]) => setRatingMin(v)}
+                      aria-label="Note minimale"
+                    />
+                    <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                      <span>Toutes</span><span>3.0</span><span>4.0</span><span>5.0</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1 font-medium"><Gauge className="h-3.5 w-3.5 text-emerald-600" /> Trafic minimum</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {trafficMin === 0 ? "tous" : `${trafficMin.toLocaleString("fr-FR")} véh/j`}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[trafficMin]} min={0} max={3000} step={100}
+                      onValueChange={([v]) => setTrafficMin(v)}
+                      aria-label="Trafic minimum"
+                    />
+                    <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                      <span>Tous</span><span>1 000</span><span>2 000</span><span>3 000+</span>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+
+            <div className="flex items-center justify-between border-t pt-3">
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" />
+                <span className="font-semibold text-foreground">{shownStations.length.toLocaleString("fr-FR")}</span>
+                <span>/ {total.toLocaleString("fr-FR")} stations</span>
+              </p>
             </div>
 
             <p className="flex items-center gap-1.5 rounded-lg border bg-background p-2 text-[11px] leading-relaxed text-muted-foreground">
@@ -234,7 +350,7 @@ export function CarteInteractiveTab() {
           <div className="flex-1"><TabSkeleton title="Chargement de la carte…" /></div>
         ) : (
           <TunisiaMap
-            stations={stations}
+            stations={shownStations}
             ownBrandSlug={brandSlug}
             tools
             showLayerControl

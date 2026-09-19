@@ -22,11 +22,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
+import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { toast } from "sonner"
 import { AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
-import type { FuelPriceCurrent, FuelPricesResponse, FuelType } from "@/lib/types"
+import type { FuelPriceCurrent, FuelPriceDTO, FuelPricesResponse, FuelType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 // ---------- Constantes métier ----------
@@ -627,11 +627,38 @@ function MarginSimulator({ current }: { current: FuelPriceCurrent[] }) {
   )
 }
 
-// ---------- Tableau chronologique des décrets ----------
+// ---------- Registre des décrets (DataViews : Tableau / Cartes / Arborescence) ----------
+
+/** Ligne enrichie du registre : prix précédent + variation par carburant. */
+type DecreeRow = FuelPriceDTO & { prevPrice: number | null; delta: number | null }
+
+/** Variation du décret : pastille rouge (hausse) / émeraude (baisse) / ardoise (stable). */
+function DecreeDelta({ delta }: { delta: number | null }) {
+  if (delta === null) return <span className="text-xs text-muted-foreground">—</span>
+  if (delta === 0) {
+    return (
+      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+        0
+      </span>
+    )
+  }
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums",
+        delta > 0
+          ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+      )}
+    >
+      {delta > 0 ? "+" : ""}{fmtMillimes(delta)}
+    </span>
+  )
+}
 
 function DecreesTable({ data }: { data: FuelPricesResponse }) {
   // Lignes triées par date décroissante, ancien → nouveau prix par carburant.
-  const rows = useMemo(() => {
+  const rows = useMemo<DecreeRow[]>(() => {
     const prev = new Map<string, { price: number; note: string | null; at: string }>()
     return [...data.history]
       .sort((a, b) => b.effectiveAt.localeCompare(a.effectiveAt))
@@ -646,83 +673,148 @@ function DecreesTable({ data }: { data: FuelPricesResponse }) {
       })
   }, [data.history])
 
+  const columns: DataViewColumn<DecreeRow>[] = [
+    {
+      key: "date", header: "Date", align: "left",
+      sortValue: (r) => new Date(r.effectiveAt).getTime(),
+      className: "whitespace-nowrap",
+      render: (r) => <span className="text-xs tabular-nums">{fmtDateFr(r.effectiveAt)}</span>,
+    },
+    {
+      key: "fuelType", header: "Carburant",
+      sortValue: (r) => FUEL_META[r.fuelType].label,
+      render: (r) => {
+        const meta = FUEL_META[r.fuelType]
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+            <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} aria-hidden />
+            {meta.label}
+          </span>
+        )
+      },
+    },
+    {
+      key: "prevPrice", header: "Ancien", align: "right",
+      sortValue: (r) => r.prevPrice ?? Number.NEGATIVE_INFINITY,
+      render: (r) => (
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {r.prevPrice !== null ? fmtPrice(r.prevPrice) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "priceMillimes", header: "Nouveau", align: "right",
+      sortValue: (r) => r.priceMillimes,
+      render: (r) => <span className="text-xs font-bold tabular-nums">{fmtPrice(r.priceMillimes)}</span>,
+    },
+    {
+      key: "delta", header: "Δ", align: "right",
+      sortValue: (r) => r.delta ?? 0,
+      render: (r) => <DecreeDelta delta={r.delta} />,
+    },
+    {
+      key: "marginMillimes", header: "Marge", align: "right",
+      sortValue: (r) => r.marginMillimes,
+      render: (r) => (
+        <span className="text-xs tabular-nums text-muted-foreground">{fmtMillimes(r.marginMillimes)}/L</span>
+      ),
+    },
+    {
+      key: "decreeNote", header: "Contexte",
+      sortValue: (r) => r.decreeNote ?? "",
+      className: "max-w-56",
+      render: (r) => (
+        <span className="block truncate text-xs italic text-muted-foreground/80" title={r.decreeNote ?? ""}>
+          {r.decreeNote ?? "—"}
+        </span>
+      ),
+    },
+  ]
+
+  // Dernier décret en vigueur d'un groupe (indépendant du tri courant).
+  const latestOf = (grows: DecreeRow[]) =>
+    grows.reduce<DecreeRow | null>((acc, r) => (!acc || r.effectiveAt > acc.effectiveAt ? r : acc), null)
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Registre des décrets</CardTitle>
         <CardDescription className="text-xs">
-          {data.totals.decrees} décrets référencés depuis 2021 — {data.totals.nextReviewLabel}
+          {data.totals.decrees} décrets référencés depuis 2021 — {data.totals.nextReviewLabel} · 3 modes d&apos;affichage
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="max-h-96">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
-              <tr className="border-b text-left">
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
-                <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Carburant</th>
-                <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ancien</th>
-                <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nouveau</th>
-                <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Δ</th>
-                <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Marge</th>
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contexte</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const meta = FUEL_META[r.fuelType]
-                const delta = r.delta
-                return (
-                  <tr
-                    key={r.id}
-                    className={cn(
-                      "border-b/60 transition-colors hover:bg-muted/50",
-                      i % 2 === 1 && "bg-muted/20",
-                    )}
-                  >
-                    <td className="whitespace-nowrap px-4 py-2 text-xs tabular-nums">{fmtDateFr(r.effectiveAt)}</td>
-                    <td className="px-2 py-2">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium">
-                        <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} aria-hidden />
-                        {meta.label}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 text-right text-xs tabular-nums text-muted-foreground">
-                      {r.prevPrice !== null ? fmtPrice(r.prevPrice) : "—"}
-                    </td>
-                    <td className="px-2 py-2 text-right text-xs font-bold tabular-nums">{fmtPrice(r.priceMillimes)}</td>
-                    <td className="px-2 py-2 text-right text-xs tabular-nums">
-                      {delta === null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : delta === 0 ? (
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                          0
-                        </span>
-                      ) : (
-                        <span
-                          className={cn(
-                            "rounded px-1.5 py-0.5 font-semibold",
-                            delta > 0
-                              ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
-                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
-                          )}
-                        >
-                          {delta > 0 ? "+" : ""}{fmtMillimes(delta)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-right text-xs tabular-nums text-muted-foreground">
-                      {fmtMillimes(r.marginMillimes)}/L
-                    </td>
-                    <td className="max-w-56 truncate px-4 py-2 text-xs italic text-muted-foreground/80" title={r.decreeNote ?? ""}>
-                      {r.decreeNote ?? "—"}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </ScrollArea>
+      <CardContent>
+        <DataViews
+          viewKey="prices-decrets"
+          columns={columns}
+          rows={rows}
+          rowKey={(r) => r.id}
+          emptyMessage="Aucun décret référencé dans le registre."
+          maxHeightClassName="max-h-96"
+          nested={{
+            groupKey: (r) => r.fuelType,
+            groupLabel: (gk, grows) => {
+              const meta = FUEL_META[gk as FuelType]
+              const latest = latestOf(grows)
+              return (
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} aria-hidden />
+                  {meta.label}
+                  <span className="ml-1 text-[11px] font-normal text-primary/70">
+                    — {grows.length} décret{grows.length > 1 ? "s" : ""} · en vigueur :{" "}
+                    {latest ? `${fmtPrice(latest.priceMillimes)} ${meta.unit} depuis le ${fmtDateFr(latest.effectiveAt)}` : "—"}
+                  </span>
+                </span>
+              )
+            },
+            groupSortValue: (_gk, grows) => grows.length,
+            hideColumnKeyInGroups: "fuelType",
+            defaultOpen: "first",
+          }}
+          renderCard={(r) => {
+            const meta = FUEL_META[r.fuelType]
+            return (
+              <Card className="overflow-hidden">
+                <div
+                  className="flex items-center justify-between gap-2 border-b px-4 py-2.5"
+                  style={{ borderColor: `${meta.color}55`, backgroundColor: `${meta.color}14` }}
+                >
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: meta.color }}>
+                    <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} aria-hidden />
+                    {meta.label}
+                  </span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">{fmtDateFr(r.effectiveAt)}</span>
+                </div>
+                <CardContent className="p-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-2xl font-black tabular-nums">
+                      {fmtPrice(r.priceMillimes)}
+                      <span className="ml-1 text-xs font-medium text-muted-foreground">{meta.unit}</span>
+                    </p>
+                    <DecreeDelta delta={r.delta} />
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t pt-3">
+                    <div>
+                      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ancien prix</dt>
+                      <dd className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                        {r.prevPrice !== null ? `${fmtPrice(r.prevPrice)} ${meta.unit}` : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Marge détaillant</dt>
+                      <dd className="mt-0.5 text-xs tabular-nums text-muted-foreground">{fmtMillimes(r.marginMillimes)}/L</dd>
+                    </div>
+                  </dl>
+                  {r.decreeNote && (
+                    <p className="mt-2 truncate text-[11px] italic text-muted-foreground/80" title={r.decreeNote}>
+                      « {r.decreeNote} »
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          }}
+        />
       </CardContent>
     </Card>
   )
