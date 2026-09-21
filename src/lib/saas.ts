@@ -24,6 +24,14 @@ export const INVOICE_STATUS_META: Record<string, { label: string; className: str
   RETARD: { label: "En retard", className: "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400" },
 }
 
+// Statuts d'une tâche de l'agent IA interne (Phase 3 Super Admin).
+export const AI_TASK_STATUS_META: Record<string, { label: string; className: string }> = {
+  ENREGISTREE: { label: "Enregistrée", className: "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400" },
+  EN_COURS: { label: "En cours", className: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300" },
+  TERMINEE: { label: "Terminée", className: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" },
+  ECHEC: { label: "Échec", className: "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400" },
+}
+
 export const AUDIT_KIND_META: Record<string, { label: string; className: string }> = {
   AUTH: { label: "Connexion", className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
   CONTRAT: { label: "Contrat", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" },
@@ -31,6 +39,8 @@ export const AUDIT_KIND_META: Record<string, { label: string; className: string 
   UTILISATEUR: { label: "Utilisateur", className: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" },
   IMPERSONATION: { label: "Prise de main", className: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300" },
   SYSTEME: { label: "Système", className: "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300" },
+  AGENT_IA: { label: "Agent IA", className: "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-400" },
+  DEMOGRAPHIE: { label: "Démographie", className: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300" },
 }
 
 /** Statut effectif d'une facture : impayée + échéance dépassée ⇒ retard. */
@@ -80,6 +90,9 @@ export interface SaasInvoiceDTO {
   amount: number
   status: string
   paidAt: string | null
+  // Relances d'échéance (T30)
+  reminderCount: number
+  lastReminderAt: string | null
 }
 
 export interface SaasUserDTO {
@@ -102,6 +115,22 @@ export interface SaasAuditDTO {
   createdAt: string
 }
 
+export interface SaasPlanDTO {
+  id: string
+  code: string
+  label: string
+  monthlyFee: number
+  seatsIncluded: number
+  stationQuota: number
+  features: string[] // features FR (séparées par « | » en base)
+  sortOrder: number
+  active: boolean
+  // stats dérivées des contrats
+  contractsCount: number // tous statuts confondus
+  contractsActive: number // contrats ACTIF uniquement
+  mrr: number // somme des tarifs des contrats ACTIF du plan (DT)
+}
+
 export interface SaasOverviewDTO {
   kpis: {
     activeContracts: number
@@ -119,3 +148,139 @@ export interface SaasOverviewDTO {
   recentInvoices: SaasInvoiceDTO[]
   audit: SaasAuditDTO[]
 }
+
+// ---- Agent IA interne (Phase 3 Super Admin) ----
+
+export interface AiTaskDTO {
+  id: string
+  title: string
+  instruction: string
+  status: string // ENREGISTREE | EN_COURS | TERMINEE | ECHEC
+  result: string | null
+  error: string | null
+  launchedAt: string | null
+  finishedAt: string | null
+  durationMs: number | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** Membre du personnel d'une enseigne, avec activation de l'agent IA. */
+export interface AiUserSettingDTO {
+  id: string
+  name: string
+  email: string
+  role: string
+  active: boolean
+  enabled: boolean
+}
+
+/** Enseigne cliente avec activation de l'agent IA (le personnel suit). */
+export interface AiBrandSettingDTO {
+  brandSlug: string
+  brandName: string
+  color: string
+  plan: string
+  contractStatus: string
+  enabled: boolean
+  users: AiUserSettingDTO[]
+}
+
+// ---- Paramètre cartographique (Phase 3 Super Admin) ----
+
+export interface CartoBoundaryDTO {
+  id: string
+  name: string
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+  active: boolean
+  updatedAt: string | null
+  isDefault: boolean
+}
+
+/** Bornes par défaut de la zone de couverture (Tunisie entière). */
+export const CARTO_DEFAULTS = {
+  minLat: 30.2,
+  maxLat: 37.4,
+  minLng: 7.5,
+  maxLng: 11.6,
+  name: "Zone de couverture — Tunisie",
+} as const
+
+// ---- Module Démographie (Phase 4 Super Admin, T35) ----
+
+/** Catégories du parc automobile (classification tunisienne usuelle, sans
+ *  notion de motorisation — chiffres à alimenter par délégation). */
+export const VEHICLE_CATEGORIES: { key: string; label: string; short: string }[] = [
+  { key: "vehiclesLight", label: "Voitures légères", short: "Véh. légères" },
+  { key: "vehiclesUtility", label: "Utilitaires & pick-up", short: "Utilitaires" },
+  { key: "vehiclesHeavy", label: "Poids lourds", short: "Poids lourds" },
+  { key: "vehiclesBuses", label: "Autocars & bus", short: "Autocars" },
+  { key: "vehiclesMotorcycles", label: "Deux-roues motorisés", short: "Deux-roues" },
+]
+
+/** Référence INS 2024 d'un gouvernorat — éditable en ligne depuis le volet
+ *  « Gouvernorats » (T37) : population, H/F, superficie, urbain/rural et
+ *  colonnes historiques (véhicules, motorisation, âge du parc). */
+export interface DemographicGouvernoratDTO {
+  id: string
+  name: string
+  isoCode: string | null
+  population: number
+  menPct: number | null
+  womenPct: number | null
+  areaKm2: number | null
+  urbanPct: number | null
+  ruralPct: number | null
+  estimated: boolean
+  delegationCount: number
+  vehicles: number
+  motorizationRate: number
+  avgFleetAge: number
+  updatedAt: string | null
+  updatedBy: string | null
+}
+
+/** Ligne éditable : une délégation du tableau démographique. */
+export interface DemographicDelegationDTO {
+  id: string
+  gouvernorat: string
+  isoCode: string
+  delegation: string
+  population: number | null
+  urbanPct: number | null
+  ruralPct: number | null
+  vehiclesLight: number | null
+  vehiclesUtility: number | null
+  vehiclesHeavy: number | null
+  vehiclesBuses: number | null
+  vehiclesMotorcycles: number | null
+  updatedAt: string | null
+  updatedBy: string | null
+}
+
+// ---- Module Démographie (T37, volet « Paramétrage ») : visibilité par
+// utilisateur — accès accordé depuis la Super Administration, effet dans
+// l'Observatoire B2B de l'utilisateur (onglet « Démographie »).
+
+export type DemographicAccessLevel = "GOUVERNORATS" | "DELEGATIONS"
+
+export interface DemographicAccessDTO {
+  userId: string
+  email: string
+  name: string
+  brandSlug: string | null
+  level: DemographicAccessLevel
+  canEdit: boolean
+  updatedAt: string | null
+  updatedBy: string | null
+}
+
+/** Niveaux de visibilité du module (libellés FR du volet Paramétrage). */
+export const DEMOGRAPHIC_LEVELS: { value: DemographicAccessLevel; label: string; hint: string }[] = [
+  { value: "GOUVERNORATS", label: "Gouvernorats", hint: "Vue des 24 gouvernorats (lecture des délégations masquée)" },
+  { value: "DELEGATIONS", label: "Gouvernorats + délégations", hint: "Vue complète : gouvernorats et 277 délégations" },
+]

@@ -8,13 +8,17 @@ import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Crown, LayoutDashboard, FileSignature, Receipt, UsersRound, ScrollText, ShieldAlert } from "lucide-react"
+import { Crown, LayoutDashboard, FileSignature, Layers, Receipt, UsersRound, BarChart3, Bot, MapPinned, ScrollText, ShieldAlert } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import { SaOverview } from "./sa-overview"
 import { SaContracts } from "./sa-contracts"
+import { SaPlans } from "./sa-plans"
 import { SaInvoices } from "./sa-invoices"
 import { SaUsers } from "./sa-users"
+import { SaDemographie } from "./sa-demographie"
+import { SaAiAgent } from "./sa-ai-agent"
+import { SaCarto } from "./sa-carto"
 import { SaAudit } from "./sa-audit"
 
 export function SuperAdminView() {
@@ -59,20 +63,33 @@ export function SuperAdminView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne (5 onglets) */}
+      {/* Navigation interne (9 onglets — Démographie ajoutée en T35 après
+          Utilisateurs, demande utilisateur Phase 4) */}
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 lg:w-auto">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 lg:w-auto">
           <TabsTrigger value="overview" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <LayoutDashboard className="h-4 w-4" aria-hidden /> Vue d&apos;ensemble
           </TabsTrigger>
           <TabsTrigger value="contracts" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <FileSignature className="h-4 w-4" aria-hidden /> Enseignes &amp; contrats
           </TabsTrigger>
+          <TabsTrigger value="plans" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <Layers className="h-4 w-4" aria-hidden /> Plans &amp; tarifs
+          </TabsTrigger>
           <TabsTrigger value="invoices" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <Receipt className="h-4 w-4" aria-hidden /> Facturation
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <UsersRound className="h-4 w-4" aria-hidden /> Utilisateurs
+          </TabsTrigger>
+          <TabsTrigger value="demo" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <BarChart3 className="h-4 w-4" aria-hidden /> Démographie
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <Bot className="h-4 w-4" aria-hidden /> Agent IA
+          </TabsTrigger>
+          <TabsTrigger value="carto" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <MapPinned className="h-4 w-4" aria-hidden /> Cartographie
           </TabsTrigger>
           <TabsTrigger value="audit" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <ScrollText className="h-4 w-4" aria-hidden /> Journal d&apos;audit
@@ -85,11 +102,23 @@ export function SuperAdminView() {
         <TabsContent value="contracts" className="mt-0 space-y-4">
           <SaContracts />
         </TabsContent>
+        <TabsContent value="plans" className="mt-0 space-y-4">
+          <SaPlans />
+        </TabsContent>
         <TabsContent value="invoices" className="mt-0 space-y-4">
           <SaInvoices />
         </TabsContent>
         <TabsContent value="users" className="mt-0 space-y-4">
           <SaUsers />
+        </TabsContent>
+        <TabsContent value="demo" className="mt-0 space-y-4">
+          <SaDemographie />
+        </TabsContent>
+        <TabsContent value="ai" className="mt-0 space-y-4">
+          <SaAiAgent />
+        </TabsContent>
+        <TabsContent value="carto" className="mt-0 space-y-4">
+          <SaCarto />
         </TabsContent>
         <TabsContent value="audit" className="mt-0 space-y-4">
           <SaAudit />

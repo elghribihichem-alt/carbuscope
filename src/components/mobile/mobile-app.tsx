@@ -105,9 +105,10 @@ function TabBar({ active, onSelect }: { active: Screen; onSelect: (s: Screen) =>
   )
 }
 
-export function MobileApp() {
+export function MobileApp({ startInAgentSpace = false }: { startInAgentSpace?: boolean } = {}) {
   const { t, isRTL } = useI18n()
-  const [screen, setScreen] = useState<Screen>("map")
+  const startAgentRef = useRef(startInAgentSpace)
+  const [screen, setScreen] = useState<Screen>(startInAgentSpace ? "agent-login" : "map")
   const [returnTo, setReturnTo] = useState<Screen>("map")
   const [selected, setSelected] = useState<StationWithDist | null>(null)
   const [brands, setBrands] = useState<BrandDTO[]>([])
@@ -183,6 +184,9 @@ export function MobileApp() {
       }
       setAgent(a)
       setAgentMissions(d.missions)
+      // Vue « Agents terrain » (mode produit dédié) : session restaurée → on
+      // va directement à l'accueil de l'espace agent (écran de connexion sauté).
+      if (startAgentRef.current) setScreen("agent-home")
     })
     return () => {
       alive = false

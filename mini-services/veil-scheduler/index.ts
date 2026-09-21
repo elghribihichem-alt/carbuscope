@@ -214,3 +214,57 @@ Bun.serve({
 console.log(
   `[veil-scheduler] actif sur le port ${PORT} — prochaine passe ${nextRunLabel(nextRunAt())} (${TZ})`,
 )
+
+// --- Garde-fou « serveur Next.js » (infrastructure bac à sable) ------------
+// Le serveur Next.js (port 3000) est démarré au boot par la plateforme. S'il
+// s'arrête (crash, redémarrage manuel pour régénérer le client Prisma…), la
+// préview utilisateur tombe en 502. Ce garde-fou vérifie toutes les 60 s que
+// le port répond et relance « bun run dev » sinon — spawn sans doublon, et
+// garde globalThis pour rester unique à travers les rechargements à chaud
+// (bun --hot réévalue ce module à chaque sauvegarde du fichier).
+
+const DEV_URL = "http://localhost:3000/api/brands"
+
+type KeeperGlobal = typeof globalThis & {
+  __csDevKeeperTimer?: ReturnType<typeof setInterval>
+  __csDevServerProc?: ReturnType<typeof Bun.spawn> | undefined
+}
+
+async function devServerUp(): Promise<boolean> {
+  try {
+    const res = await fetch(DEV_URL, { signal: AbortSignal.timeout(3000) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+function startDevServer(): void {
+  const g = globalThis as KeeperGlobal
+  if (g.__csDevServerProc) return
+  console.log("[dev-keeper] port 3000 sans réponse — relance de « bun run dev »…")
+  const proc = Bun.spawn(["bun", "run", "dev"], {
+    cwd: "/home/z/my-project",
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  })
+  g.__csDevServerProc = proc
+  proc.exited.then(() => {
+    ;(globalThis as KeeperGlobal).__csDevServerProc = undefined
+    console.log("[dev-keeper] le serveur Next.js s'est arrêté — il sera relancé au prochain tick.")
+  }).catch(() => {
+    ;(globalThis as KeeperGlobal).__csDevServerProc = undefined
+  })
+}
+
+{
+  const g = globalThis as KeeperGlobal
+  if (!g.__csDevKeeperTimer) {
+    g.__csDevKeeperTimer = setInterval(() => {
+      void devServerUp().then(up => { if (!up) startDevServer() })
+    }, 60_000)
+    // Vérification immédiate au (re)chargement du module.
+    void devServerUp().then(up => { if (!up) startDevServer() })
+  }
+}

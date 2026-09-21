@@ -1,9 +1,11 @@
 'use client'
 
 import * as React from "react"
-import { LayoutDashboard, Map, Fuel, Crosshair, Calculator, Banknote, Radar, FileText, Settings, Lock, Target } from "lucide-react"
+import { useEffect, useState } from "react"
+import { LayoutDashboard, Map, Fuel, Crosshair, Calculator, Banknote, Radar, FileText, Settings, Lock, Target, Users } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAppStore, TAB_ACCESS, type Tab } from "@/store/app-store"
+import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 
 const TABS: { value: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { value: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
@@ -18,14 +20,44 @@ const TABS: { value: Tab; label: string; icon: React.ComponentType<{ className?:
   { value: "settings", label: "Paramètres", icon: Settings },
 ]
 
+// Onglet conditionnel (T37 — volet « Paramétrage » de la Super Administration) :
+// visible uniquement si le compte connecté dispose d'un accès démographie. La
+// sonde légère /api/demographie/acces répond { access } | { access: null }.
+const DEMOGRAPHIE_TAB: { value: Tab; label: string; icon: React.ComponentType<{ className?: string }> } = {
+  value: "demographie",
+  label: "Démographie",
+  icon: Users,
+}
+
 export function TabNav() {
-  const { tab, setTab, role } = useAppStore()
+  const { tab, setTab, role, userId } = useAppStore()
+  const [hasDemographie, setHasDemographie] = useState(false)
+
+  // E-mail du compte démo connecté (gate de l'onglet conditionnel — la sonde
+  // n'a de sens que pour un compte connu ; sinon l'onglet reste masqué).
+  const email = userId ? DEMO_ACCOUNTS_MAP[userId]?.email ?? null : null
+
+  useEffect(() => {
+    if (!email) return
+    let alive = true
+    fetch(`/api/demographie/acces?email=${encodeURIComponent(email)}`)
+      .then(r => r.json())
+      .then(j => {
+        if (alive) setHasDemographie(Boolean(j?.access))
+      })
+      .catch(() => { if (alive) setHasDemographie(false) })
+    return () => { alive = false }
+  }, [email])
+
+  const tabs = hasDemographie && email !== null
+    ? [...TABS.slice(0, 9), DEMOGRAPHIE_TAB, TABS[9]]
+    : TABS
 
   return (
     <TooltipProvider delayDuration={200}>
       <nav style={{ top: "var(--cs-header-h, 57px)" }} className="sticky z-30 border-b bg-background/95 backdrop-blur" aria-label="Navigation principale">
         <div className="mx-auto flex max-w-[1600px] items-center gap-1 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TABS.map(t => {
+          {tabs.map(t => {
             const allowed = TAB_ACCESS[t.value].includes(role)
             const btn = (
               <button

@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Bell, Moon, Sun, Building2, LineChart, Smartphone, ShieldCheck, Crown, ChevronDown, LogOut, Zap } from "lucide-react"
+import { Bell, Moon, Sun, Building2, LineChart, Smartphone, ShieldCheck, Crown, ChevronDown, ClipboardCheck, LogOut, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { useTheme } from "next-themes"
 import { useAppStore, ROLE_LABELS, type Mode, type Role } from "@/store/app-store"
@@ -22,6 +22,7 @@ const MODES: { value: Mode; label: string; icon: React.ComponentType<{ className
   { value: "observatoire", label: "Observatoire B2B", icon: LineChart },
   { value: "portail", label: "Portail enseigne", icon: Building2 },
   { value: "mobile", label: "Mobile B2C", icon: Smartphone },
+  { value: "agents", label: "Agents terrain", icon: ClipboardCheck },
   { value: "backoffice", label: "Back-office", icon: ShieldCheck },
   { value: "superadmin", label: "Super Admin", icon: Crown, superOnly: true },
 ]
@@ -96,6 +97,7 @@ export function AppHeader() {
               <button
                 key={m.value}
                 onClick={() => setMode(m.value)}
+                aria-label={m.label}
                 className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
                   mode === m.value
                     ? m.value === "superadmin"

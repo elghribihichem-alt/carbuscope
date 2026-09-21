@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import {
   Mail, Lock, Eye, EyeOff, LogIn, Loader2, Zap, AlertCircle,
-  LineChart, Building2, Smartphone, ShieldCheck, Fuel, MapPin, Lightbulb, Crown,
+  LineChart, Building2, Smartphone, ShieldCheck, Fuel, MapPin, Lightbulb, Crown, ClipboardCheck,
 } from "lucide-react"
 import { useAppStore, ROLE_LABELS } from "@/store/app-store"
 import { CarbuscopeLogo } from "@/components/shell/carbuscope-logo"
@@ -24,6 +24,7 @@ const MODE_ICON: Record<DemoAccount["mode"], React.ComponentType<{ className?: s
   observatoire: LineChart,
   portail: Building2,
   mobile: Smartphone,
+  agents: ClipboardCheck,
   backoffice: ShieldCheck,
   superadmin: Crown,
 }
@@ -32,6 +33,7 @@ const MODE_LABEL: Record<DemoAccount["mode"], string> = {
   observatoire: "Observatoire B2B",
   portail: "Portail enseigne",
   mobile: "Mobile B2C",
+  agents: "Agents terrain",
   backoffice: "Back-office",
   superadmin: "Super Administration",
 }

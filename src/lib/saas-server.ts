@@ -4,7 +4,7 @@
 import { db } from "@/lib/db"
 import type { Prisma } from "@prisma/client"
 import {
-  type SaasAuditDTO, type SaasContractDTO, type SaasInvoiceDTO, type SaasUserDTO,
+  type AiTaskDTO, type DemographicAccessDTO, type DemographicDelegationDTO, type DemographicGouvernoratDTO, type SaasAuditDTO, type SaasContractDTO, type SaasInvoiceDTO, type SaasPlanDTO, type SaasUserDTO,
 } from "@/lib/saas"
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts"
 
@@ -63,6 +63,8 @@ export function serializeInvoice(inv: InvoiceFull): SaasInvoiceDTO {
     amount: inv.amount,
     status: eff,
     paidAt: inv.paidAt?.toISOString() ?? null,
+    reminderCount: inv.reminderCount,
+    lastReminderAt: inv.lastReminderAt?.toISOString() ?? null,
   }
 }
 
@@ -95,6 +97,114 @@ export function serializeAudit(e: AuditFull): SaasAuditDTO {
   }
 }
 
+type AiTaskFull = Prisma.AiTaskGetPayload<Record<string, never>>
+
+/** Sérialise une tâche de l'agent IA interne (Phase 3 Super Admin). */
+export function serializeAiTask(t: AiTaskFull): AiTaskDTO {
+  return {
+    id: t.id,
+    title: t.title,
+    instruction: t.instruction,
+    status: t.status,
+    result: t.result,
+    error: t.error,
+    launchedAt: t.launchedAt?.toISOString() ?? null,
+    finishedAt: t.finishedAt?.toISOString() ?? null,
+    durationMs: t.durationMs,
+    createdBy: t.createdBy,
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+  }
+}
+
+type PlanFull = Prisma.SaasPlanGetPayload<Record<string, never>>
+
+/** Sérialise un plan du catalogue avec ses stats dérivées des contrats. */
+export function serializePlan(
+  p: PlanFull,
+  stats: { contractsCount: number; contractsActive: number; mrr: number }
+): SaasPlanDTO {
+  return {
+    id: p.id,
+    code: p.code,
+    label: p.label,
+    monthlyFee: p.monthlyFee,
+    seatsIncluded: p.seatsIncluded,
+    stationQuota: p.stationQuota,
+    features: p.features.split("|").map(f => f.trim()).filter(Boolean),
+    sortOrder: p.sortOrder,
+    active: p.active,
+    ...stats,
+  }
+}
+
+type DemographicGovFull = Prisma.GovernoratStatGetPayload<Record<string, never>>
+
+/** Sérialise la référence INS 2024 d'un gouvernorat (module Démographie). */
+export function serializeDemographicGouvernorat(g: DemographicGovFull): DemographicGouvernoratDTO {
+  return {
+    id: g.id,
+    name: g.name,
+    isoCode: g.isoCode,
+    population: g.population,
+    menPct: g.menPct,
+    womenPct: g.womenPct,
+    areaKm2: g.areaKm2,
+    urbanPct: g.urbanPct,
+    ruralPct: g.ruralPct,
+    estimated: g.estimated,
+    delegationCount: g.delegationCount,
+    vehicles: g.vehicles,
+    motorizationRate: g.motorizationRate,
+    avgFleetAge: g.avgFleetAge,
+    updatedAt: g.updatedAt?.toISOString() ?? null,
+    updatedBy: g.updatedBy,
+  }
+}
+
+// ---- T37 : sérialisation d'un accès démographie (volet Paramétrage) ----
+
+type DemographicAccessFull = Prisma.DemographicAccessGetPayload<Record<string, never>>
+
+/** Accès démographie sérialisé (jointure utilisateur faite en amont). */
+export function serializeDemographicAccess(
+  a: DemographicAccessFull,
+  user: { id: string; email: string; name: string; brandSlug: string | null },
+): DemographicAccessDTO {
+  return {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    brandSlug: user.brandSlug,
+    level: a.level === "DELEGATIONS" ? "DELEGATIONS" : "GOUVERNORATS",
+    canEdit: a.canEdit,
+    updatedAt: a.updatedAt.toISOString(),
+    updatedBy: a.updatedBy,
+  }
+}
+
+type DemographicDelegationFull = Prisma.DemographicDelegationGetPayload<Record<string, never>>
+
+/** Sérialise une ligne de délégation du tableau démographique. */
+export function serializeDemographicDelegation(d: DemographicDelegationFull): DemographicDelegationDTO {
+  return {
+    id: d.id,
+    gouvernorat: d.gouvernorat,
+    isoCode: d.isoCode,
+    delegation: d.delegation,
+    population: d.population,
+    urbanPct: d.urbanPct,
+    ruralPct: d.ruralPct,
+    vehiclesLight: d.vehiclesLight,
+    vehiclesUtility: d.vehiclesUtility,
+    vehiclesHeavy: d.vehiclesHeavy,
+    vehiclesBuses: d.vehiclesBuses,
+    vehiclesMotorcycles: d.vehiclesMotorcycles,
+    updatedAt: d.updatedAt?.toISOString() ?? null,
+    updatedBy: d.updatedBy,
+  }
+}
+
 /** Journalise une action sensible de la Super Administration. */
 export async function logAudit(input: {
   kind: string
@@ -102,7 +212,7 @@ export async function logAudit(input: {
   actor?: string
   brandSlug?: string | null
 }) {
-  const kinds = ["AUTH", "CONTRAT", "FACTURE", "UTILISATEUR", "IMPERSONATION", "SYSTEME"]
+  const kinds = ["AUTH", "CONTRAT", "FACTURE", "UTILISATEUR", "IMPERSONATION", "SYSTEME", "AGENT_IA", "DEMOGRAPHIE"]
   if (!kinds.includes(input.kind)) throw new Error(`kind invalide: ${input.kind}`)
   return db.auditEvent.create({
     data: {

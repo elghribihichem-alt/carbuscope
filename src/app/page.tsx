@@ -21,7 +21,9 @@ import { PricesTab } from '@/components/prices/prices-tab'
 import { VeilleTab } from '@/components/veille/veille-tab'
 import { ReportsTab } from '@/components/reports/reports-tab'
 import { SettingsTab } from '@/components/settings/settings-tab'
+import { DemographieTerrain } from '@/components/demographie/demographie-terrain'
 import { MobileB2CView } from '@/components/mobile/mobile-b2c-view'
+import { MobileAgentView } from '@/components/mobile/mobile-agent-view'
 import { PortalView } from '@/components/portal/portal-view'
 import { BackofficeView } from '@/components/backoffice/backoffice-view'
 import { SuperAdminView } from '@/components/superadmin/superadmin-view'
@@ -72,11 +74,13 @@ export default function Home() {
             {tab === 'prices' && <PricesTab />}
             {tab === 'veille' && <VeilleTab />}
             {tab === 'reports' && <ReportsTab />}
+            {tab === 'demographie' && <DemographieTerrain />}
             {tab === 'settings' && <SettingsTab />}
           </>
         )}
         {effectiveMode === 'portail' && <PortalView />}
         {effectiveMode === 'mobile' && <MobileB2CView />}
+        {effectiveMode === 'agents' && <MobileAgentView />}
         {effectiveMode === 'backoffice' && <BackofficeView />}
         {effectiveMode === 'superadmin' && <SuperAdminView />}
       </main>

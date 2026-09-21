@@ -4,7 +4,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 
-export type Mode = "observatoire" | "portail" | "mobile" | "backoffice" | "superadmin"
+export type Mode = "observatoire" | "portail" | "mobile" | "agents" | "backoffice" | "superadmin"
 
 export type Tab =
   | "dashboard"
@@ -16,6 +16,7 @@ export type Tab =
   | "prices"
   | "veille"
   | "reports"
+  | "demographie"
   | "settings"
 
 export type Role = "ADMIN" | "NETWORK" | "COMMERCIAL" | "EXPANSION" | "VIEWER"
@@ -39,6 +40,9 @@ export const TAB_ACCESS: Record<Tab, Role[]> = {
   prices: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
   veille: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
   reports: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
+  // Onglet conditionnel (T37) : visible si l'utilisateur connecté dispose d'un
+  // accès démographie (volet Paramétrage de la Super Administration).
+  demographie: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
   settings: ["ADMIN"],
 }
 

@@ -85,7 +85,9 @@ export function SaOverview({ onNavigate }: { onNavigate?: (tab: string) => void 
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Grille responsive — grid-cols-1 explicite (minmax(0,1fr)) : sans base,
+          la piste « auto » de la grille laissait déborder les cartes en 390 px. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Prochains renouvellements */}
         <Card>
           <CardHeader className="pb-3">

@@ -124,6 +124,58 @@ model GovernoratStat {
   motorizationRate Float
   avgFleetAge      Float
   delegationCount  Int
+  // ---- Module Démographie (Phase 4 Super Admin, T35) : référence INS 2024
+  // affichée en tête de groupe du tableau démographique — éditable depuis
+  // le volet « Gouvernorats » (T37) avec traçabilité du dernier éditeur.
+  isoCode          String? // « TN-11 »
+  menPct           Float? // part des hommes (%)
+  womenPct         Float? // part des femmes (%)
+  areaKm2          Float? // superficie (km²)
+  urbanPct         Float? // taux d'urbanisation (%)
+  ruralPct         Float? // taux de ruralité (%)
+  estimated        Boolean @default(false) // chiffres INS estimés (« est. »)
+  updatedAt        DateTime? // dernière édition (volet Gouvernorats)
+  updatedBy        String? // e-mail du dernier éditeur
+}
+
+// ---- Module Démographie (T37, volet « Paramétrage ») : visibilité du module
+// pour un utilisateur de la plateforme. Un enregistrement = un accès accordé.
+// level GOUVERNORATS → vue gouvernorats ; DELEGATIONS → gouvernorats +
+// délégations ; canEdit autorise l'édition en ligne (sinon lecture seule).
+// L'effet est visible dans l'Observatoire B2B de l'utilisateur (onglet
+// « Démographie » apparaissant après rechargement de la navigation).
+model DemographicAccess {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  level     String   @default("GOUVERNORATS") // GOUVERNORATS | DELEGATIONS
+  canEdit   Boolean  @default(false)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// ---- Module Démographie (Phase 4 Super Admin, T35) : une ligne par
+// délégation (277 lignes, source INS 2024). Lignes éditables en ligne (clic)
+// par le super-administrateur : population, taux urbain/rural et parc
+// automobile par catégorie. Le niveau « cité » du découpage administratif
+// (gouvernorat → délégation → cité) est volontairement différé.
+model DemographicDelegation {
+  id                  String    @id @default(cuid())
+  gouvernorat         String // « Tunis » (clé vers GovernoratStat.name)
+  isoCode             String // « TN-11 »
+  delegation          String // « El Menzah »
+  population          Int?
+  urbanPct            Float?
+  ruralPct            Float?
+  vehiclesLight       Int? // voitures légères
+  vehiclesUtility     Int? // utilitaires & pick-up
+  vehiclesHeavy       Int? // poids lourds
+  vehiclesBuses       Int? // autocars & bus
+  vehiclesMotorcycles Int? // deux-roues motorisés
+  updatedAt           DateTime?
+  updatedBy           String? // e-mail du dernier éditeur
+
+  @@unique([gouvernorat, delegation])
+  @@index([gouvernorat])
 }
 
 model RoadAxis {
@@ -297,6 +349,22 @@ model SaasContract {
   updatedAt    DateTime     @updatedAt
 }
 
+// ---- Catalogue des plans tarifaires SaaS (T32) : source de vérité des offres
+// vendues aux enseignes. Les contrats référencent le code du plan
+// (ESSENTIEL | PRO | ENTERPRISE) ; features FR séparées par « | ».
+
+model SaasPlan {
+  id            String   @id @default(cuid())
+  code          String   @unique // ESSENTIEL | PRO | ENTERPRISE
+  label         String
+  monthlyFee    Int // DT / mois
+  seatsIncluded Int // sièges utilisateurs inclus
+  stationQuota  Int // quota de stations
+  features      String // features FR séparées par « | »
+  sortOrder     Int
+  active        Boolean  @default(true)
+}
+
 model SaasInvoice {
   id         String      @id @default(cuid())
   contractId String
@@ -307,15 +375,68 @@ model SaasInvoice {
   amount     Float // DT TTC
   status     String      @default("IMPAYEE") // PAYEE | IMPAYEE | RETARD
   paidAt     DateTime?
+  // Relances d'échéance (T30) : combien de relances envoyées + dernière date
+  reminderCount    Int       @default(0)
+  lastReminderAt   DateTime?
   createdAt  DateTime     @default(now())
 }
 
 model AuditEvent {
   id        String   @id @default(cuid())
-  kind      String   // AUTH | CONTRAT | FACTURE | UTILISATEUR | IMPERSONATION | SYSTEME
+  kind      String   // AUTH | CONTRAT | FACTURE | UTILISATEUR | IMPERSONATION | SYSTEME | AGENT_IA | DEMOGRAPHIE
   message   String
   actor     String   @default("system") // e-mail de l'acteur
   brandSlug String?
+  createdAt DateTime @default(now())
+}
+
+// ---- Agent IA interne (Phase 3 Super Admin) : tâches créées/exécutées par
+// l'assistant IA de la plateforme (LLM serveur). Disponible d'abord pour la
+// Super Administration ; ouverture progressive aux enseignes et à leur
+// personnel via AiAgentBrandSetting / AiAgentUserSetting.
+
+model AiTask {
+  id          String    @id @default(cuid())
+  title       String
+  instruction String
+  status      String    @default("ENREGISTREE") // ENREGISTREE | EN_COURS | TERMINEE | ECHEC
+  result      String?
+  error       String?
+  launchedAt  DateTime?
+  finishedAt  DateTime?
+  durationMs  Int?
+  createdBy   String    @default("") // e-mail de l'auteur
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model AiAgentBrandSetting {
+  id        String   @id @default(cuid())
+  brandSlug String   @unique
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model AiAgentUserSetting {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+// ---- Paramètre cartographique (Phase 3 Super Admin) : délimitation de la
+// zone de couverture (bounding box éditable). CarbuScope ne couvre que la
+// Tunisie — cette zone borne le chargement cartographique pour éviter le
+// poids et les zones hors pays inutiles.
+model CartoBoundary {
+  id        String   @id @default("zone-principale")
+  name      String   @default("Zone de couverture — Tunisie")
+  minLat    Float    @default(30.2)
+  maxLat    Float    @default(37.4)
+  minLng    Float    @default(7.5)
+  maxLng    Float    @default(11.6)
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 }
 
