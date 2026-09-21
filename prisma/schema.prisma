@@ -263,12 +263,59 @@ model Contribution {
 }
 
 model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  role        String    @default("VIEWER") // ADMIN | NETWORK | COMMERCIAL | EXPANSION | VIEWER
+  brandSlug   String?
+  active      Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+// ---- Super Administration (T33) : pilotage SaaS de la plateforme —
+// contrats des enseignes clientes, abonnements, facturation et journal
+// d'audit des actions sensibles (impersonation, suspension, paiement).
+
+model SaasContract {
+  id           String       @id @default(cuid())
+  brandSlug    String       @unique
+  brandName    String
+  color        String       @default("#059669")
+  plan         String       @default("PRO") // ESSENTIEL | PRO | ENTERPRISE
+  status       String       @default("ACTIF") // ESSAI | ACTIF | SUSPENDU | RESILIE
+  startedAt    DateTime     @default(now())
+  renewsAt     DateTime
+  monthlyFee   Float        @default(0) // DT / mois (0 = essai)
+  seats        Int          @default(5) // utilisateurs inclus
+  stationQuota Int          @default(50)
+  contactName  String
+  contactEmail String
+  contactPhone String       @default("")
+  invoices     SaasInvoice[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model SaasInvoice {
+  id         String      @id @default(cuid())
+  contractId String
+  contract   SaasContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  number     String      @unique // ex. FCT-2025-0042
+  issuedAt   DateTime
+  dueAt      DateTime
+  amount     Float // DT TTC
+  status     String      @default("IMPAYEE") // PAYEE | IMPAYEE | RETARD
+  paidAt     DateTime?
+  createdAt  DateTime     @default(now())
+}
+
+model AuditEvent {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  role      String   @default("VIEWER") // ADMIN | NETWORK | COMMERCIAL | EXPANSION | VIEWER
+  kind      String   // AUTH | CONTRAT | FACTURE | UTILISATEUR | IMPERSONATION | SYSTEME
+  message   String
+  actor     String   @default("system") // e-mail de l'acteur
   brandSlug String?
-  active    Boolean  @default(true)
   createdAt DateTime @default(now())
 }
 

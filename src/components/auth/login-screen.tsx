@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import {
   Mail, Lock, Eye, EyeOff, LogIn, Loader2, Zap, AlertCircle,
-  LineChart, Building2, Smartphone, ShieldCheck, Fuel, MapPin, Lightbulb,
+  LineChart, Building2, Smartphone, ShieldCheck, Fuel, MapPin, Lightbulb, Crown,
 } from "lucide-react"
 import { useAppStore, ROLE_LABELS } from "@/store/app-store"
 import { CarbuscopeLogo } from "@/components/shell/carbuscope-logo"
@@ -25,6 +25,7 @@ const MODE_ICON: Record<DemoAccount["mode"], React.ComponentType<{ className?: s
   portail: Building2,
   mobile: Smartphone,
   backoffice: ShieldCheck,
+  superadmin: Crown,
 }
 
 const MODE_LABEL: Record<DemoAccount["mode"], string> = {
@@ -32,6 +33,7 @@ const MODE_LABEL: Record<DemoAccount["mode"], string> = {
   portail: "Portail enseigne",
   mobile: "Mobile B2C",
   backoffice: "Back-office",
+  superadmin: "Super Administration",
 }
 
 export function LoginScreen() {

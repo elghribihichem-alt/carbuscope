@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Bell, Moon, Sun, Building2, LineChart, Smartphone, ShieldCheck, ChevronDown, LogOut, Zap } from "lucide-react"
+import { Bell, Moon, Sun, Building2, LineChart, Smartphone, ShieldCheck, Crown, ChevronDown, LogOut, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { useTheme } from "next-themes"
 import { useAppStore, ROLE_LABELS, type Mode, type Role } from "@/store/app-store"
@@ -18,11 +18,12 @@ import { DEMO_ACCOUNTS, DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import type { BrandDTO, AlertDTO } from "@/lib/types"
 import { CarbuscopeLogo } from "./carbuscope-logo"
 
-const MODES: { value: Mode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const MODES: { value: Mode; label: string; icon: React.ComponentType<{ className?: string }>; superOnly?: boolean }[] = [
   { value: "observatoire", label: "Observatoire B2B", icon: LineChart },
   { value: "portail", label: "Portail enseigne", icon: Building2 },
   { value: "mobile", label: "Mobile B2C", icon: Smartphone },
   { value: "backoffice", label: "Back-office", icon: ShieldCheck },
+  { value: "superadmin", label: "Super Admin", icon: Crown, superOnly: true },
 ]
 
 const ROLES: Role[] = ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"]
@@ -34,6 +35,9 @@ export function AppHeader() {
   const [alerts, setAlerts] = useState<AlertDTO[]>([])
   const headerRef = useRef<HTMLElement>(null)
   const account = userId ? DEMO_ACCOUNTS_MAP[userId] : null
+  // L'espace Super Administration est réservé au compte racine : le bouton
+  // « Super Admin » du sélecteur de mode n'apparaît que pour ce profil.
+  const isSuperAdmin = account?.isSuperAdmin === true
 
   /** Bascule vers un autre profil de démonstration (sélecteur démo). */
   function switchProfile(id: string) {
@@ -85,15 +89,22 @@ export function AppHeader() {
           </div>
         </div>
 
-        {/* Sélecteur de mode produit */}
+        {/* Sélecteur de mode produit (Super Admin réservé au compte racine) */}
         <nav className="order-3 w-full sm:order-none sm:w-auto" aria-label="Produit">
           <div className="flex items-center gap-0.5 rounded-lg border bg-muted/50 p-0.5">
-            {MODES.map(m => (
+            {MODES.filter(m => !m.superOnly || isSuperAdmin).map(m => (
               <button
                 key={m.value}
                 onClick={() => setMode(m.value)}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${mode === m.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  mode === m.value
+                    ? m.value === "superadmin"
+                      ? "bg-teal-600 text-white shadow-sm"
+                      : "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
                 aria-pressed={mode === m.value}
+                title={m.superOnly ? "Super Administration — gestion SaaS de la plateforme" : undefined}
               >
                 <m.icon className="h-3.5 w-3.5" />
                 <span className="hidden md:inline">{m.label}</span>

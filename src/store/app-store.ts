@@ -4,7 +4,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 
-export type Mode = "observatoire" | "portail" | "mobile" | "backoffice"
+export type Mode = "observatoire" | "portail" | "mobile" | "backoffice" | "superadmin"
 
 export type Tab =
   | "dashboard"

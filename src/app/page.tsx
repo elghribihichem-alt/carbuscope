@@ -24,7 +24,9 @@ import { SettingsTab } from '@/components/settings/settings-tab'
 import { MobileB2CView } from '@/components/mobile/mobile-b2c-view'
 import { PortalView } from '@/components/portal/portal-view'
 import { BackofficeView } from '@/components/backoffice/backoffice-view'
+import { SuperAdminView } from '@/components/superadmin/superadmin-view'
 import { LoginScreen, AuthSplash } from '@/components/auth/login-screen'
+import { DEMO_ACCOUNTS_MAP } from '@/lib/demo-accounts'
 
 // Détection d'hydratation sûre : faux pendant le rendu serveur / première passe
 // client, vrai ensuite — sans setState dans un effet (règle react-hooks).
@@ -42,6 +44,11 @@ export default function Home() {
   const tab = useAppStore(s => s.tab)
   const userId = useAppStore(s => s.userId)
 
+  // L'espace Super Administration est réservé au compte racine — tout autre
+  // profil qui s'y retrouverait est ramené à l'observatoire (garde défensive).
+  const isSuperAdmin = userId ? DEMO_ACCOUNTS_MAP[userId]?.isSuperAdmin === true : false
+  const effectiveMode = mode === 'superadmin' && !isSuperAdmin ? 'observatoire' : mode
+
   // Attend l'hydratation : évite tout écart pendant la restauration de la
   // session persistée (localStorage), puis révèle écran de connexion ou app.
   const mounted = useHydrated()
@@ -52,9 +59,9 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <AppHeader />
-      {mode === 'observatoire' && <TabNav />}
+      {effectiveMode === 'observatoire' && <TabNav />}
       <main className="flex flex-1 flex-col" id="contenu">
-        {mode === 'observatoire' && (
+        {effectiveMode === 'observatoire' && (
           <>
             {tab === 'dashboard' && <DashboardTab />}
             {tab === 'map' && <CarteInteractiveTab />}
@@ -68,9 +75,10 @@ export default function Home() {
             {tab === 'settings' && <SettingsTab />}
           </>
         )}
-        {mode === 'portail' && <PortalView />}
-        {mode === 'mobile' && <MobileB2CView />}
-        {mode === 'backoffice' && <BackofficeView />}
+        {effectiveMode === 'portail' && <PortalView />}
+        {effectiveMode === 'mobile' && <MobileB2CView />}
+        {effectiveMode === 'backoffice' && <BackofficeView />}
+        {effectiveMode === 'superadmin' && <SuperAdminView />}
       </main>
       <AppFooter />
     </div>

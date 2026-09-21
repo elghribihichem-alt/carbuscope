@@ -17,6 +17,8 @@ export interface DemoAccount {
   mode: Mode
   color: string
   bio: string
+  /** Accès racine : espace Super Administration (gestion SaaS de la plateforme). */
+  isSuperAdmin?: boolean
 }
 
 /** Mot de passe partagé par tous les comptes de démonstration. */
@@ -120,6 +122,21 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     mode: "backoffice",
     color: "#57534e",
     bio: "Back-office : contributions terrain, décrets, fraîcheur des données.",
+  },
+  {
+    id: "rania",
+    name: "Rania Feki",
+    initials: "RF",
+    email: "rania.feki@carbuscope.tn",
+    password: DEMO_PASSWORD,
+    jobTitle: "Super-administratrice plateforme",
+    brandSlug: "agil",
+    brandName: "CarbuScope",
+    role: "ADMIN",
+    mode: "superadmin",
+    color: "#0f766e",
+    bio: "Pilotage SaaS : contrats des enseignes, facturation, comptes, audit.",
+    isSuperAdmin: true,
   },
 ]
 
