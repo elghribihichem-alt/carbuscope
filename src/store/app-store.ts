@@ -2,6 +2,7 @@
 
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 
 export type Mode = "observatoire" | "portail" | "mobile" | "backoffice"
 
@@ -48,12 +49,15 @@ interface AppState {
   role: Role
   focusStationCode: string | null // « voir sur la carte »
   selectedStationId: string | null
+  userId: string | null // compte de démonstration connecté
   setMode: (m: Mode) => void
   setTab: (t: Tab) => void
   setBrandSlug: (b: string) => void
   setRole: (r: Role) => void
   setFocusStation: (code: string | null) => void
   setSelectedStation: (id: string | null) => void
+  login: (accountId: string) => void
+  logout: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -65,16 +69,32 @@ export const useAppStore = create<AppState>()(
       role: "ADMIN",
       focusStationCode: null,
       selectedStationId: null,
+      userId: null,
       setMode: (mode) => set({ mode }),
       setTab: (tab) => set({ tab }),
       setBrandSlug: (brandSlug) => set({ brandSlug, focusStationCode: null, selectedStationId: null }),
       setRole: (role) => set({ role }),
       setFocusStation: (focusStationCode) => set({ focusStationCode }),
       setSelectedStation: (selectedStationId) => set({ selectedStationId }),
+      // Connexion démo : applique le profil complet du compte (rôle, enseigne, espace)
+      login: (accountId) => {
+        const acc = DEMO_ACCOUNTS_MAP[accountId]
+        if (!acc) return
+        set({
+          userId: accountId,
+          role: acc.role,
+          brandSlug: acc.brandSlug,
+          mode: acc.mode,
+          tab: "dashboard",
+          focusStationCode: null,
+          selectedStationId: null,
+        })
+      },
+      logout: () => set({ userId: null }),
     }),
     {
       name: "carbuscope-store",
-      partialize: (s) => ({ brandSlug: s.brandSlug, role: s.role }),
+      partialize: (s) => ({ brandSlug: s.brandSlug, role: s.role, userId: s.userId }),
     }
   )
 )

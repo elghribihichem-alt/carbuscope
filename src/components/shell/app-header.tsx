@@ -6,9 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Bell, Moon, Sun, Building2, LineChart, Smartphone, ShieldCheck, ChevronDown } from "lucide-react"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Bell, Moon, Sun, Building2, LineChart, Smartphone, ShieldCheck, ChevronDown, LogOut, Zap } from "lucide-react"
+import { toast } from "sonner"
 import { useTheme } from "next-themes"
-import { useAppStore, type Mode, type Role, ROLE_LABELS } from "@/store/app-store"
+import { useAppStore, ROLE_LABELS, type Mode, type Role } from "@/store/app-store"
+import { DEMO_ACCOUNTS, DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import type { BrandDTO, AlertDTO } from "@/lib/types"
 import { CarbuscopeLogo } from "./carbuscope-logo"
 
@@ -22,11 +28,22 @@ const MODES: { value: Mode; label: string; icon: React.ComponentType<{ className
 const ROLES: Role[] = ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"]
 
 export function AppHeader() {
-  const { mode, setMode, brandSlug, setBrandSlug, role, setRole, setTab, tab } = useAppStore()
+  const { mode, setMode, brandSlug, setBrandSlug, role, setRole, setTab, userId, login, logout } = useAppStore()
   const { theme, setTheme } = useTheme()
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [alerts, setAlerts] = useState<AlertDTO[]>([])
   const headerRef = useRef<HTMLElement>(null)
+  const account = userId ? DEMO_ACCOUNTS_MAP[userId] : null
+
+  /** Bascule vers un autre profil de démonstration (sélecteur démo). */
+  function switchProfile(id: string) {
+    const acc = DEMO_ACCOUNTS_MAP[id]
+    if (!acc || id === userId) return
+    login(id)
+    toast.info(`Profil changé : ${acc.name}`, {
+      description: `${acc.jobTitle} — ${acc.brandName}.`,
+    })
+  }
 
   // Publie la hauteur réelle de l'en-tête (peut passer à 2 lignes selon la largeur)
   // pour que la navigation d'onglets se colle SOUS lui sans être recouverte.
@@ -158,10 +175,89 @@ export function AppHeader() {
             <Moon className="h-4 w-4 dark:hidden" />
           </Button>
 
-          <Badge variant="outline" className="hidden h-8 items-center gap-1 bg-emerald-50 text-[11px] font-medium text-emerald-700 lg:inline-flex dark:bg-emerald-950 dark:text-emerald-400">
-            {tab === "settings" && mode === "observatoire" ? "Démo" : "Démo"} v0.1
-            <ChevronDown className="h-3 w-3 opacity-40" />
-          </Badge>
+          {/* Compte connecté — sélecteur démo fonctionnel (profil / déconnexion) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 rounded-lg border bg-background px-1.5 py-1 text-xs font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                aria-label="Menu du compte connecté"
+              >
+                {account ? (
+                  <>
+                    <span
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                      style={{ backgroundColor: account.color }}
+                      aria-hidden
+                    >
+                      {account.initials}
+                    </span>
+                    <span className="hidden max-w-[110px] truncate sm:inline">{account.name}</span>
+                    <span className="hidden text-muted-foreground md:inline">· {ROLE_LABELS[account.role]}</span>
+                  </>
+                ) : (
+                  <span className="px-1.5 py-1">Démo</span>
+                )}
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              {account ? (
+                <>
+                  <DropdownMenuLabel className="flex items-center gap-3 py-2.5">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                      style={{ backgroundColor: account.color }}
+                      aria-hidden
+                    >
+                      {account.initials}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{account.name}</span>
+                      <span className="block truncate text-xs font-normal text-muted-foreground">{account.email}</span>
+                    </span>
+                  </DropdownMenuLabel>
+                  <div className="px-2 pb-2">
+                    <Badge variant="outline" className="bg-emerald-50 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                      {ROLE_LABELS[account.role]} · {account.brandName}
+                    </Badge>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Sélecteur démo — changer de profil
+                  </DropdownMenuLabel>
+                  {DEMO_ACCOUNTS.filter(a => a.id !== account.id).map(a => (
+                    <DropdownMenuItem key={a.id} onSelect={() => switchProfile(a.id)} className="gap-3 py-2">
+                      <span
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                        style={{ backgroundColor: a.color }}
+                        aria-hidden
+                      >
+                        {a.initials}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold">{a.name}</span>
+                        <span className="block truncate text-[10px] text-muted-foreground">{a.jobTitle} · {a.brandName}</span>
+                      </span>
+                      <Zap className="h-3 w-3 shrink-0 text-amber-500" aria-hidden />
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <div className="flex items-center justify-between px-2 py-1.5 text-[10px] text-muted-foreground">
+                    <span>Démo v0.1 — données d&apos;illustration</span>
+                  </div>
+                  <DropdownMenuItem
+                    onSelect={() => { logout(); toast.info("Vous êtes déconnecté", { description: "À bientôt sur CarbuScope." }) }}
+                    className="gap-2 py-2 text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden />
+                    Se déconnecter
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <div className="p-2 text-sm text-muted-foreground">Aucun compte connecté.</div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
