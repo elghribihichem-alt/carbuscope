@@ -18,6 +18,9 @@ import {
 } from "lucide-react"
 import { useAppStore, ROLE_LABELS } from "@/store/app-store"
 import { CarbuscopeLogo } from "@/components/shell/carbuscope-logo"
+import { ThemeToggle } from "@/components/app/theme-toggle"
+import { LangToggle } from "@/components/app/lang-toggle"
+import { useI18n } from "@/lib/i18n"
 import { DEMO_ACCOUNTS, findAccountByEmail, type DemoAccount } from "@/lib/demo-accounts"
 
 const MODE_ICON: Record<DemoAccount["mode"], React.ComponentType<{ className?: string }>> = {
@@ -40,6 +43,7 @@ const MODE_LABEL: Record<DemoAccount["mode"], string> = {
 
 export function LoginScreen() {
   const login = useAppStore(s => s.login)
+  const { t } = useI18n()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -93,10 +97,10 @@ export function LoginScreen() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background lg:flex-row">
-      {/* Panneau d'identité (desktop) */}
+    <div className="flex min-h-screen flex-col bg-[var(--c-page)] lg:flex-row">
+      {/* Panneau d'identité (desktop) — héro café (navy corporate / brun café) */}
       <aside
-        className="relative hidden overflow-hidden bg-zinc-900 text-white lg:flex lg:w-[46%] lg:flex-col lg:justify-between lg:p-10"
+        className="relative hidden overflow-hidden bg-gradient-to-br from-[var(--c-hero-from)] to-[var(--c-hero-to)] text-white lg:flex lg:w-[46%] lg:flex-col lg:justify-between lg:p-10"
         aria-hidden
       >
         <div
@@ -106,53 +110,58 @@ export function LoginScreen() {
             backgroundSize: "26px 26px",
           }}
         />
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 -left-16 h-72 w-72 rounded-full bg-emerald-600/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[var(--c-landing-glow-1)] blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-16 h-72 w-72 rounded-full bg-[var(--c-landing-glow-2)] blur-3xl" />
 
         <div className="relative flex items-center gap-3">
           <CarbuscopeLogo size={44} />
           <div className="leading-tight">
-            <p className="text-xl font-bold tracking-tight">
-              Carbu<span className="text-emerald-400">Scope</span>
+            <p className="font-display text-xl font-bold tracking-tight">
+              Carbu<span className="text-[var(--c-sidebar-gold)]">Scope</span>
             </p>
-            <p className="text-xs text-zinc-400">L&apos;observatoire du carburant — Tunisie</p>
+            <p className="text-xs text-[var(--c-hero-muted)]">{t('chrome.tagline')}</p>
           </div>
         </div>
 
         <div className="relative max-w-md">
-          <h1 className="text-3xl font-bold leading-tight">
-            Le Waze du carburant, <span className="text-emerald-400">au service des réseaux.</span>
+          <h1 className="font-display text-3xl font-bold leading-tight">
+            Le Waze du carburant, <span className="text-[var(--c-sidebar-gold)]">au service des réseaux.</span>
           </h1>
-          <p className="mt-4 text-sm leading-relaxed text-zinc-300">
+          <p className="mt-4 text-sm leading-relaxed text-[var(--c-hero-muted)]">
             Observatoire B2B, application mobile B2C et portail enseigne réunis sur une même
             infrastructure de données : prix, services, concurrence et terrain, en temps réel.
           </p>
           <div className="mt-8 grid grid-cols-3 gap-4">
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <Fuel className="h-4 w-4 text-emerald-400" />
+            <div className="rounded-lg border border-white/10 bg-[var(--c-hero-badge)]/60 p-3">
+              <Fuel className="h-4 w-4 text-[var(--c-sidebar-gold)]" />
               <p className="mt-2 text-lg font-bold leading-none">1 814</p>
-              <p className="mt-1 text-[11px] text-zinc-400">stations référencées</p>
+              <p className="mt-1 text-[11px] text-[var(--c-hero-muted)]">stations référencées</p>
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <MapPin className="h-4 w-4 text-emerald-400" />
+            <div className="rounded-lg border border-white/10 bg-[var(--c-hero-badge)]/60 p-3">
+              <MapPin className="h-4 w-4 text-[var(--c-sidebar-gold)]" />
               <p className="mt-2 text-lg font-bold leading-none">24</p>
-              <p className="mt-1 text-[11px] text-zinc-400">gouvernorats couverts</p>
+              <p className="mt-1 text-[11px] text-[var(--c-hero-muted)]">gouvernorats couverts</p>
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <Building2 className="h-4 w-4 text-emerald-400" />
+            <div className="rounded-lg border border-white/10 bg-[var(--c-hero-badge)]/60 p-3">
+              <Building2 className="h-4 w-4 text-[var(--c-sidebar-gold)]" />
               <p className="mt-2 text-lg font-bold leading-none">6</p>
-              <p className="mt-1 text-[11px] text-zinc-400">enseignes suivies</p>
+              <p className="mt-1 text-[11px] text-[var(--c-hero-muted)]">enseignes suivies</p>
             </div>
           </div>
         </div>
 
-        <p className="relative text-[11px] text-zinc-500">
+        <p className="relative text-[11px] text-[var(--c-sidebar-faint)]">
           Environnement de démonstration — données à valeur d&apos;illustration · © 2025 CarbuScope
         </p>
       </aside>
 
       {/* Formulaire de connexion */}
-      <main className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8" id="contenu">
+      <main className="relative flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8" id="contenu">
+        {/* Chrome flottant : thème + langue accessibles dès l'écran de connexion */}
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          <LangToggle />
+          <ThemeToggle />
+        </div>
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -162,26 +171,26 @@ export function LoginScreen() {
           {/* Identité mobile */}
           <div className="mb-6 flex items-center gap-2.5 lg:hidden">
             <CarbuscopeLogo size={36} />
-            <p className="text-lg font-bold tracking-tight">
-              Carbu<span className="text-emerald-600">Scope</span>
+            <p className="text-lg font-bold tracking-tight text-[var(--c-ink-deep)]">
+              Carbu<span className="text-[var(--c-brown)]">Scope</span>
             </p>
           </div>
 
-          <Card className="border shadow-sm">
+          <Card className="border border-[var(--c-line)] shadow-sm">
             <CardContent className="p-6 sm:p-8">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--a-em-50)] text-[var(--a-em-700)] dark:bg-[var(--a-em-950)] dark:text-[var(--a-em-400)]">
                   <LogIn className="h-5 w-5" aria-hidden />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold leading-tight">Connexion</h2>
-                  <p className="text-sm text-muted-foreground">Accédez à votre espace CarbuScope</p>
+                  <h2 className="text-lg font-bold leading-tight text-[var(--c-ink-deep)]">{t('login.title')}</h2>
+                  <p className="text-sm text-[var(--c-ink-muted)]">{t('login.subtitle')}</p>
                 </div>
               </div>
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-4" aria-label="Formulaire de connexion">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Adresse e-mail</Label>
+                  <Label htmlFor="login-email">{t('login.email')}</Label>
                   <div className="relative">
                     <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
                     <Input
@@ -200,13 +209,13 @@ export function LoginScreen() {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="login-password">Mot de passe</Label>
+                    <Label htmlFor="login-password">{t('login.password')}</Label>
                     <button
                       type="button"
-                      className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                      className="text-xs font-medium text-[var(--c-brown-deep)] hover:underline dark:text-[var(--c-brown)]"
                       onClick={() => setForgotHint(h => !h)}
                     >
-                      Mot de passe oublié ?
+                      {t('login.forgot')}
                     </button>
                   </div>
                   <div className="relative">
@@ -226,13 +235,13 @@ export function LoginScreen() {
                       type="button"
                       onClick={() => setShowPassword(s => !s)}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                      aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                      aria-label={t('login.show')}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {forgotHint && (
-                    <p className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300" role="note">
+                    <p className="flex items-start gap-1.5 rounded-md border border-[var(--c-amber-line-soft)] bg-[var(--c-amber-tint)] px-3 py-2 text-xs text-[var(--c-amber-deep)]" role="note">
                       <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
                       Mode démonstration : tous les comptes utilisent le mot de passe&nbsp;
                       <code className="font-mono font-semibold">carbu2025</code>.
@@ -253,7 +262,7 @@ export function LoginScreen() {
                 <Button
                   ref={submitRef}
                   type="submit"
-                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                  className="w-full"
                   disabled={loading}
                 >
                   {loading ? (
@@ -264,7 +273,7 @@ export function LoginScreen() {
                   ) : (
                     <>
                       <LogIn className="h-4 w-4" aria-hidden />
-                      Se connecter
+                      {t('login.submit')}
                     </>
                   )}
                 </Button>
@@ -272,14 +281,14 @@ export function LoginScreen() {
 
               <div className="my-6 flex items-center gap-3">
                 <Separator className="flex-1" />
-                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Comptes de démonstration
+                <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--c-ink-muted)]">
+                  {t('login.demoTitle')}
                 </span>
                 <Separator className="flex-1" />
               </div>
 
-              <p className="mb-3 text-xs text-muted-foreground">
-                Cliquez sur un profil pour pré-remplir le formulaire, ou sur l&apos;éclair pour une connexion express.
+              <p className="mb-3 text-xs text-[var(--c-ink-muted)]">
+                {t('login.demoHint')}
               </p>
 
               <ul className="space-y-2">
@@ -290,13 +299,13 @@ export function LoginScreen() {
                     <li key={acc.id}>
                       <div
                         className={`flex items-stretch overflow-hidden rounded-lg border transition-shadow ${
-                          selected ? "border-emerald-500 ring-1 ring-emerald-500/40" : "border-border hover:border-emerald-300 dark:hover:border-emerald-800"
+                          selected ? "border-[var(--c-brown)] ring-1 ring-[var(--c-brown)]/40" : "border-[var(--c-line)] hover:border-[var(--a-em-300)] dark:hover:border-[var(--a-em-800)]"
                         }`}
                       >
                         <button
                           type="button"
                           onClick={() => prefill(acc)}
-                          className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                          className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--c-tint)] focus-visible:bg-[var(--c-tint)] focus-visible:outline-none"
                           aria-pressed={selected}
                           title={`${acc.name} — ${acc.jobTitle} (${acc.email})`}
                         >
@@ -321,9 +330,9 @@ export function LoginScreen() {
                           type="button"
                           onClick={() => connect(acc)}
                           disabled={loading}
-                          className="flex w-10 shrink-0 items-center justify-center border-l border-border text-muted-foreground transition-colors hover:bg-emerald-600 hover:text-white focus-visible:outline-none focus-visible:bg-emerald-600 focus-visible:text-white disabled:opacity-50"
-                          aria-label={`Connexion express : ${acc.name}`}
-                          title={`Connexion express — ${MODE_LABEL[acc.mode]}`}
+                          className="flex w-10 shrink-0 items-center justify-center border-l border-[var(--c-line-faint)] text-[var(--c-ink-muted)] transition-colors hover:bg-[var(--c-brown)] hover:text-[var(--primary-foreground)] focus-visible:outline-none focus-visible:bg-[var(--c-brown)] focus-visible:text-[var(--primary-foreground)] disabled:opacity-50"
+                          aria-label={`${t('login.express')} : ${acc.name}`}
+                          title={`${t('login.express')} — ${MODE_LABEL[acc.mode]}`}
                         >
                           <Zap className="h-4 w-4" aria-hidden />
                         </button>
@@ -335,7 +344,7 @@ export function LoginScreen() {
             </CardContent>
           </Card>
 
-          <p className="mt-6 text-center text-[11px] text-muted-foreground">
+          <p className="mt-6 text-center text-[11px] text-[var(--c-ink-muted)]">
             Plateforme de démonstration — aucune donnée réelle n&apos;est collectée.
           </p>
         </motion.div>
@@ -347,9 +356,9 @@ export function LoginScreen() {
 /** Écran transitoire pendant l'hydratation de la session persistée. */
 export function AuthSplash() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background" role="status" aria-live="polite">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[var(--c-page)]" role="status" aria-live="polite">
       <CarbuscopeLogo size={44} />
-      <p className="animate-pulse text-sm text-muted-foreground">Chargement de votre espace…</p>
+      <p className="animate-pulse text-sm text-[var(--c-ink-muted)]">Chargement de votre espace…</p>
     </div>
   )
 }

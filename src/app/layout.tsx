@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { ThemeProvider } from "next-themes";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/app/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,10 +39,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+        {/* Design system « café » : 4 thèmes, corporate par défaut, sans thème système. */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="corporate"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
           {children}
           <Toaster />
-          <SonnerToaster position="top-center" richColors closeButton />
+          <SonnerToaster position="top-right" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

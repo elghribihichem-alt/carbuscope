@@ -55,7 +55,7 @@ export function TabNav() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <nav style={{ top: "var(--cs-header-h, 57px)" }} className="sticky z-30 border-b bg-background/95 backdrop-blur" aria-label="Navigation principale">
+      <nav style={{ top: "var(--cs-header-h, 57px)" }} className="sticky z-30 border-b border-[var(--c-line-2)] bg-[var(--c-paper)]/95 backdrop-blur" aria-label="Navigation principale">
         <div className="mx-auto flex max-w-[1600px] items-center gap-1 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map(t => {
             const allowed = TAB_ACCESS[t.value].includes(role)
@@ -66,10 +66,10 @@ export function TabNav() {
                 onClick={() => setTab(t.value)}
                 className={`relative flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
                   tab === t.value
-                    ? "bg-emerald-600 text-white shadow-sm"
+                    ? "bg-[var(--c-brown)] text-[var(--primary-foreground)] shadow-sm"
                     : allowed
-                      ? "text-muted-foreground hover:bg-accent hover:text-foreground"
-                      : "cursor-not-allowed text-muted-foreground/50"
+                      ? "text-[var(--c-ink-muted)] hover:bg-[var(--c-tint)] hover:text-[var(--c-ink)]"
+                      : "cursor-not-allowed text-[var(--c-ink-ghost)]"
                 }`}
                 aria-current={tab === t.value ? "page" : undefined}
               >

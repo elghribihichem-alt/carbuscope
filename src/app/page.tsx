@@ -8,6 +8,7 @@
 
 import { useSyncExternalStore } from "react"
 import { useAppStore } from '@/store/app-store'
+import { useI18n } from '@/lib/i18n'
 import { AppHeader } from '@/components/shell/app-header'
 import { TabNav } from '@/components/shell/tab-nav'
 import { AppFooter } from '@/components/shell/app-footer'
@@ -45,6 +46,7 @@ export default function Home() {
   const mode = useAppStore(s => s.mode)
   const tab = useAppStore(s => s.tab)
   const userId = useAppStore(s => s.userId)
+  const { dir } = useI18n()
 
   // L'espace Super Administration est réservé au compte racine — tout autre
   // profil qui s'y retrouverait est ramené à l'observatoire (garde défensive).
@@ -59,7 +61,7 @@ export default function Home() {
   if (!userId) return <LoginScreen />
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div dir={dir} className="flex min-h-screen flex-col bg-[var(--c-page)] text-foreground">
       <AppHeader />
       {effectiveMode === 'observatoire' && <TabNav />}
       <main className="flex flex-1 flex-col" id="contenu">
