@@ -28,7 +28,9 @@ export function applySession(user: SessionUser, keepMode = true) {
   const s = useAppStore.getState()
   s.setSession(user)
   s.setAuthStatus("auth")
-  s.setRole(user.role as Role)
+  // Rôle « métier » pour les onglets de l'observatoire : la racine Super Admin
+  // navigue comme un administrateur complet (convention démo TAB_ACCESS).
+  s.setRole(user.role === "SUPER_ADMIN" ? "ADMIN" : (user.role as Role))
   if (user.brandSlug) s.setBrandSlug(user.brandSlug)
   if (!keepMode || !user.spaces.includes(s.mode)) {
     const accueil: Mode =

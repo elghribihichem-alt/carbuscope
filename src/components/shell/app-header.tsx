@@ -4,19 +4,13 @@ import * as React from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Bell, Building2, LineChart, Smartphone, ShieldCheck, Crown, ChevronDown, ClipboardCheck, LogOut, Zap } from "lucide-react"
-import { toast } from "sonner"
+import { Bell, Building2, LineChart, Smartphone, ShieldCheck, Crown, ClipboardCheck } from "lucide-react"
 import { ThemeToggle } from "@/components/app/theme-toggle"
 import { LangToggle } from "@/components/app/lang-toggle"
+import { UserMenu } from "@/components/auth/user-menu"
 import { useI18n } from "@/lib/i18n"
-import { useAppStore, ROLE_LABELS, type Mode, type Role } from "@/store/app-store"
-import { DEMO_ACCOUNTS, DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
+import { useAppStore, type Mode } from "@/store/app-store"
 import type { BrandDTO, AlertDTO } from "@/lib/types"
 import { CarbuscopeLogo } from "./carbuscope-logo"
 
@@ -29,28 +23,15 @@ const MODES: { value: Mode; labelKey: "chrome.modeObservatoire" | "chrome.modePo
   { value: "superadmin", labelKey: "chrome.modeSuperadmin", icon: Crown, superOnly: true },
 ]
 
-const ROLES: Role[] = ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"]
-
 export function AppHeader() {
-  const { mode, setMode, brandSlug, setBrandSlug, role, setRole, setTab, userId, login, logout } = useAppStore()
+  const { mode, setMode, brandSlug, setBrandSlug, setTab, session } = useAppStore()
   const { t } = useI18n()
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [alerts, setAlerts] = useState<AlertDTO[]>([])
   const headerRef = useRef<HTMLElement>(null)
-  const account = userId ? DEMO_ACCOUNTS_MAP[userId] : null
   // L'espace Super Administration est réservé au compte racine : le bouton
   // « Super Admin » du sélecteur de mode n'apparaît que pour ce profil.
-  const isSuperAdmin = account?.isSuperAdmin === true
-
-  /** Bascule vers un autre profil de démonstration (sélecteur démo). */
-  function switchProfile(id: string) {
-    const acc = DEMO_ACCOUNTS_MAP[id]
-    if (!acc || id === userId) return
-    login(id)
-    toast.info(`${t('chrome.profileChanged')} : ${acc.name}`, {
-      description: `${acc.jobTitle} — ${acc.brandName}.`,
-    })
-  }
+  const isSuperAdmin = session?.role === "SUPER_ADMIN"
 
   // Publie la hauteur réelle de l'en-tête (peut passer à 2 lignes selon la largeur)
   // pour que la navigation d'onglets se colle SOUS lui sans être recouverte.
@@ -141,18 +122,6 @@ export function AppHeader() {
             </Select>
           </div>
 
-          {/* Rôle */}
-          <Select value={role} onValueChange={v => setRole(v as Role)}>
-            <SelectTrigger className="h-8 w-[160px] text-xs" aria-label={t('chrome.role')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ROLES.map(r => (
-                <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           {/* Cloche d'alertes */}
           <Popover>
             <PopoverTrigger asChild>
@@ -193,89 +162,8 @@ export function AppHeader() {
           {/* Thème (4 thèmes café) */}
           <ThemeToggle />
 
-          {/* Compte connecté — sélecteur démo fonctionnel (profil / déconnexion) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center gap-2 rounded-lg border border-[var(--c-line-2)] bg-[var(--c-paper)] px-1.5 py-1 text-xs font-medium transition-colors hover:bg-[var(--c-tint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--c-brown)]/60"
-                aria-label={t('chrome.account')}
-              >
-                {account ? (
-                  <>
-                    <span
-                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                      style={{ backgroundColor: account.color }}
-                      aria-hidden
-                    >
-                      {account.initials}
-                    </span>
-                    <span className="hidden max-w-[110px] truncate sm:inline">{account.name}</span>
-                    <span className="hidden text-[var(--c-ink-muted)] md:inline">· {ROLE_LABELS[account.role]}</span>
-                  </>
-                ) : (
-                  <span className="px-1.5 py-1">{t('chrome.demo')}</span>
-                )}
-                <ChevronDown className="h-3.5 w-3.5 text-[var(--c-ink-muted)]" aria-hidden />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              {account ? (
-                <>
-                  <DropdownMenuLabel className="flex items-center gap-3 py-2.5">
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                      style={{ backgroundColor: account.color }}
-                      aria-hidden
-                    >
-                      {account.initials}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">{account.name}</span>
-                      <span className="block truncate text-xs font-normal text-muted-foreground">{account.email}</span>
-                    </span>
-                  </DropdownMenuLabel>
-                  <div className="px-2 pb-2">
-                    <Badge variant="outline" className="bg-[var(--a-em-50)] text-[10px] font-medium text-[var(--a-em-700)] dark:bg-[var(--a-em-950)] dark:text-[var(--a-em-400)]">
-                      {ROLE_LABELS[account.role]} · {account.brandName}
-                    </Badge>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-[var(--c-ink-muted)]">
-                    {t('chrome.demoSwitch')}
-                  </DropdownMenuLabel>
-                  {DEMO_ACCOUNTS.filter(a => a.id !== account.id).map(a => (
-                    <DropdownMenuItem key={a.id} onSelect={() => switchProfile(a.id)} className="gap-3 py-2">
-                      <span
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                        style={{ backgroundColor: a.color }}
-                        aria-hidden
-                      >
-                        {a.initials}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-semibold">{a.name}</span>
-                        <span className="block truncate text-[10px] text-muted-foreground">{a.jobTitle} · {a.brandName}</span>
-                      </span>
-                      <Zap className="h-3 w-3 shrink-0 text-[var(--c-amber)]" aria-hidden />
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <div className="flex items-center justify-between px-2 py-1.5 text-[10px] text-[var(--c-ink-muted)]">
-                    <span>{t('chrome.demoVersion')}</span>
-                  </div>
-                  <DropdownMenuItem
-                    onSelect={() => { logout(); toast.info(t('chrome.logoutToastTitle'), { description: t('chrome.logoutToastDesc') }) }}
-                    className="gap-2 py-2 text-[var(--c-terra)] focus:text-[var(--c-terra)]"
-                  >
-                    <LogOut className="h-4 w-4" aria-hidden />
-                    {t('chrome.logout')}
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <div className="p-2 text-sm text-muted-foreground">{t('chrome.noAccount')}</div>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Compte connecté — V7 : profil de session, sécurité 2FA, changement de compte, déconnexion */}
+          <UserMenu />
         </div>
       </div>
     </header>

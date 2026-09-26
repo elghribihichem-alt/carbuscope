@@ -21,13 +21,20 @@ export async function logAudit(entry: {
 }) {
   const a = entry.acteur ?? DEFAULT_ACTEUR
   try {
-    await db.auditLog.create({
+    // V7 — écrit dans AuditEvent (le journal réellement exposé par
+    // /api/super/audit). Message consolidé : action · cible · détails · sévérité.
+    const severite = entry.severite && entry.severite !== "NORMALE" ? entry.severite : null
+    await db.auditEvent.create({
       data: {
-        acteurNom: a.nom, acteurEmail: a.email, acteurRole: a.role,
-        module: entry.module, action: entry.action,
-        cibleType: entry.cibleType, cibleLabel: entry.cibleLabel,
-        details: entry.details ?? "", severite: entry.severite ?? "NORMALE",
-        ip: entry.ip ?? "10.0.0.2",
+        kind: entry.module,
+        message: [
+          entry.action,
+          entry.cibleLabel && `${entry.cibleType} : ${entry.cibleLabel}`,
+          entry.details || null,
+          severite,
+          entry.ip || null,
+        ].filter(Boolean).join(" · "),
+        actor: a.email,
       },
     })
   } catch {
@@ -70,7 +77,18 @@ export function serializeFacture(f: {
 }
 
 export function serializeCompte(u: { id: string; email: string; name: string; role: string; brandSlug: string | null; active: boolean; totpEnabled: boolean; createdAt: Date }, brandName: string | null = null): CompteDTO {
-  return { ...u, brandName, createdAt: u.createdAt.toISOString() }
+  // V7 — JAMAIS de passwordHash / totpSecret dans une réponse API (fuite bloquée).
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    brandSlug: u.brandSlug,
+    active: u.active,
+    totpEnabled: u.totpEnabled,
+    createdAt: u.createdAt.toISOString(),
+    brandName,
+  }
 }
 
 export function serializeAudit(l: { id: string; acteurNom: string; acteurEmail: string; acteurRole: string; module: string; action: string; cibleType: string; cibleLabel: string; details: string; severite: string; ip: string; createdAt: Date }): AuditLogDTO {

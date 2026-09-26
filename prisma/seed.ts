@@ -392,8 +392,27 @@ async function main() {
     })
   }
 
-  console.log("👥 Utilisateurs de démonstration…")
+  console.log("👥 Utilisateurs de démonstration (V7 — authentification réelle)…")
+  // Mot de passe de démonstration public « carbuscope » (hashé bcrypt côté
+  // serveur) : chaque persona ci-dessous peut se connecter via /api/auth/login,
+  // activer la 2FA depuis son menu utilisateur et être suivie en Super Admin.
+  const { hashSync } = await import("bcryptjs")
+  const demoHash = hashSync("carbuscope", 10)
   const users = [
+    // Équipe éditeur CarbuScope (accès back-office ; Rania = racine Super Admin)
+    { email: "rania.feki@carbuscope.tn", name: "Rania Feki", role: "SUPER_ADMIN", brandSlug: null as string | null },
+    { email: "amine.chebbi@carbuscope.tn", name: "Amine Chebbi", role: "ADMIN", brandSlug: null },
+    { email: "hichem.jaziri@carbuscope.tn", name: "Hichem Jaziri", role: "NETWORK", brandSlug: null },
+    { email: "ops@carbuscope.tn", name: "Farid Ops", role: "ADMIN", brandSlug: null },
+    { email: "finance@carbuscope.tn", name: "Ines Karoui", role: "VIEWER", brandSlug: null },
+    // Enseignes clientes (personas produit)
+    { email: "sonia.beji@agil.tn", name: "Sonia Beji", role: "ADMIN", brandSlug: "agil" },
+    { email: "nadia.haddad@agil.tn", name: "Nadia Haddad", role: "ADMIN", brandSlug: "agil" },
+    { email: "observateur@agil.tn", name: "Walid Gharbi", role: "VIEWER", brandSlug: "agil" },
+    { email: "karim.trabelsi@shell.tn", name: "Karim Trabelsi", role: "COMMERCIAL", brandSlug: "shell" },
+    { email: "mehdi.gharbi@ola.tn", name: "Mehdi Gharbi", role: "EXPANSION", brandSlug: "ola" },
+    { email: "leila.mansour@totalenergies.tn", name: "Leila Mansour", role: "VIEWER", brandSlug: "totalenergies" },
+    // Comptes de travail historiques (back-office / études)
     { email: "admin@carbuscope.tn", name: "Admin Plateforme", role: "ADMIN", brandSlug: null },
     { email: "reseau@agil.tn", name: "Salma Ferhat", role: "NETWORK", brandSlug: "agil" },
     { email: "commercial@agil.tn", name: "Mehdi Lasram", role: "COMMERCIAL", brandSlug: "agil" },
@@ -401,7 +420,9 @@ async function main() {
     { email: "reseau@totalenergies.tn", name: "Ines Chaabane", role: "NETWORK", brandSlug: "totalenergies" },
   ]
   for (const u of users) {
-    await db.user.create({ data: { email: u.email, name: u.name, role: u.role, brandSlug: u.brandSlug } })
+    await db.user.create({
+      data: { email: u.email, name: u.name, role: u.role, brandSlug: u.brandSlug, passwordHash: demoHash },
+    })
   }
 
   const total = await db.station.count()

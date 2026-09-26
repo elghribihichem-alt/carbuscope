@@ -7,20 +7,20 @@ import type { DemoAccount } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
-// Sélection pédagogique : éditeur, personnel plateforme, un admin par enseigne
-// cliente + un observateur (rôle limité).
+// Sélection pédagogique alignée sur les personas de démonstration : la racine
+// Super Admin, l'équipe éditeur, un admin par enseigne cliente + profils variés.
 const CURATED = [
-  "super.admin@carbuscope.tn",
+  "rania.feki@carbuscope.tn",
+  "amine.chebbi@carbuscope.tn",
   "hichem.jaziri@carbuscope.tn",
   "ops@carbuscope.tn",
   "finance@carbuscope.tn",
-  "admin@agil.tn",
-  "reseau@agil.tn",
+  "sonia.beji@agil.tn",
+  "nadia.haddad@agil.tn",
   "observateur@agil.tn",
-  "admin@totalenergies.tn",
-  "admin@shell.tn",
-  "admin@staroil.tn",
-  "admin@ola.tn",
+  "karim.trabelsi@shell.tn",
+  "mehdi.gharbi@ola.tn",
+  "leila.mansour@totalenergies.tn",
 ]
 
 export async function GET() {

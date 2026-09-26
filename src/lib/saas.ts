@@ -104,6 +104,7 @@ export interface SaasUserDTO {
   active: boolean
   lastLoginAt: string | null
   personaId: string | null // compte de démonstration associé (prise de main)
+  totpEnabled: boolean // V7 : double authentification TOTP active sur ce compte
 }
 
 export interface SaasAuditDTO {

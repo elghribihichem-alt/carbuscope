@@ -1,13 +1,13 @@
 // V7 — Authentification réelle CarbuScope : sessions signées HMAC-SHA256
-// (cookie httpOnly), vérification bcrypt, TOTP 2FA (otplib), rate limit
-// anti-force-brute. Server-only — JAMAIS importé côté client.
+// (cookie httpOnly), vérification bcrypt, TOTP 2FA (RFC 6238, implémenté sur
+// crypto natif — zéro dépendance), rate limit anti-force-brute. Server-only —
+// JAMAIS importé côté client.
 // Les API « données » restent ouvertes en démonstration (convention du projet) ;
 // cette lib protège les sessions, le 2FA et les mutations d'authentification.
 
-import { createHmac, timingSafeEqual } from "crypto"
+import { createHmac, randomBytes, timingSafeEqual } from "crypto"
 import { cookies } from "next/headers"
 import bcrypt from "bcryptjs"
-import { generateSecret, generateURI, verify as verifyTotp } from "otplib"
 import { db } from "@/lib/db"
 import { logAudit } from "@/lib/sa-server"
 import type { SessionUser } from "@/lib/types"
@@ -16,7 +16,6 @@ export const SESSION_COOKIE = "cs_session"
 export const SESSION_TTL_S = 12 * 3600 // 12 h
 
 const SECRET = process.env.AUTH_SECRET || "carbuscope-dev-secret-v7"
-const ISSUER = "CarbuScope"
 
 // ---------- Sessions signées ----------
 
@@ -98,31 +97,86 @@ export async function requireSession(): Promise<SessionUser | null> {
 export const hashPassword = (plain: string) => bcrypt.hashSync(plain, 10)
 export const checkPassword = (plain: string, hash: string) => bcrypt.compareSync(plain, hash)
 
-// ---------- TOTP (2FA) ----------
+// ---------- TOTP (2FA) — RFC 6238 sur HMAC-SHA1, fenêtre de 30 s ----------
+
+const B32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+
+function base32Encode(buf: Buffer): string {
+  let bits = 0
+  let value = 0
+  let out = ""
+  for (const byte of buf) {
+    value = (value << 8) | byte
+    bits += 8
+    while (bits >= 5) {
+      out += B32_ALPHABET[(value >>> (bits - 5)) & 31]
+      bits -= 5
+    }
+  }
+  if (bits > 0) out += B32_ALPHABET[(value << (5 - bits)) & 31]
+  return out
+}
+
+function base32Decode(secret: string): Buffer {
+  const clean = secret.toUpperCase().replace(/=+$/, "").replace(/[^A-Z2-7]/g, "")
+  let bits = 0
+  let value = 0
+  const bytes: number[] = []
+  for (const ch of clean) {
+    const idx = B32_ALPHABET.indexOf(ch)
+    if (idx < 0) continue
+    value = (value << 5) | idx
+    bits += 5
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 255)
+      bits -= 8
+    }
+  }
+  return Buffer.from(bytes)
+}
+
+/** Code TOTP pour un compteur de fenêtres donné (RFC 6238, 6 chiffres). */
+function totpAt(secret: string, counter: number): string {
+  const key = base32Decode(secret)
+  const msg = Buffer.alloc(8)
+  msg.writeBigUInt64BE(BigInt(counter))
+  const digest = createHmac("sha1", key).update(msg).digest()
+  const offset = digest[digest.length - 1] & 0x0f
+  const code =
+    (((digest[offset] & 0x7f) << 24) |
+      (digest[offset + 1] << 16) |
+      (digest[offset + 2] << 8) |
+      digest[offset + 3]) %
+    1_000_000
+  return code.toString().padStart(6, "0")
+}
+
+const currentWindow = () => Math.floor(Date.now() / 1000 / 30)
 
 export function newTotpSecret(): string {
-  return generateSecret()
+  // 20 octets aléatoires → 32 caractères base32 (standard Google Authenticator)
+  return base32Encode(randomBytes(20))
 }
 
 export function totpUriFor(email: string, secret: string): string {
-  return generateURI({ issuer: ISSUER, label: email, secret })
+  return `otpauth://totp/${encodeURIComponent(`CarbuScope:${email}`)}?secret=${secret}&issuer=CarbuScope&algorithm=SHA1&digits=6&period=30`
 }
 
-export async function checkTotp(secret: string, token: string): Promise<boolean> {
+/** Tolérance ±1 fenêtre (30 s) de chaque côté — comme les apps d'authentification. */
+export function checkTotp(secret: string, token: string): boolean {
   const clean = token.replace(/\s+/g, "")
-  if (!/^\d{6}$/.test(clean)) return false
-  try {
-    const res = await verifyTotp({ secret, token: clean, epochTolerance: 30 })
-    return res.valid === true
-  } catch {
-    return false
+  if (!/^\d{6}$/.test(clean) || !secret) return false
+  const w = currentWindow()
+  for (const c of [w - 1, w, w + 1]) {
+    const expected = totpAt(secret, c)
+    if (expected.length === clean.length && timingSafeEqual(Buffer.from(expected), Buffer.from(clean))) return true
   }
+  return false
 }
 
 /** Génère un code TOTP valide « maintenant » (outils de QA / démo uniquement). */
-export async function generateTotpNow(secret: string): Promise<string> {
-  const { generate } = await import("otplib")
-  return generate({ secret })
+export function generateTotpNow(secret: string): string {
+  return totpAt(secret, currentWindow())
 }
 
 // ---------- Rate limit anti-force-brute (login) ----------

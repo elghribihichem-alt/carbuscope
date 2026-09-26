@@ -315,14 +315,17 @@ model Contribution {
 }
 
 model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
-  name        String
-  role        String    @default("VIEWER") // ADMIN | NETWORK | COMMERCIAL | EXPANSION | VIEWER
-  brandSlug   String?
-  active      Boolean   @default(true)
-  lastLoginAt DateTime?
-  createdAt   DateTime  @default(now())
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         String    @default("VIEWER") // SUPER_ADMIN | ADMIN | NETWORK | COMMERCIAL | EXPANSION | VIEWER
+  brandSlug    String?
+  active       Boolean   @default(true)
+  passwordHash String? // bcrypt — null = compte non initialisé (connexion refusée)
+  totpSecret   String? // secret TOTP base32 (double authentification)
+  totpEnabled  Boolean   @default(false) // 2FA active : la connexion exige un code à 6 chiffres
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
 }
 
 // ---- Super Administration (T33) : pilotage SaaS de la plateforme —

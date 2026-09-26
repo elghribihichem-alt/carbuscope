@@ -11,10 +11,10 @@ export async function GET() {
   const [users, brands, saasSlugs] = await Promise.all([
     db.user.findMany({ orderBy: [{ brandSlug: "asc" }, { createdAt: "asc" }] }),
     db.brand.findMany({ select: { slug: true, name: true } }),
-    db.contrat.findMany({ where: { brandSlug: { not: null } }, select: { brandSlug: true, statut: true } }),
+    db.saasContract.findMany({ select: { brandSlug: true, status: true } }),
   ])
   const brandName = new Map(brands.map(b => [b.slug, b.name]))
-  const contratsActifs = new Set(saasSlugs.filter(c => c.statut === "ACTIF").map(c => c.brandSlug))
+  const contratsActifs = new Set(saasSlugs.filter(c => c.status === "ACTIF").map(c => c.brandSlug))
   const comptes = users.map(u => serializeCompte(u, u.brandSlug ? brandName.get(u.brandSlug) ?? u.brandSlug : "CarbuScope (éditeur)"))
   return NextResponse.json({
     comptes,

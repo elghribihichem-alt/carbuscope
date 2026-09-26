@@ -673,3 +673,30 @@ export type VisitReportInput = {
   notes?: string
   anomaly?: boolean // true → la tâche passe en ANOMALIE au lieu de FAITE
 }
+
+// ---------- V7 : authentification réelle (session serveur + 2FA TOTP) ----------
+
+/** Utilisateur connecté (cookie de session signé httpOnly, TTL 12 h). */
+export interface SessionUser {
+  id: string
+  email: string
+  name: string
+  /** SUPER_ADMIN | ADMIN | NETWORK | COMMERCIAL | EXPANSION | VIEWER */
+  role: string
+  brandSlug: string | null
+  brandName: string | null
+  /** Double authentification TOTP active sur le compte. */
+  totpEnabled: boolean
+  /** Espaces produit autorisés pour ce profil (Super Administration incluse pour la racine). */
+  spaces: string[]
+}
+
+/** Compte de démonstration retourné par /api/auth/accounts (écran de connexion + changeur de compte). */
+export interface DemoAccount {
+  name: string
+  email: string
+  role: string
+  brandSlug: string | null
+  brandName: string | null
+  totpEnabled: boolean
+}

@@ -5,7 +5,7 @@
 // Identité émeraude CarbuScope, 100 % FR, responsive dès 390 px.
 
 import { useEffect, useRef, useState } from "react"
-import { Fuel, Loader2, LockKeyhole, LogIn, ShieldCheck, Eye, EyeOff, ArrowLeft, KeyRound, Bot, LineChart, Smartphone, Building2, UserRound, Info } from "lucide-react"
+import { Fuel, Loader2, LockKeyhole, LogIn, ShieldCheck, Eye, EyeOff, ArrowLeft, KeyRound, Bot, LineChart, Smartphone, Building2, UserRound, Info, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -56,7 +56,9 @@ export function LoginGate() {
   const adopte = (user: SessionUser) => {
     setSession(user)
     setAuthStatus("auth")
-    setRole(user.role as Role)
+    // Rôle « métier » pour les onglets de l'observatoire : la racine Super Admin
+    // navigue comme un administrateur complet (convention démo TAB_ACCESS).
+    setRole(user.role === "SUPER_ADMIN" ? "ADMIN" : (user.role as Role))
     if (user.brandSlug) setBrandSlug(user.brandSlug)
     stopImpersonating()
     setTab("dashboard")
@@ -114,6 +116,13 @@ export function LoginGate() {
     setPassword("carbuscope")
     setEtape("identifiants")
     setErreur(null)
+  }
+
+  /** Connexion express : un clic sur une persona = connexion immédiate avec le
+   * mot de passe démo public (le défi 2FA s'affiche si le compte l'a activée). */
+  const connexionExpress = (c: DemoAccount) => {
+    preRemplir(c)
+    connecter({ email: c.email, password: "carbuscope" })
   }
 
   return (
@@ -268,13 +277,13 @@ export function LoginGate() {
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {comptes.slice(0, 8).map(c => (
                   <button
-                    key={c.email} type="button" onClick={() => preRemplir(c)}
+                    key={c.email} type="button" onClick={() => connexionExpress(c)}
                     disabled={busy}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2 text-left transition-colors hover:border-emerald-400 hover:bg-emerald-50/60 disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40",
+                      "group flex items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2 text-left transition-colors hover:border-emerald-400 hover:bg-emerald-50/60 disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40",
                       email === c.email && "border-emerald-500 bg-emerald-50/70 dark:border-emerald-600 dark:bg-emerald-950/50",
                     )}
-                    title={`Se connecter : ${c.email} (rôle ${roleLabel(c.role)})`}
+                    title={`Connexion express : ${c.email} (rôle ${roleLabel(c.role)})`}
                   >
                     <span
                       className={cn(
@@ -285,12 +294,13 @@ export function LoginGate() {
                     >
                       {c.name.split(" ").map(m => m[0]).slice(0, 2).join("")}
                     </span>
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <span className="block truncate text-[12.5px] font-semibold leading-tight">{c.name}</span>
                       <span className="block truncate text-[11px] leading-tight text-muted-foreground">
                         {c.brandName ?? roleLabel(c.role)}{c.totpEnabled ? " · 2FA" : ""}
                       </span>
                     </span>
+                    <Zap className="h-3.5 w-3.5 shrink-0 text-amber-500 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
                   </button>
                 ))}
               </div>

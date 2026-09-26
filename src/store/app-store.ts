@@ -3,6 +3,7 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
+import type { SessionUser } from "@/lib/types"
 
 export type Mode = "observatoire" | "portail" | "mobile" | "agents" | "backoffice" | "superadmin"
 
@@ -53,7 +54,11 @@ interface AppState {
   role: Role
   focusStationCode: string | null // « voir sur la carte »
   selectedStationId: string | null
-  userId: string | null // compte de démonstration connecté
+  userId: string | null // compte de démonstration connecté (ancien flux, conservé pour compat)
+  // ---- V7 : session d'authentification réelle (bootstrappée depuis /api/auth/session) ----
+  session: SessionUser | null
+  /** "anon" = écran de connexion ; "auth" = session serveur active. */
+  authStatus: "anon" | "auth"
   setMode: (m: Mode) => void
   setTab: (t: Tab) => void
   setBrandSlug: (b: string) => void
@@ -62,6 +67,10 @@ interface AppState {
   setSelectedStation: (id: string | null) => void
   login: (accountId: string) => void
   logout: () => void
+  setSession: (u: SessionUser | null) => void
+  setAuthStatus: (s: "anon" | "auth") => void
+  /** Sort d'une éventuelle prise de main (impersonation) : l'état redevient nominal. */
+  stopImpersonating: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -74,6 +83,10 @@ export const useAppStore = create<AppState>()(
       focusStationCode: null,
       selectedStationId: null,
       userId: null,
+      // V7 : session serveur (jamais persistée — bootstrappée via /api/auth/session,
+      // le cookie httpOnly signé fait foi)
+      session: null,
+      authStatus: "anon",
       setMode: (mode) => set({ mode }),
       setTab: (tab) => set({ tab }),
       setBrandSlug: (brandSlug) => set({ brandSlug, focusStationCode: null, selectedStationId: null }),
@@ -95,6 +108,10 @@ export const useAppStore = create<AppState>()(
         })
       },
       logout: () => set({ userId: null }),
+      // ---- V7 : session réelle ----
+      setSession: (session) => set({ session }),
+      setAuthStatus: (authStatus) => set({ authStatus }),
+      stopImpersonating: () => set({ userId: null }),
     }),
     {
       name: "carbuscope-store",
