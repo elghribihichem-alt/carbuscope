@@ -18,7 +18,8 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell, BarChart, Bar, LabelList,
 } from "recharts"
-import { CHART_PALETTE, tooltipStyle, num, pct } from "@/lib/chart"
+import { tooltipStyle, num, pct } from "@/lib/chart"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 import {
   formatDT, formatDTCourt, formatInt, formatMois, type AnalyticsResponse,
 } from "@/lib/sa-types"
@@ -30,16 +31,22 @@ import {
 import { cn } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
-// Couleurs métier (jamais bleu/indigo) : revenus = émeraude, facturé = violet.
+// Couleurs métier (T41 phase 6) : thémées via useChartPalette — mrr = identité
+// SA color(4), facturé = color(1), encaissé = color(3). Jamais bleu statique.
 // ---------------------------------------------------------------------------
-const C = {
-  mrr: "#9333ea", // prune — identité SA
-  facture: "#059669", // émeraude
-  encaisse: "#065f46", // émeraude foncé
-  cohorte: "#9333ea",
-} as const
+function useSaColors() {
+  const palette = useChartPalette()
+  return {
+    palette,
+    C: {
+      mrr: palette.color(4),
+      facture: palette.color(1),
+      encaisse: palette.color(3),
+      cohorte: palette.color(4),
+    },
+  }
+}
 
-const TICK = { fontSize: 11, fill: "var(--muted-foreground)" }
 const LEGEND = { fontSize: 11, paddingTop: 8 }
 
 /** "2026-09" → "sept. 26" (axe X condensé). */
@@ -106,9 +113,11 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void 
 }
 
 // ---------------------------------------------------------------------------
-// Graphique principal : MRR (ligne violette) + facturé/encaissé (aires émeraude)
+// Graphique principal : MRR (ligne identité SA) + facturé/encaissé (aires thémées)
 // ---------------------------------------------------------------------------
 function SerieMrrChart({ data }: { data: AnalyticsResponse["serie"] }) {
+  const { palette, C } = useSaColors()
+  const TICK = { fontSize: 11, fill: palette.axis }
   const rows = useMemo(
     () => data.map(s => ({
       mois: s.mois,
@@ -154,7 +163,7 @@ function SerieMrrChart({ data }: { data: AnalyticsResponse["serie"] }) {
                   <stop offset="100%" stopColor={C.encaisse} stopOpacity={0.06} />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={palette.grid} />
               <XAxis dataKey="label" tick={TICK} axisLine={false} tickLine={false} interval={0} />
               <YAxis
                 tick={TICK}
@@ -165,7 +174,7 @@ function SerieMrrChart({ data }: { data: AnalyticsResponse["serie"] }) {
               />
               <Tooltip
                 contentStyle={tooltipStyle()}
-                cursor={{ stroke: "var(--border)" }}
+                cursor={{ stroke: palette.axisLine }}
                 labelFormatter={(l) => formatMois(moisParLabel[String(l)] ?? String(l))}
                 formatter={(v, n) => [formatDTCourt(Number(v)), String(n)]}
               />
@@ -211,13 +220,14 @@ function SerieMrrChart({ data }: { data: AnalyticsResponse["serie"] }) {
 // Répartition du MRR par client : donut + tableau DataViews (barre de part)
 // ---------------------------------------------------------------------------
 function RepartitionClients({ data }: { data: AnalyticsResponse["revenusParClient"] }) {
+  const { palette } = useSaColors()
   const rows = useMemo(
     () => data.map((r, i) => ({
       ...r,
-      couleur: CHART_PALETTE[i % CHART_PALETTE.length],
+      couleur: palette.color(i + 1),
       nomComplet: `${r.nomClient} — ${pct(r.partPct)}`,
     })),
-    [data],
+    [data, palette],
   )
   const totalMrr = useMemo(() => data.reduce((s, r) => s + r.mrrMillimes, 0), [data])
 
@@ -389,6 +399,8 @@ function RepartitionClients({ data }: { data: AnalyticsResponse["revenusParClien
 // Cohortes de signature : barres horizontales + MRR total en étiquette
 // ---------------------------------------------------------------------------
 function CohortesChart({ data }: { data: AnalyticsResponse["cohortes"] }) {
+  const { palette, C } = useSaColors()
+  const TICK = { fontSize: 11, fill: palette.axis }
   const rows = useMemo(
     () => data.map(c => ({
       ...c,
@@ -412,7 +424,7 @@ function CohortesChart({ data }: { data: AnalyticsResponse["cohortes"] }) {
         <div className="h-52" role="img" aria-label="Nombre de clients et MRR par cohorte de signature">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 140, left: 8, bottom: 0 }}>
-              <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="var(--border)" />
+              <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke={palette.grid} />
               <XAxis type="number" hide domain={[0, (dMax: number) => dMax + 0.5]} />
               <YAxis type="category" dataKey="libelle" tick={TICK} axisLine={false} tickLine={false} width={64} />
               <Tooltip

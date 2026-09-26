@@ -25,7 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { toast } from "sonner"
-import { AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
+import { tooltipStyle } from "@/lib/chart"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 import type { FuelPriceCurrent, FuelPriceDTO, FuelPricesResponse, FuelType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -279,6 +280,13 @@ function CurrentPriceCard({ c }: { c: FuelPriceCurrent }) {
 // ---------- Graphique historique ----------
 
 function PriceHistoryChart({ data }: { data: FuelPricesResponse }) {
+  // Palette de charts thémée (T41 phase 6) : les traits suivent le thème actif.
+  const palette = useChartPalette()
+  const fuelColor: Record<FuelType, string> = {
+    ESSENCE: palette.color(1),
+    GAZOLE: palette.color(2),
+    GPL: palette.color(4),
+  }
   const [visible, setVisible] = useState<Record<FuelType, boolean>>({
     ESSENCE: true, GAZOLE: true, GPL: true,
   })
@@ -337,7 +345,7 @@ function PriceHistoryChart({ data }: { data: FuelPricesResponse }) {
               >
                 <span
                   className="h-2 w-2 rounded-full"
-                  style={{ background: visible[f] ? FUEL_META[f].color : "#94a3b8" }}
+                  style={{ background: visible[f] ? fuelColor[f] : palette.color(5) }}
                   aria-hidden
                 />
                 {FUEL_META[f].label.split(" ")[0]}
@@ -350,17 +358,17 @@ function PriceHistoryChart({ data }: { data: FuelPricesResponse }) {
         {anyVisible ? (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={series} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="dateLabel"
-                tick={{ ...AXIS_STYLE, fontSize: 10 }}
+                tick={{ fill: palette.axis, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
                 minTickGap={24}
               />
               <YAxis
-                tick={{ ...AXIS_STYLE, fontSize: 10 }}
+                tick={{ fill: palette.axis, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
                 width={44}
@@ -379,7 +387,7 @@ function PriceHistoryChart({ data }: { data: FuelPricesResponse }) {
                   key={f}
                   type="stepAfter"
                   dataKey={f}
-                  stroke={FUEL_META[f].color}
+                  stroke={fuelColor[f]}
                   strokeWidth={2.2}
                   dot={false}
                   activeDot={{ r: 4, strokeWidth: 2 }}
@@ -391,7 +399,7 @@ function PriceHistoryChart({ data }: { data: FuelPricesResponse }) {
                   x={d.date}
                   y={d.value}
                   r={3.5}
-                  fill={FUEL_META[d.fuel].color}
+                  fill={fuelColor[d.fuel]}
                   stroke="var(--background)"
                   strokeWidth={1.5}
                   // dataKey inutile ici : les points s'affichent sur leur série
@@ -413,6 +421,13 @@ function PriceHistoryChart({ data }: { data: FuelPricesResponse }) {
 // ---------- Simulateur d'impact marge (A.6.4 — « marge par litre ») ----------
 
 function MarginSimulator({ current }: { current: FuelPriceCurrent[] }) {
+  // Pastilles carburants alignées sur le thème (mêmes teintes que le graphique).
+  const palette = useChartPalette()
+  const fuelColor: Record<FuelType, string> = {
+    ESSENCE: palette.color(1),
+    GAZOLE: palette.color(2),
+    GPL: palette.color(4),
+  }
   // Paramètres (défauts réalistes station tunisienne).
   const [mainFuel, setMainFuel] = useState<FuelType>("GAZOLE")
   const [traffic, setTraffic] = useState(900) // véh/j captifs
@@ -493,7 +508,7 @@ function MarginSimulator({ current }: { current: FuelPriceCurrent[] }) {
               )}
             >
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: FUEL_META[f].color }} aria-hidden />
+                <span className="h-2 w-2 rounded-full" style={{ background: fuelColor[f] }} aria-hidden />
                 <span className="text-xs font-semibold">{FUEL_META[f].label.split(" ")[0]}</span>
               </span>
               <span className="mt-0.5 block text-[10px] tabular-nums text-muted-foreground">

@@ -31,7 +31,8 @@ import {
   formatDT, formatDTCourt, formatDTNombre, formatDate, formatInt, formatMois,
   type FactureDTO, type AbonnementDTO, type ContratDTO,
 } from "@/lib/sa-types"
-import { AXIS_STYLE, GRID_STROKE, tooltipStyle, CHART_PALETTE, num } from "@/lib/chart"
+import { tooltipStyle, num } from "@/lib/chart"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import {
@@ -86,8 +87,8 @@ type FactureKpis = {
 
 type FacturesResponse = { factures: FactureDTO[]; kpis: FactureKpis }
 
-// Palette graphique : emerald = encaissé, prune = facturé (identité SA, pas de bleu).
-const [EMERALD, , , PRUNE] = CHART_PALETTE
+// Palette graphique (T41 phase 6) : thémée via useChartPalette dans SaBilling —
+// encaissé = color(1), facturé = color(4) (identité SA, pas de bleu statique).
 
 const JSON_HEADERS = { "Content-Type": "application/json" }
 
@@ -277,6 +278,11 @@ function FacturePrintDocument({ f, nomClient }: { f: FactureDTO; nomClient: stri
 // ---------------------------------------------------------------- module ②
 
 export function SaBilling() {
+  // ---- palette de charts thémée (suit corporate / clair / café / espresso)
+  const palette = useChartPalette()
+  const EMERALD = palette.color(1) // encaissé (aire + dégradé)
+  const PRUNE = palette.color(4) // facturé (aire + dégradé)
+
   // ---- factures : jeu global (KPI + graphique + encart TVA) et liste filtrée
   const [all, setAll] = useState<FacturesResponse | null>(null)
   const [clients, setClients] = useState<ContratDTO[] | null>(null)
@@ -975,11 +981,11 @@ export function SaBilling() {
                         <stop offset="100%" stopColor={PRUNE} stopOpacity={0.02} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                    <XAxis dataKey="label" tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} tickLine={false} dy={4} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={palette.grid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: palette.axis, fontSize: 11 }} stroke={palette.axisLine} tickLine={false} dy={4} />
                     <YAxis
-                      tick={AXIS_STYLE.tick}
-                      stroke={AXIS_STYLE.stroke}
+                      tick={{ fill: palette.axis, fontSize: 11 }}
+                      stroke={palette.axisLine}
                       tickLine={false}
                       width={56}
                       tickFormatter={(v) => (v === 0 ? "0" : `${num(v / 1000)} k`)}

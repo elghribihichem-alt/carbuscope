@@ -621,6 +621,18 @@
   --chart-tooltip-border: #dddacd;
   --chart-cursor: rgba(138, 75, 31, 0.06);
 
+  /* Palette de charts café légèrement éclaircie (fond blanc : +vividité).
+     T8 « phase 6 » : les graphiques suivent le thème clair comme les 3 autres. */
+  --chart-1: #9a5a2a;
+  --chart-2: #d69a3f;
+  --chart-3: #6f8a62;
+  --chart-4: #c06a4d;
+  --chart-5: #8d7d6a;
+  --chart-6: #b97e2e;
+  --chart-7: #ac9a82;
+  --chart-8: #d4955a;
+  --chart-axis: #9a8870;
+
   /* La sidebar espresso et les accents café restent (tokens non surchargés). */
 }
 

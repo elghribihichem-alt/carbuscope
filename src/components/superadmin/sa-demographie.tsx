@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAppStore } from "@/store/app-store"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 import { VEHICLE_CATEGORIES, type DemographicAccessDTO, type DemographicDelegationDTO, type DemographicGouvernoratDTO } from "@/lib/saas"
 import { fmtDate, timeAgo } from "./sa-shared"
 import { DemographieGouvernoratsPanel, GOV_EXPORT_COLUMNS } from "@/components/demographie/demographie-gouvernorats"
@@ -76,8 +77,8 @@ const GOV_TOAST_LABELS: Record<string, string> = {
   avgFleetAge: "âge du parc",
 }
 
-// Palette du modélisateur (aucun bleu ni indigo).
-const CHART_COLORS = ["#059669", "#f59e0b", "#7c3aed", "#0d9488", "#ea580c", "#e11d48", "#65a30d", "#c026d3", "#78716c"]
+// Palette du modélisateur (T41 phase 6) : thémée via useChartPalette dans
+// ChartPie — suit corporate / clair / café / espresso (repli circulaire).
 
 // Indicateurs modélisables : gouvernorats (INS 2024 + parc historique) et
 // délégations (une fois alimentées).
@@ -244,6 +245,7 @@ function ChartPie({ items, unit, decimals, total }: {
   decimals: number
   total: number
 }) {
+  const palette = useChartPalette()
   const sorted = [...items].sort((a, b) => b.value - a.value)
   const top = sorted.slice(0, 8)
   const rest = sorted.slice(8)
@@ -274,7 +276,7 @@ function ChartPie({ items, unit, decimals, total }: {
                 key={s.label}
                 cx={80} cy={80} r={R}
                 fill="none"
-                stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                stroke={palette.color(i + 1)}
                 strokeWidth={26}
                 strokeDasharray={`${len} ${C - len}`}
                 strokeDashoffset={-s.start * C}
@@ -295,7 +297,7 @@ function ChartPie({ items, unit, decimals, total }: {
       <ul className="grid w-full max-w-lg grid-cols-1 gap-x-8 gap-y-1.5 sm:grid-cols-2">
         {slices.map((s, i) => (
           <li key={s.label} className="flex items-center gap-2 text-xs">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} aria-hidden />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: palette.color(i + 1) }} aria-hidden />
             <span className="min-w-0 flex-1 truncate" title={s.label}>{s.label}</span>
             <span className="font-mono tabular-nums text-muted-foreground">{fmtChart(s.value, decimals)}</span>
             <span className="w-14 text-right font-mono tabular-nums text-muted-foreground/70">

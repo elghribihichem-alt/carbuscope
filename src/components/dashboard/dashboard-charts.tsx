@@ -8,34 +8,45 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, PieChart, Pie, Cell,
 } from "recharts"
-import { CHART_PALETTE, tooltipStyle, num, pct } from "@/lib/chart"
+import { tooltipStyle, num, pct } from "@/lib/chart"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 import type * as React from "react"
 import { cn } from "@/lib/utils"
 import { growthRate } from "./dashboard-utils"
 import type { GouvernoratStatRow, MarketShareRow, MovementsStats, ServicesEvolution } from "@/lib/types"
 
-/** Palette cahier des charges : émeraude, ardoise (concurrents), ambre, rouge, prune. */
-const C = {
-  mine: "#059669",
-  concurrent: "#94a3b8",
-  ambre: "#d97706",
-  rouge: "#dc2626",
-  prune: "#9333ea",
-} as const
-
-const TICK = { fontSize: 10, fill: "var(--muted-foreground)" }
-// Recharts applique `angle` aux ticks à l'exécution mais ne l'expose pas dans ses types.
-const ANGLED_TICK = {
-  ...TICK,
-  angle: -35,
-  textAnchor: "end",
-} as React.SVGProps<SVGTextElement>
+/**
+ * Palette sémantique du tableau de bord (T41 phase 6) : mine → color(1),
+ * concurrent → gris neutre color(5), ambre → color(2), rouge → color(4),
+ * prune → color(3) — les couleurs suivent le thème actif via useChartPalette.
+ */
+function useDashboardColors() {
+  const palette = useChartPalette()
+  return {
+    palette,
+    C: {
+      mine: palette.color(1),
+      concurrent: palette.color(5),
+      ambre: palette.color(2),
+      rouge: palette.color(4),
+      prune: palette.color(3),
+    },
+  }
+}
 const LEGEND = { fontSize: 11, paddingTop: 6 }
 
 // ---------------------------------------------------------------------------
 // Histogramme : répartition des stations par gouvernorat (empilé mes / concurrents)
 // ---------------------------------------------------------------------------
 export function GouvBarChart({ rows, brandName }: { rows: GouvernoratStatRow[]; brandName: string }) {
+  const { palette, C } = useDashboardColors()
+  const TICK = { fontSize: 10, fill: palette.axis }
+  // Recharts applique `angle` aux ticks à l'exécution mais ne l'expose pas dans ses types.
+  const ANGLED_TICK = {
+    ...TICK,
+    angle: -35,
+    textAnchor: "end",
+  } as React.SVGProps<SVGTextElement>
   const data = rows.slice(0, 12).map(r => ({
     gouvernorat: r.gouvernorat,
     "Mes stations": r.mine,
@@ -45,7 +56,7 @@ export function GouvBarChart({ rows, brandName }: { rows: GouvernoratStatRow[]; 
     <div className="h-72" role="img" aria-label={`Répartition des stations ${brandName} et concurrentes par gouvernorat`}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
+          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={palette.grid} />
           <XAxis
             dataKey="gouvernorat"
             tick={ANGLED_TICK}
@@ -73,6 +84,8 @@ export function GouvBarChart({ rows, brandName }: { rows: GouvernoratStatRow[]; 
 // Courbe : évolution des services sur 5 ans (6 services les plus dynamiques)
 // ---------------------------------------------------------------------------
 export function ServicesLineChart({ data }: { data: ServicesEvolution }) {
+  const { palette } = useDashboardColors()
+  const TICK = { fontSize: 10, fill: palette.axis }
   const series = [...data.series]
     .sort((a, b) => growthRate(b.values) - growthRate(a.values))
     .slice(0, 6)
@@ -85,7 +98,7 @@ export function ServicesLineChart({ data }: { data: ServicesEvolution }) {
     <div className="h-72" role="img" aria-label="Évolution du nombre de stations équipées par service sur 5 ans">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 4, right: 12, left: -16, bottom: 0 }}>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
+          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={palette.grid} />
           <XAxis dataKey="annee" tick={TICK} axisLine={false} tickLine={false} />
           <YAxis tick={TICK} axisLine={false} tickLine={false} width={38} allowDecimals={false} />
           <Tooltip contentStyle={tooltipStyle()} formatter={(v, n) => [num(Number(v)), String(n)]} />
@@ -95,7 +108,7 @@ export function ServicesLineChart({ data }: { data: ServicesEvolution }) {
               key={s.service}
               type="monotone"
               dataKey={s.service}
-              stroke={CHART_PALETTE[i % CHART_PALETTE.length]}
+              stroke={palette.color(i + 1)}
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 4 }}
@@ -169,6 +182,8 @@ export function MarketShareDonut({
 // Barres empilées : mouvements concurrentiels sur 12 mois
 // ---------------------------------------------------------------------------
 export function MovementsBarChart({ data }: { data: MovementsStats }) {
+  const { palette, C } = useDashboardColors()
+  const TICK = { fontSize: 10, fill: palette.axis }
   const chartData = data.months.map((m, i) => ({
     mois: m,
     "Ouvertures": data.openings[i] ?? 0,
@@ -180,7 +195,7 @@ export function MovementsBarChart({ data }: { data: MovementsStats }) {
     <div className="h-72" role="img" aria-label="Mouvements concurrentiels sur les 12 derniers mois">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
+          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={palette.grid} />
           <XAxis dataKey="mois" tick={TICK} interval={0} axisLine={false} tickLine={false} />
           <YAxis tick={TICK} axisLine={false} tickLine={false} width={38} allowDecimals={false} />
           <Tooltip

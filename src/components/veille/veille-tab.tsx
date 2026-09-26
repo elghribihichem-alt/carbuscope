@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
 import { tooltipStyle, num } from "@/lib/chart"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 import type { AlertDTO, BrandDTO, MovementDTO, MovementsStats } from "@/lib/types"
 import { Siren, Bell, Info, Radar } from "lucide-react"
 import { AlertsTimeline } from "./alerts-timeline"
@@ -29,6 +30,7 @@ type VeilleData = {
 }
 
 export function VeilleTab() {
+  const palette = useChartPalette()
   const [data, setData] = useState<VeilleData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -143,15 +145,15 @@ export function VeilleTab() {
           <div className="h-72" role="img" aria-label="Mouvements du marché sur les 12 derniers mois">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="mois" tick={TICK} interval={0} axisLine={false} tickLine={false} />
-                <YAxis tick={TICK} axisLine={false} tickLine={false} width={38} allowDecimals={false} />
+                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={palette.grid} />
+                <XAxis dataKey="mois" tick={{ ...TICK, fill: palette.axis }} interval={0} axisLine={false} tickLine={false} />
+                <YAxis tick={{ ...TICK, fill: palette.axis }} axisLine={false} tickLine={false} width={38} allowDecimals={false} />
                 <Tooltip contentStyle={tooltipStyle()} formatter={(v, n) => [num(Number(v)), String(n)]} />
                 <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} iconType="circle" iconSize={8} />
-                <Area type="monotone" dataKey="Ouvertures" stackId="mv" stroke="#059669" fill="#059669" fillOpacity={0.5} />
-                <Area type="monotone" dataKey="Rénovations" stackId="mv" stroke="#d97706" fill="#d97706" fillOpacity={0.5} />
-                <Area type="monotone" dataKey="Fermetures" stackId="mv" stroke="#dc2626" fill="#dc2626" fillOpacity={0.5} />
-                <Line type="monotone" dataKey="Rebrandings" stroke="#9333ea" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="Ouvertures" stackId="mv" stroke={palette.color(1)} fill={palette.color(1)} fillOpacity={0.5} />
+                <Area type="monotone" dataKey="Rénovations" stackId="mv" stroke={palette.color(2)} fill={palette.color(2)} fillOpacity={0.5} />
+                <Area type="monotone" dataKey="Fermetures" stackId="mv" stroke={palette.color(4)} fill={palette.color(4)} fillOpacity={0.5} />
+                <Line type="monotone" dataKey="Rebrandings" stroke={palette.color(3)} strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

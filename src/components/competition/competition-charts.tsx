@@ -11,9 +11,18 @@ import { ChartContainer } from "@/components/ui/chart"
 import { SERVICE_LABELS } from "@/lib/types"
 import type { CompetitionStats, MarketShareRow } from "@/lib/types"
 import { num, tooltipStyle } from "@/lib/chart"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 
-const SLATE = "#94a3b8" // ardoise clair — concurrents
-const EMERALD = "#059669" // émeraude — mon réseau
+// Couleurs thémées (T41 phase 6) : concurrents = gris neutre color(5),
+// mon réseau = color(1) — suivent le thème actif (plus d'hex statiques).
+function useCompetitionColors() {
+  const palette = useChartPalette()
+  return {
+    palette,
+    SLATE: palette.color(5),
+    EMERALD: palette.color(1),
+  }
+}
 
 export function fmtPct(v: number): string {
   return `${v.toFixed(1).replace(".", ",")} %`
@@ -93,6 +102,7 @@ export function MarketShareDoughnut({ rows, mySlug }: { rows: MarketShareRow[]; 
 /* ------- Barres horizontales groupées : densité de services concurrents ------- */
 
 export function ServicesDensityChart({ data }: { data: CompetitionStats["servicesDensity"] }) {
+  const { palette, SLATE, EMERALD } = useCompetitionColors()
   const rows = data.map((d) => ({
     service: SERVICE_LABELS[d.service] ?? d.service,
     concurrents: d.competitorsPct,
@@ -128,16 +138,17 @@ export function ServicesDensityChart({ data }: { data: CompetitionStats["service
       </div>
       <ChartContainer config={{}} className="aspect-auto h-[304px] w-full">
         <BarChart data={rows} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }} barGap={3}>
-          <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+          <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke={palette.grid} />
           <XAxis
             type="number"
             domain={[0, 100]}
             ticks={[0, 25, 50, 75, 100]}
             tickFormatter={(v: number) => `${v} %`}
+            tick={{ fill: palette.axis, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
           />
-          <YAxis type="category" dataKey="service" width={104} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+          <YAxis type="category" dataKey="service" width={104} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: palette.axis }} />
           <Tooltip content={renderTip} />
           <Bar dataKey="concurrents" name="Concurrents" fill={SLATE} radius={[0, 3, 3, 0]} barSize={10} />
           <Bar dataKey="monReseau" name="Mon réseau" fill={EMERALD} radius={[0, 3, 3, 0]} barSize={10} />
@@ -150,6 +161,7 @@ export function ServicesDensityChart({ data }: { data: CompetitionStats["service
 /* ------------- Aire lissée : ouvertures concurrentes sur 12 mois ------------- */
 
 export function OpeningsAreaChart({ months, values }: { months: string[]; values: number[] }) {
+  const { palette, EMERALD } = useCompetitionColors()
   const gradientId = React.useId().replace(/[^a-zA-Z0-9]/g, "")
   const rows = months.map((m, i) => ({ mois: m, ouvertures: values[i] ?? 0 }))
 
@@ -169,9 +181,9 @@ export function OpeningsAreaChart({ months, values }: { months: string[]; values
             <stop offset="100%" stopColor={EMERALD} stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-        <XAxis dataKey="mois" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-        <YAxis allowDecimals={false} width={26} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={palette.grid} />
+        <XAxis dataKey="mois" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: palette.axis }} interval="preserveStartEnd" />
+        <YAxis allowDecimals={false} width={26} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: palette.axis }} />
         <Tooltip content={renderTip} />
         <Area
           type="monotone"

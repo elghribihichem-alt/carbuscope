@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from "react"
 import { useAppStore } from '@/store/app-store'
 import { useI18n } from '@/lib/i18n'
+import { useDeepLinks } from '@/hooks/use-deep-links'
 import { AppHeader } from '@/components/shell/app-header'
 import { TabNav } from '@/components/shell/tab-nav'
 import { AppFooter } from '@/components/shell/app-footer'
@@ -47,6 +48,10 @@ export default function Home() {
   const tab = useAppStore(s => s.tab)
   const userId = useAppStore(s => s.userId)
   const { dir } = useI18n()
+
+  // T41 phase 7 — deep-links : restaure #mode=…&tab=… au chargement et reflète
+  // l'état de navigation dans l'URL (replaceState, discret).
+  useDeepLinks()
 
   // L'espace Super Administration est réservé au compte racine — tout autre
   // profil qui s'y retrouverait est ramené à l'observatoire (garde défensive).

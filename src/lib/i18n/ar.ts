@@ -434,4 +434,16 @@ export const ar: Partial<Dict> = {
   "action.reset": "إعادة تعيين",
   "action.prevPage": "الصفحة السابقة",
   "action.nextPage": "الصفحة التالية",
+  // ---------- تبويبات المرصد (tab-nav، T41) ----------
+  "rm.tabs.dashboard": "لوحة القيادة",
+  "rm.tabs.map": "الخريطة التفاعلية",
+  "rm.tabs.stations": "محطاتي",
+  "rm.tabs.competition": "المنافسة",
+  "rm.tabs.calculators": "الحاسبات",
+  "rm.tabs.implantation": "التوسع",
+  "rm.tabs.prices": "الأسعار والهوامش",
+  "rm.tabs.veille": "المراقبة",
+  "rm.tabs.reports": "التقارير",
+  "rm.tabs.demographie": "التركيبة السكانية",
+  "rm.tabs.settings": "الإعدادات",
 }

@@ -1,15 +1,18 @@
 // CarbuScope — Helpers graphiques (palette sans bleu, styles recharts)
 
+// Palette de repli alignée sur les tokens --chart-1..8 du thème « Café »
+// (T41 phase 6) : premier rendu SSR cohérent, puis useChartPalette relit les
+// vraies valeurs du thème actif (corporate / clair / café / espresso).
 export const CHART_PALETTE = [
-  "#059669", // émeraude
-  "#d97706", // ambre
-  "#dc2626", // rouge
-  "#9333ea", // prune
-  "#d9a514", // or
-  "#e07856", // terracotta
-  "#64748b", // ardoise
-  "#4d7c0f", // olive
-  "#be185d", // framboise
+  "#8a4b1f", // brun torréfié (--chart-1)
+  "#c98a2d", // ambre café (--chart-2)
+  "#5f7a52", // vert forêt (--chart-3)
+  "#b0563b", // terracotta (--chart-4)
+  "#7d6b58", // taupe neutre (--chart-5)
+  "#a96e1e", // or profond (--chart-6)
+  "#9c8a72", // sable (--chart-7)
+  "#c4854a", // caramel (--chart-8)
+  "#8a7660", // taupe d'axe (complément, --chart-axis café)
 ]
 
 export const AXIS_STYLE = {

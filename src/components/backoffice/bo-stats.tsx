@@ -18,7 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { KpiCard } from "@/components/shell/kpi-card"
-import { CHART_PALETTE, AXIS_STYLE, GRID_STROKE, tooltipStyle } from "@/lib/chart"
+import { tooltipStyle } from "@/lib/chart"
+import { useChartPalette } from "@/hooks/use-chart-palette"
 import {
   CONTRIBUTION_TYPE_LABELS, ALERT_TYPE_LABELS,
   type ContributionDTO, type MarketShareRow, type PlatformStats,
@@ -55,6 +56,7 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export function BoStats() {
+  const palette = useChartPalette()
   const [contributions, setContributions] = useState<ContributionDTO[] | null>(null)
   const [marketShare, setMarketShare] = useState<MarketShareRow[] | null>(null)
   const [platform, setPlatform] = useState<PlatformStats | null>(null)
@@ -202,7 +204,7 @@ export function BoStats() {
                       strokeWidth={2}
                     >
                       {marketShare.map(row => (
-                        <Cell key={row.slug} fill={row.color || CHART_PALETTE[0]} />
+                        <Cell key={row.slug} fill={row.color || palette.color(1)} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -245,17 +247,17 @@ export function BoStats() {
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={byType} margin={{ top: 8, right: 8, bottom: 4, left: -18 }}>
-                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+                    <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="label"
-                      tick={AXIS_STYLE.tick}
-                      stroke={AXIS_STYLE.stroke}
+                      tick={{ fill: palette.axis, fontSize: 11 }}
+                      stroke={palette.axisLine}
                       interval={0}
                       angle={-22}
                       textAnchor="end"
                       height={44}
                     />
-                    <YAxis tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} allowDecimals={false} />
+                    <YAxis tick={{ fill: palette.axis, fontSize: 11 }} stroke={palette.axisLine} allowDecimals={false} />
                     <Tooltip
                       contentStyle={tooltipStyle()}
                       cursor={{ fill: "var(--muted)", opacity: 0.6 }}
@@ -266,7 +268,7 @@ export function BoStats() {
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
                       {byType.map((_, i) => (
-                        <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                        <Cell key={i} fill={palette.color(i + 1)} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -308,7 +310,7 @@ export function BoStats() {
                         endAngle={-270}
                         stroke="none"
                       >
-                        <Cell fill="#059669" />
+                        <Cell fill={palette.color(1)} />
                         <Cell fill="var(--muted)" fillOpacity={0.35} />
                       </Pie>
                     </PieChart>
@@ -366,7 +368,7 @@ export function BoStats() {
                   {moderationRows.map(row => {
                     const total = Math.max(1, p.moderation.total)
                     const share = (row.count / total) * 100
-                    const color = row.status === "PENDING" ? "#d97706" : row.status === "VALIDATED" ? "#059669" : "#dc2626"
+                    const color = row.status === "PENDING" ? palette.color(2) : row.status === "VALIDATED" ? palette.color(1) : palette.color(4)
                     return (
                       <div key={row.status}>
                         <div className="mb-1 flex items-center justify-between text-xs">
@@ -442,21 +444,21 @@ export function BoStats() {
                     <ComposedChart data={p.reviews.trend} margin={{ top: 8, right: 8, bottom: 4, left: -18 }}>
                       <defs>
                         <linearGradient id="boReviewsFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#059669" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor={palette.color(1)} stopOpacity={0.35} />
+                          <stop offset="100%" stopColor={palette.color(1)} stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} />
-                      <YAxis yAxisId="left" tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} allowDecimals={false} />
-                      <YAxis yAxisId="right" orientation="right" tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} allowDecimals={false} />
+                      <CartesianGrid stroke={palette.grid} strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fill: palette.axis, fontSize: 11 }} stroke={palette.axisLine} />
+                      <YAxis yAxisId="left" tick={{ fill: palette.axis, fontSize: 11 }} stroke={palette.axisLine} allowDecimals={false} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fill: palette.axis, fontSize: 11 }} stroke={palette.axisLine} allowDecimals={false} />
                       <Tooltip
                         contentStyle={tooltipStyle()}
                         cursor={{ fill: "var(--muted)", opacity: 0.4 }}
                         formatter={(value: number, name: string) => [num(value), name === "reviews" ? "Avis" : "Auteurs actifs"]}
                       />
-                      <Area yAxisId="left" type="monotone" dataKey="reviews" name="reviews" stroke="#059669" strokeWidth={2} fill="url(#boReviewsFill)" />
-                      <Line yAxisId="right" type="monotone" dataKey="authors" name="authors" stroke="#d97706" strokeWidth={2} dot={{ r: 3, fill: "#d97706" }} />
+                      <Area yAxisId="left" type="monotone" dataKey="reviews" name="reviews" stroke={palette.color(1)} strokeWidth={2} fill="url(#boReviewsFill)" />
+                      <Line yAxisId="right" type="monotone" dataKey="authors" name="authors" stroke={palette.color(2)} strokeWidth={2} dot={{ r: 3, fill: palette.color(2) }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -505,9 +507,9 @@ export function BoStats() {
                 <div className="h-40">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={alertsByType} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 42 }}>
-                      <CartesianGrid horizontal={false} stroke={GRID_STROKE} strokeDasharray="3 3" />
-                      <XAxis type="number" allowDecimals={false} tick={AXIS_STYLE.tick} stroke={AXIS_STYLE.stroke} axisLine={false} tickLine={false} />
-                      <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <CartesianGrid horizontal={false} stroke={palette.grid} strokeDasharray="3 3" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fill: palette.axis, fontSize: 11 }} stroke={palette.axisLine} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: palette.axis }} axisLine={false} tickLine={false} />
                       <Tooltip
                         contentStyle={tooltipStyle()}
                         cursor={{ fill: "var(--muted)", opacity: 0.4 }}
@@ -515,7 +517,7 @@ export function BoStats() {
                       />
                       <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={13}>
                         {alertsByType.map((_, i) => (
-                          <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                          <Cell key={i} fill={palette.color(i + 1)} />
                         ))}
                       </Bar>
                     </BarChart>

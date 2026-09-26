@@ -433,6 +433,19 @@ export const fr = {
   "action.reset": "Réinitialiser",
   "action.prevPage": "Page précédente",
   "action.nextPage": "Page suivante",
+  // ---------- Onglets métier de l'Observatoire (tab-nav, T41) ----------
+  // Valeurs = libellés FR historiques exacts (aucun changement visuel en FR).
+  "rm.tabs.dashboard": "Tableau de bord",
+  "rm.tabs.map": "Carte interactive",
+  "rm.tabs.stations": "Mes stations",
+  "rm.tabs.competition": "Concurrence",
+  "rm.tabs.calculators": "Calculateurs",
+  "rm.tabs.implantation": "Implantation",
+  "rm.tabs.prices": "Prix & marges",
+  "rm.tabs.veille": "Veille",
+  "rm.tabs.reports": "Rapports",
+  "rm.tabs.demographie": "Démographie",
+  "rm.tabs.settings": "Paramètres",
 } as const
 
 export type DictKey = keyof typeof fr

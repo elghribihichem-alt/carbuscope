@@ -434,4 +434,16 @@ export const en: Partial<Dict> = {
   "action.reset": "Reset",
   "action.prevPage": "Previous page",
   "action.nextPage": "Next page",
+  // ---------- Observatory tabs (tab-nav, T41) ----------
+  "rm.tabs.dashboard": "Dashboard",
+  "rm.tabs.map": "Interactive map",
+  "rm.tabs.stations": "My stations",
+  "rm.tabs.competition": "Competition",
+  "rm.tabs.calculators": "Calculators",
+  "rm.tabs.implantation": "Expansion",
+  "rm.tabs.prices": "Prices & margins",
+  "rm.tabs.veille": "Watch",
+  "rm.tabs.reports": "Reports",
+  "rm.tabs.demographie": "Demographics",
+  "rm.tabs.settings": "Settings",
 }
