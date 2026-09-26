@@ -19,6 +19,7 @@ import type { AlertDTO, BrandDTO, MovementDTO, MovementsStats } from "@/lib/type
 import { Siren, Bell, Info, Radar } from "lucide-react"
 import { AlertsTimeline } from "./alerts-timeline"
 import { MovementsHistory } from "./movements-history"
+import { RelancesCard } from "./relances-card"
 
 const TICK = { fontSize: 10, fill: "var(--muted-foreground)" }
 
@@ -132,6 +133,9 @@ export function VeilleTab() {
 
       {/* ---------- Alertes actives (A.7.1) ---------- */}
       <AlertsTimeline alerts={data.alerts} brandColors={brandColors} />
+
+      {/* ---------- Relances de fraîcheur J+7 (T43, cahier §3.2) ---------- */}
+      <RelancesCard />
 
       {/* ---------- Mouvements 12 mois (A.7.2) ---------- */}
       <Card>

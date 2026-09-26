@@ -700,3 +700,48 @@ export interface DemoAccount {
   brandName: string | null
   totpEnabled: boolean
 }
+
+// ---------- T43 : relances de fraîcheur J+7 (cahier des charges §3.2) ----------
+
+/** Station dont la fiche dépasse le seuil de re-vérification (délai de mise à jour < 7 jours). */
+export interface RelanceStationDTO {
+  code: string
+  name: string
+  brandSlug: string
+  brandName: string
+  brandColor: string
+  gouvernorat: string
+  delegation: string
+  lastVerified: string
+  daysLate: number
+  verifiedBy: string
+  /** Dernière relance envoyée pour cette fiche (notification RELANCE, null si jamais). */
+  lastReminderAt: string | null
+}
+
+export interface RelancesKpis {
+  /** Stations actives de l'enseigne (hors projets). */
+  total: number
+  /** Fiches au-delà du seuil. */
+  overdue: number
+  /** % de fiches vérifiées dans le délai (cible cahier des charges : > 90 % à 12 mois). */
+  freshnessRate: number
+  /** Retard moyen des fiches en retard (jours). */
+  avgDaysLate: number
+  /** Retard de la fiche la plus ancienne non revérifiée (jours). */
+  oldestDays: number
+  /** Fiches déjà relancées dans les dernières 24 h (anti-spam). */
+  relanced24h: number
+}
+
+export interface RelancesResponse {
+  seuil: number
+  stations: RelanceStationDTO[]
+  kpis: RelancesKpis
+}
+
+export interface RelancePostResponse {
+  sent: number
+  skipped: number
+  notifiedBrand: string
+}

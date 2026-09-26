@@ -262,7 +262,7 @@ model AlertRun {
 model Notification {
   id           String   @id @default(cuid())
   brandSlug    String
-  kind         String   @default("WATCHLIST") // WATCHLIST | SYSTEM | DECREE
+  kind         String   @default("WATCHLIST") // WATCHLIST | SYSTEM | DECREE | RELANCE (T43 : fraîcheur J+7)
   title        String
   body         String
   stationLabel String? // station ou périmètre concerné

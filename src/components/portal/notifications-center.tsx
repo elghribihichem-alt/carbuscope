@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import {
-  Bell, BellRing, CheckCheck, TrendingDown, Radar, Inbox, MailCheck, Loader2, MapPin, Banknote, ArrowRight, Wifi, WifiOff,
+  Bell, BellRing, CheckCheck, TrendingDown, Radar, Inbox, MailCheck, Loader2, MapPin, Banknote, ArrowRight, Wifi, WifiOff, AlarmClock,
 } from "lucide-react"
 import type { NotificationDTO } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -265,11 +265,13 @@ export function NotificationsCenter({ brandSlug, onNavigate }: { brandSlug: stri
                           ? "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400"
                           : n.kind === "SYSTEM"
                             ? "border-violet-200 bg-violet-100 text-violet-700 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-300"
-                            : "border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
+                            : n.kind === "RELANCE"
+                              ? "border-teal-200 bg-teal-100 text-teal-700 dark:border-teal-900 dark:bg-teal-950 dark:text-teal-300"
+                              : "border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
                       )}
                       aria-hidden
                     >
-                      {n.kind === "DECREE" ? <Banknote className="h-4 w-4" /> : n.kind === "SYSTEM" ? <Radar className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                      {n.kind === "DECREE" ? <Banknote className="h-4 w-4" /> : n.kind === "SYSTEM" ? <Radar className="h-4 w-4" /> : n.kind === "RELANCE" ? <AlarmClock className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                     </span>
 
                     <div className="min-w-0 flex-1">
