@@ -81,6 +81,7 @@ export function serializeUser(u: UserFull): SaasUserDTO {
     active: u.active,
     lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
     personaId: persona?.id ?? null,
+    totpEnabled: u.totpEnabled ?? false,
   }
 }
 
