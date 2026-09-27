@@ -59,6 +59,16 @@ interface AppState {
   session: SessionUser | null
   /** "anon" = écran de connexion ; "auth" = session serveur active. */
   authStatus: "anon" | "auth"
+  // ---- T46 : navigation verticale (sidebar accordéon) ----
+  /** Sous-navigation des modules : clé = module (ex. "shadow-recensement"), valeur = section active. */
+  nav: Record<string, string>
+  setNav: (key: string, value: string) => void
+  /** Sidebar desktop repliée en rail d'icônes. */
+  sidebarCollapsed: boolean
+  setSidebarCollapsed: (collapsed: boolean) => void
+  /** Panneau de navigation mobile (Sheet). */
+  mobileNavOpen: boolean
+  setMobileNavOpen: (open: boolean) => void
   setMode: (m: Mode) => void
   setTab: (t: Tab) => void
   setBrandSlug: (b: string) => void
@@ -87,6 +97,14 @@ export const useAppStore = create<AppState>()(
       // le cookie httpOnly signé fait foi)
       session: null,
       authStatus: "anon",
+      // T46 : navigation verticale — les valeurs manquantes retombent sur les
+      // défauts de chaque vue (nav[key] ?? "…"), donc pas de persistance nécessaire.
+      nav: {},
+      setNav: (key, value) => set((s) => ({ nav: { ...s.nav, [key]: value } })),
+      sidebarCollapsed: false,
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      mobileNavOpen: false,
+      setMobileNavOpen: (mobileNavOpen) => set({ mobileNavOpen }),
       setMode: (mode) => set({ mode }),
       setTab: (tab) => set({ tab }),
       setBrandSlug: (brandSlug) => set({ brandSlug, focusStationCode: null, selectedStationId: null }),
@@ -115,7 +133,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "carbuscope-store",
-      partialize: (s) => ({ brandSlug: s.brandSlug, role: s.role, userId: s.userId }),
+      partialize: (s) => ({ brandSlug: s.brandSlug, role: s.role, userId: s.userId, sidebarCollapsed: s.sidebarCollapsed }),
     }
   )
 )

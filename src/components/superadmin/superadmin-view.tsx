@@ -4,11 +4,10 @@
 // contrats des enseignes clientes, facturation, comptes utilisateurs, audit.
 // Accès réservé au compte super-administrateur (flag isSuperAdmin du compte démo).
 
-import { useState } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Crown, LayoutDashboard, FileSignature, Layers, Receipt, UsersRound, BarChart3, Bot, MapPinned, ScrollText, ShieldAlert } from "lucide-react"
+import { Crown, ShieldAlert } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import { SaOverview } from "./sa-overview"
@@ -24,7 +23,10 @@ import { SaAudit } from "./sa-audit"
 export function SuperAdminView() {
   const userId = useAppStore(s => s.userId)
   const account = userId ? DEMO_ACCOUNTS_MAP[userId] : null
-  const [tab, setTab] = useState("overview")
+  // T46 — sous-navigation pilotée par la sidebar (store) : nav.superadmin ?? "overview"
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav.superadmin) ?? "overview"
+  const setTab = (v: string) => setNav("superadmin", v)
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -63,39 +65,10 @@ export function SuperAdminView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne (9 onglets — Démographie ajoutée en T35 après
-          Utilisateurs, demande utilisateur Phase 4) */}
+      {/* Sections (9 — Démographie ajoutée en T35 après Utilisateurs, demande
+          utilisateur Phase 4) — T46 : la sous-navigation est portée par la
+          sidebar verticale, plus de barre d'onglets horizontale ici. */}
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 lg:w-auto">
-          <TabsTrigger value="overview" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <LayoutDashboard className="h-4 w-4" aria-hidden /> Vue d&apos;ensemble
-          </TabsTrigger>
-          <TabsTrigger value="contracts" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <FileSignature className="h-4 w-4" aria-hidden /> Enseignes &amp; contrats
-          </TabsTrigger>
-          <TabsTrigger value="plans" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Layers className="h-4 w-4" aria-hidden /> Plans &amp; tarifs
-          </TabsTrigger>
-          <TabsTrigger value="invoices" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Receipt className="h-4 w-4" aria-hidden /> Facturation
-          </TabsTrigger>
-          <TabsTrigger value="users" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <UsersRound className="h-4 w-4" aria-hidden /> Utilisateurs
-          </TabsTrigger>
-          <TabsTrigger value="demo" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <BarChart3 className="h-4 w-4" aria-hidden /> Démographie
-          </TabsTrigger>
-          <TabsTrigger value="ai" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Bot className="h-4 w-4" aria-hidden /> Agent IA
-          </TabsTrigger>
-          <TabsTrigger value="carto" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <MapPinned className="h-4 w-4" aria-hidden /> Cartographie
-          </TabsTrigger>
-          <TabsTrigger value="audit" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <ScrollText className="h-4 w-4" aria-hidden /> Journal d&apos;audit
-          </TabsTrigger>
-        </TabsList>
-
         <TabsContent value="overview" className="mt-0 space-y-4">
           <SaOverview onNavigate={setTab} />
         </TabsContent>

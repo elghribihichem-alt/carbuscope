@@ -447,6 +447,33 @@ export const fr = {
   "rm.tabs.reports": "Rapports",
   "rm.tabs.demographie": "Démographie",
   "rm.tabs.settings": "Paramètres",
+
+  // ---------- Sidebar verticale (T46 — menu et sous-menus en accordéon) ----------
+  "sb.title": "Navigation",
+  "sb.collapse": "Replier la barre latérale",
+  "sb.expand": "Déplier la barre latérale",
+  "sb.openMobile": "Ouvrir le menu",
+  "sb.observatoire": "Observatoire B2B",
+  "sb.groups.pilotage": "Pilotage",
+  "sb.groups.reseau": "Réseau & marché",
+  "sb.groups.analyse": "Analyse & décision",
+  "sb.groups.gestion": "Gestion",
+  "sb.sub.implantation.zones": "Zones blanches",
+  "sb.sub.implantation.isochrones": "Isochrones",
+  "sb.sub.implantation.comparateur": "Comparateur",
+  "sb.sub.implantation.cannibalisation": "Cannibalisation",
+  "sb.sub.calculators.trafic": "Trafic captif",
+  "sb.sub.calculators.couverture": "Couverture concurrentielle",
+  "sb.sub.calculators.parc": "Parc automobile",
+  "sb.sub.calculators.rentabilite": "Rentabilité prévisionnelle",
+  "sb.sub.calculators.multi-sites": "Comparaison multi-sites",
+  "sb.sub.calculators.veille": "Veille concurrentielle",
+  "sb.lockedHint": "Onglet réservé — rôle insuffisant",
+  "sb.lockedChange": "Changez de rôle dans l'en-tête (démo)",
+  "sb.mobile.title": "Aperçu mobile B2C",
+  "sb.mobile.screens": "Écrans de l'application",
+  "sb.agents.title": "Espace agent terrain",
+  "sb.agents.screens": "Parcours de l'agent",
 } as const
 
 export type DictKey = keyof typeof fr

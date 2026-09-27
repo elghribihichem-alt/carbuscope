@@ -12,7 +12,7 @@ import { useAppStore, type Role } from '@/store/app-store'
 import { useI18n } from '@/lib/i18n'
 import { useDeepLinks } from '@/hooks/use-deep-links'
 import { AppHeader } from '@/components/shell/app-header'
-import { TabNav } from '@/components/shell/tab-nav'
+import { AppSidebar } from '@/components/shell/app-sidebar'
 import { AppFooter } from '@/components/shell/app-footer'
 import { DashboardTab } from '@/components/dashboard/dashboard-tab'
 import { CarteInteractiveTab } from '@/components/map/carte-interactive-tab'
@@ -98,9 +98,13 @@ export default function Home() {
 
   return (
     <div dir={dir} className="flex min-h-screen flex-col bg-[var(--c-page)] text-foreground">
+      {/* En-tête figé (sticky top-0) : identité, modes produit, alertes, compte */}
       <AppHeader />
-      {effectiveMode === 'observatoire' && <TabNav />}
-      <main className="flex flex-1 flex-col" id="contenu">
+      {/* T46 — navigation verticale en accordéon (desktop) + Sheet (mobile).
+          La sidebar se colle sous l'en-tête figé et défile indépendamment. */}
+      <div className="flex flex-1 items-stretch">
+        <AppSidebar mode={effectiveMode} />
+        <main className="flex min-w-0 flex-1 flex-col" id="contenu">
         {effectiveMode === 'observatoire' && (
           <>
             {tab === 'dashboard' && <DashboardTab />}
@@ -122,7 +126,8 @@ export default function Home() {
         {effectiveMode === 'backoffice' && <BackofficeView />}
         {effectiveMode === 'superadmin' && <SuperAdminView />}
         {effectiveMode === 'shadow' && <ShadowView />}
-      </main>
+        </main>
+      </div>
       <AppFooter />
     </div>
   )

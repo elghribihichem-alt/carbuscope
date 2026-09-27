@@ -10,12 +10,13 @@
 // la fiche de pilotage de la mission concernée (section « Mes missions »).
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ClipboardList, Eye, Footprints, ShieldCheck, UserRound } from "lucide-react"
+import { ClipboardList, Footprints, UserRound } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/shell/loading"
+import { useAppStore } from "@/store/app-store"
 import { num } from "@/components/settings/settings-shared"
 import type { BrandDTO, MissionDetailDTO, MissionsResponse } from "@/lib/types"
 import {
@@ -26,8 +27,11 @@ import { TerrainOwnSheet } from "./terrain-own"
 import { TerrainCompetitorsSheet } from "./terrain-competitors"
 
 export function PortalTerrain({ brandSlug }: { brandSlug: string }) {
-  // Sous-navigation interne : missions | own | competitors
-  const [section, setSection] = useState("missions")
+  // Sous-navigation interne pilotée par la sidebar (store T46, clé
+  // « portal-terrain ») : missions | own | competitors
+  const setNav = useAppStore(s => s.setNav)
+  const section = useAppStore(s => s.nav["portal-terrain"]) ?? "missions"
+  const setSection = useCallback((v: string) => setNav("portal-terrain", v), [setNav])
 
   // Données partagées
   const [brands, setBrands] = useState<BrandDTO[] | null>(null)
@@ -154,7 +158,7 @@ export function PortalTerrain({ brandSlug }: { brandSlug: string }) {
   const onOpenMission = useCallback((missionId: string) => {
     setSection("missions")
     setPendingMissionId(missionId)
-  }, [])
+  }, [setSection])
 
   // ----- États de chargement / erreur du module -----
   if (loadError && !missionsData) {
@@ -227,20 +231,8 @@ export function PortalTerrain({ brandSlug }: { brandSlug: string }) {
         </CardContent>
       </Card>
 
-      {/* Sous-navigation du module (3 sections) */}
+      {/* Contenu de la section active — la sous-navigation (3 sections) est portée par la sidebar */}
       <Tabs value={section} onValueChange={setSection} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 sm:w-auto">
-          <TabsTrigger value="missions" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <ClipboardList className="h-4 w-4" aria-hidden /> Mes missions
-          </TabsTrigger>
-          <TabsTrigger value="own" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <ShieldCheck className="h-4 w-4" aria-hidden /> Fiche propriétaire
-          </TabsTrigger>
-          <TabsTrigger value="competitors" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Eye className="h-4 w-4" aria-hidden /> Fiches concurrents
-          </TabsTrigger>
-        </TabsList>
-
         <TabsContent value="missions" className="mt-0 space-y-4">
           <TerrainMissions
             brandSlug={brandSlug}

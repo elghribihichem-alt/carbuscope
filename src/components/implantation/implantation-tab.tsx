@@ -6,11 +6,11 @@
 // score de cannibalisation. Chargement unique des 3 endpoints, partagé via props.
 
 import { useEffect, useMemo, useState } from "react"
-import { Clock, GitCompareArrows, MapPinPlus, Swords, Target } from "lucide-react"
+import { Target } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton, TabSkeleton, ErrorState } from "@/components/shell/loading"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useAppStore } from "@/store/app-store"
 import type { BrandDTO, GovernoratRow, StationDTO } from "@/lib/types"
 import { num } from "@/lib/chart"
@@ -20,15 +20,11 @@ import { Isochrones } from "./isochrones"
 import { ComparateurGouvernorats } from "./comparateur-gouvernorats"
 import { Cannibalisation } from "./cannibalisation"
 
-const SECTION_TABS = [
-  { value: "zones", label: "Zones blanches", icon: MapPinPlus },
-  { value: "isochrones", label: "Isochrones", icon: Clock },
-  { value: "comparateur", label: "Comparateur", icon: GitCompareArrows },
-  { value: "cannibalisation", label: "Cannibalisation", icon: Swords },
-] as const
-
 export function ImplantationTab() {
   const brandSlug = useAppStore((s) => s.brandSlug)
+  // T46 — sous-navigation pilotée par la sidebar (store) : nav.implantation ?? "zones"
+  const setNav = useAppStore((s) => s.setNav)
+  const section = useAppStore((s) => s.nav.implantation) ?? "zones"
 
   const [data, setData] = useState<ImplantationData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -96,17 +92,9 @@ export function ImplantationTab() {
         </Badge>
       </header>
 
-      {/* Sous-navigation des 4 outils */}
-      <Tabs defaultValue="zones">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 sm:w-auto">
-          {SECTION_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="gap-1.5 text-xs sm:text-sm">
-              <t.icon className="h-3.5 w-3.5" aria-hidden />
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
+      {/* Sous-navigation des 4 outils — T46 : portée par la sidebar verticale,
+          plus de barre d'onglets horizontale ici. Radix Tabs fonctionne sans TabsList. */}
+      <Tabs value={section} onValueChange={(v) => setNav("implantation", v)}>
         <TabsContent value="zones" className="mt-4">
           {govStats ? (
             <ZonesBlanches result={govStats} />

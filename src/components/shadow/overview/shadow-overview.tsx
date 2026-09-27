@@ -9,10 +9,11 @@
 // courant, signalées par un badge « Données mensuelles consolidées »).
 
 import { useCallback, useEffect, useState } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
+import { useAppStore } from "@/store/app-store"
 import type { ShadowOverviewKpis, ShadowOverviewResponse } from "@/lib/types"
 import { SectionHeader, monthLabelFr } from "@/components/shadow/shadow-shared"
 import { KpisTab } from "./kpis-tab"
@@ -22,6 +23,9 @@ import { CalendarTab } from "./calendar-tab"
 import { CalendarRange, FileArchive } from "lucide-react"
 
 export function ShadowOverview({ onNavigate }: { onNavigate?: (section: string) => void }) {
+  // Onglet actif piloté par la sidebar (store T46, clé « shadow-overview »).
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav["shadow-overview"]) ?? "kpis"
   const [data, setData] = useState<ShadowOverviewResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [month, setMonth] = useState<string>("__live__")
@@ -115,21 +119,8 @@ export function ShadowOverview({ onNavigate }: { onNavigate?: (section: string) 
         }
       />
 
-      <Tabs defaultValue="kpis">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
-          <TabsTrigger value="kpis" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>📊</span> Indicateurs Clés
-          </TabsTrigger>
-          <TabsTrigger value="alerts" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>🔴</span> Alertes
-          </TabsTrigger>
-          <TabsTrigger value="top" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>🏆</span> Top 10 Menaces
-          </TabsTrigger>
-          <TabsTrigger value="calendar" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>📅</span> Calendrier
-          </TabsTrigger>
-        </TabsList>
+      {/* Contenu de l'onglet actif — la navigation (4 onglets) est portée par la sidebar */}
+      <Tabs value={tab} onValueChange={v => setNav("shadow-overview", v)}>
         <TabsContent value="kpis" className="mt-4">
           <KpisTab data={data} kpis={kpis} consolidated={consolidated} selectedMonth={isLive ? data.month : month} onNavigate={onNavigate} />
         </TabsContent>

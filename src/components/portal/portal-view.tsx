@@ -4,10 +4,10 @@
 
 import { useEffect, useState } from "react"
 import { useAppStore } from "@/store/app-store"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ShieldCheck, LayoutDashboard, Store, PlugZap, Building2, Star, Footprints } from "lucide-react"
+import { ShieldCheck, Building2 } from "lucide-react"
 import type { BrandDTO } from "@/lib/types"
 import { num } from "@/components/settings/settings-shared"
 import { PortalDashboard } from "./portal-dashboard"
@@ -21,9 +21,12 @@ import { NotificationsCenter } from "./notifications-center"
 export function PortalView() {
   const brandSlug = useAppStore(s => s.brandSlug)
   const [brand, setBrand] = useState<BrandDTO | null>(null)
-  // Onglet contrôlé : le deep-link depuis le centre de notifications (alerte de
-  // veille → « Avis & réputation », décret prix → tableau de bord) change l'onglet.
-  const [tab, setTab] = useState("dashboard")
+  // Onglet contrôlé par la sidebar (store T46, clé « portail ») : le deep-link
+  // depuis le centre de notifications (alerte de veille → « Avis & réputation »,
+  // décret prix → tableau de bord) écrit dans le même store.
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav.portail) ?? "dashboard"
+  const setTab = (v: string) => setNav("portail", v)
 
   useEffect(() => {
     const ac = new AbortController()
@@ -87,26 +90,8 @@ export function PortalView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne du portail (5 onglets) — contrôlée pour le deep-link */}
+      {/* Contenu de l'onglet actif — la navigation (5 onglets) est portée par la sidebar */}
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 lg:w-auto">
-          <TabsTrigger value="dashboard" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <LayoutDashboard className="h-4 w-4" aria-hidden /> Tableau de bord
-          </TabsTrigger>
-          <TabsTrigger value="reviews" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Star className="h-4 w-4" aria-hidden /> Avis &amp; réputation
-          </TabsTrigger>
-          <TabsTrigger value="stations" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Store className="h-4 w-4" aria-hidden /> Mes stations
-          </TabsTrigger>
-          <TabsTrigger value="terrain" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Footprints className="h-4 w-4" aria-hidden /> Veille terrain
-          </TabsTrigger>
-          <TabsTrigger value="api" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <PlugZap className="h-4 w-4" aria-hidden /> API &amp; promotions
-          </TabsTrigger>
-        </TabsList>
-
         <TabsContent value="dashboard" className="mt-0 space-y-4">
           <PortalDashboard brandSlug={brandSlug} />
         </TabsContent>

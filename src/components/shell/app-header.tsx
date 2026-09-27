@@ -1,11 +1,12 @@
-'use client'
+"use client"
 
 import * as React from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Bell, Building2, LineChart, Smartphone, ShieldCheck, Crown, ClipboardCheck, Ghost } from "lucide-react"
+import { Bell, Building2, LineChart, Smartphone, ShieldCheck, Crown, ClipboardCheck, Ghost, Menu } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/app/theme-toggle"
 import { LangToggle } from "@/components/app/lang-toggle"
 import { UserMenu } from "@/components/auth/user-menu"
@@ -25,7 +26,7 @@ const MODES: { value: Mode; labelKey: "chrome.modeObservatoire" | "chrome.modePo
 ]
 
 export function AppHeader() {
-  const { mode, setMode, brandSlug, setBrandSlug, setTab, session } = useAppStore()
+  const { mode, setMode, brandSlug, setBrandSlug, setTab, session, setMobileNavOpen } = useAppStore()
   const { t } = useI18n()
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [alerts, setAlerts] = useState<AlertDTO[]>([])
@@ -65,6 +66,20 @@ export function AppHeader() {
   return (
     <header ref={headerRef} className="sticky top-0 z-40 border-b border-[var(--c-line-2)] bg-[var(--c-paper)]/92 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+        {/* T46 — menu hamburger : ouvre la sidebar (Sheet) sous le breakpoint */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-9 w-9 shrink-0 text-[var(--c-ink-muted)] hover:bg-[var(--c-tint)]",
+            mode === "mobile" || mode === "agents" ? "xl:hidden" : "md:hidden",
+          )}
+          onClick={() => setMobileNavOpen(true)}
+          aria-label={t("sb.openMobile")}
+        >
+          <Menu className="h-5 w-5" aria-hidden />
+        </Button>
+
         {/* Identité */}
         <div className="flex items-center gap-2.5">
           <CarbuscopeLogo size={36} />

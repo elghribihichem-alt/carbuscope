@@ -6,7 +6,8 @@
 // requêtes (AbortController) — le conteneur ne gère que la navigation.
 
 import { useState } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { useAppStore } from "@/store/app-store"
 import { TabNewPoint } from "./tab-new-point"
 import { TabPointsList } from "./tab-points-list"
 import { TabUpdates } from "./tab-updates"
@@ -15,32 +16,14 @@ import { TabValidation } from "./tab-validation"
 import { TabGallery } from "./tab-gallery"
 
 export function ShadowRecensement({ onNavigate }: { onNavigate?: (section: string) => void }) {
-  const [tab, setTab] = useState("nouveau")
+  // Onglet actif piloté par la sidebar (store T46, clé « shadow-recensement »).
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav["shadow-recensement"]) ?? "nouveau"
+  const setTab = (v: string) => setNav("shadow-recensement", v)
   const [focusCode, setFocusCode] = useState<string | null>(null)
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-      <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-stone-100 p-1 dark:bg-stone-900">
-        <TabsTrigger value="nouveau" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>➕</span> Nouveau Point
-        </TabsTrigger>
-        <TabsTrigger value="liste" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>📝</span> Liste des Points
-        </TabsTrigger>
-        <TabsTrigger value="maj" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>🔄</span> Mises à Jour
-        </TabsTrigger>
-        <TabsTrigger value="audit" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>👥</span> Équipe d&apos;Audit
-        </TabsTrigger>
-        <TabsTrigger value="validation" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>✅</span> Validation
-        </TabsTrigger>
-        <TabsTrigger value="galerie" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>📸</span> Galerie Photos
-        </TabsTrigger>
-      </TabsList>
-
       <TabsContent value="nouveau" className="mt-0">
         <TabNewPoint
           onGoToList={(code) => {

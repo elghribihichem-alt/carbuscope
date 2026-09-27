@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 import type { AppApi, Screen, StationWithDist, UserStats } from "./shared"
 import { USER_POS } from "./shared"
 import type { FuelPricesResponse } from "@/lib/types"
+import { useAppStore } from "@/store/app-store"
 import { MapScreen } from "./screens/map-screen"
 import { SearchScreen } from "./screens/search-screen"
 import { StationScreen } from "./screens/station-screen"
@@ -40,6 +41,13 @@ const TABS: { id: Screen; labelKey: DictKey; icon: React.ComponentType<{ classNa
   { id: "promos", labelKey: "tab.promos", icon: Tag },
   { id: "fidelite", labelKey: "tab.fidelite", icon: Gift },
   { id: "profil", labelKey: "tab.profil", icon: UserRound },
+]
+
+// T46 — écrans racine restaurables au montage depuis nav[navKey]. Les écrans
+// poussés (fiche, signalement, avis, rapport agent…) dépendent d'un état local
+// volatil (station sélectionnée, mission ouverte…) : on ne les restaure pas.
+const ROOT_SCREENS: readonly Screen[] = [
+  "map", "search", "promos", "fidelite", "profil", "alertes", "comparateur", "agent-login",
 ]
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -105,10 +113,30 @@ function TabBar({ active, onSelect }: { active: Screen; onSelect: (s: Screen) =>
   )
 }
 
-export function MobileApp({ startInAgentSpace = false }: { startInAgentSpace?: boolean } = {}) {
+export function MobileApp({ startInAgentSpace = false, navKey }: { startInAgentSpace?: boolean; navKey?: "mobile" | "agents" } = {}) {
   const { t, isRTL } = useI18n()
   const startAgentRef = useRef(startInAgentSpace)
-  const [screen, setScreen] = useState<Screen>(startInAgentSpace ? "agent-login" : "map")
+  // T46 — synchronisation bidirectionnelle sidebar ↔ téléphone : chaque
+  // navigation du téléphone est poussée dans le store (la sidebar suit l'écran
+  // actif) ; l'abonnement ci-dessous applique les sélections de la sidebar.
+  const setNav = useAppStore(s => s.setNav)
+  const [screen, setScreenState] = useState<Screen>(() => {
+    // Départ sur l'écran racine sélectionné dans la sidebar, si présent.
+    // « agent-home » n'est pas restauré : la reconnexion silencieuse
+    // (effet ci-dessous) rebasculera dessus si une session existe.
+    const stored = navKey ? useAppStore.getState().nav[navKey] : undefined
+    if (stored && ROOT_SCREENS.includes(stored as Screen)) return stored as Screen
+    return startInAgentSpace ? "agent-login" : "map"
+  })
+  // Navigation initiée par le téléphone : déjà validée par l'app (ex. login
+  // agent réussi avant setScreen("agent-home")) — l'abonnement la laisse passer.
+  const internalNav = useRef(false)
+  const setScreen = (s: Screen) => {
+    internalNav.current = true
+    setScreenState(s)
+    if (navKey) setNav(navKey, s) // la sidebar suit l'écran actif
+    internalNav.current = false
+  }
   const [returnTo, setReturnTo] = useState<Screen>("map")
   const [selected, setSelected] = useState<StationWithDist | null>(null)
   const [brands, setBrands] = useState<BrandDTO[]>([])
@@ -133,6 +161,34 @@ export function MobileApp({ startInAgentSpace = false }: { startInAgentSpace?: b
   const [agentReportResult, setAgentReportResult] = useState<AgentReportResult | null>(null)
   const agentMissionReq = useRef(0) // anti-course : dernière requête de détail ouverte
   const agentMissionIdRef = useRef<string | null>(null)
+
+  // T46 — ref miroir de la session agent, lue par l'abonnement store → écran
+  // (garde anti-écran-vide). Synchronisée par effet : la valeur est fiable une
+  // fois le rendu commité, contrairement à l'instantané de l'état React.
+  const agentRef = useRef<FieldAgentDTO | null>(null)
+
+  useEffect(() => {
+    agentRef.current = agent
+  }, [agent])
+
+  // T46 — la sidebar (aperçu mobile) peut piloter l'écran affiché dans le
+  // téléphone : on applique nav[navKey], avec une garde anti-écran-vide — un
+  // écran agent (hors connexion) exige une session, sinon retour au login.
+  useEffect(() => {
+    if (!navKey) return
+    const unsub = useAppStore.subscribe((state, prev) => {
+      const next = state.nav[navKey]
+      if (!next || next === prev.nav[navKey]) return
+      if (internalNav.current) return // navigation interne : déjà appliquée
+      if (next.startsWith("agent-") && next !== "agent-login" && !agentRef.current) {
+        setScreenState("agent-login")
+        setNav(navKey, "agent-login") // la sidebar reflète la redirection
+        return
+      }
+      setScreenState(next as Screen)
+    })
+    return unsub
+  }, [navKey, setNav])
 
   // Chargement initial : enseignes + stations actives (une seule fois)
   useEffect(() => {

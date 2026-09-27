@@ -1247,3 +1247,79 @@ Stage Summary:
 ## ÉTAT GLOBAL DU PROJET (fin de session)
 - Application CarbuScope complète : Observatoire B2B (11 onglets), Portail enseigne, Mobile B2C + Espace agents (avec recensement Shadow), Back-office, Super Administration (SaaS + démographie 3 niveaux), module Shadow Market (6 sections/28 onglets) — 2 985 stations, 5 enseignes officielles, 929 points informels, 515 cités.
 - Dette connue : ~159 erreurs tsc préexistantes concentrées dans des routes SA/portail orphelines (modèles Prisma fantômes — supervision, factures, tickets…) — non visibles dans l'app rendue ; à trier un jour (compléter ou nettoyer).
+
+---
+Task ID: 2-a
+Agent: general-purpose (conversion portail + shadow)
+Task: Piloter la navigation Portail/Shadow par le store (sidebar T46) et supprimer les TabsList horizontaux
+
+Work Log:
+- Lecture du worklog (conventions : palette sans bleu, UI FR), de `src/store/app-store.ts` (nav/setNav) et de `app-sidebar.tsx` (lecture seule : vérification des clés navKey `portail`, `portal-terrain`, `shadow`, `shadow-overview`… et des ids enfants — conformes au contrat).
+- `portal/portal-view.tsx` : `useState("dashboard")` → store (`nav.portail ?? "dashboard"`, setTab = setNav("portail", …)) ; TabsList des 5 onglets supprimé (le Tabs contrôlé + les 5 TabsContent restent, Radix fonctionne sans TabsList) ; imports nettoyés (TabsList/TabsTrigger, icônes LayoutDashboard/Store/PlugZap/Star/Footprints) ; deep-link `NotificationsCenter onNavigate` conservé — il écrit désormais dans le store.
+- `portal/portal-terrain.tsx` : `useState("missions")` → store (`nav["portal-terrain"] ?? "missions"`, setSection via useCallback([setNav]) pour garder la mémoïsation de `onOpenMission` dont les deps passent à [setSection]) ; TabsList des 3 sections supprimé ; imports nettoyés (Eye/ShieldCheck devenus inutiles).
+- `shadow/shadow-view.tsx` : `useState<SectionId>("overview")` → store (`(nav.shadow ?? "overview") as SectionId`) ; bloc `<nav>` sticky des 6 sections SUPPRIMÉ intégralement ; const SECTIONS supprimée (remplacée par une union `type SectionId` littérale) ; `onNavigate` de ShadowOverview/ShadowRecensement branché sur `setNav("shadow", id)` ; `import { useState }` retiré.
+- `shadow/overview/shadow-overview.tsx` : `<Tabs defaultValue="kpis">` → contrôlé (`nav["shadow-overview"] ?? "kpis"`, setNav récupéré via hook dans le composant) ; TabsList des 4 onglets supprimé ; prop onNavigate inchangée (toujours relayée par shadow-view vers setNav("shadow", …)).
+- `shadow/cartography/shadow-cartography.tsx` : idem, clé `shadow-cartography`, défaut "national", TabsList (5 onglets) supprimé.
+- `shadow/recensement/shadow-recensement.tsx` : tab/setTab remplacés par le store (clé `shadow-recensement`, défaut "nouveau") ; le callback `onGoToList` de TabNewPoint continue d'appeler `setTab("liste")` qui écrit dans le store (focusCode reste un state local) ; TabsList (6 onglets) supprimé.
+- `shadow/impact/shadow-impact.tsx` : idem, clé `shadow-impact`, défaut "station", TabsList (5 onglets) supprimé (la sélection de station et la fiche d'impact restent des états locaux).
+- `shadow/reports/shadow-reports.tsx` : `<Tabs defaultValue="monthly">` → contrôlé (clé `shadow-reports`, défaut "monthly"), TabsList (4 onglets) supprimé.
+- `shadow/settings/shadow-settings.tsx` : `<Tabs defaultValue="access">` → contrôlé (clé `shadow-settings`, défaut "access"), TabsList (4 onglets) supprimé.
+- Vérifications : `rg "TabsList|TabsTrigger" src/components/portal src/components/shadow` → 0 occurrence ; `bunx eslint src/components/portal src/components/shadow` → 0 erreur/0 warning ; `bunx tsc --noEmit` → 0 erreur dans portal/ et shadow/ (les 159 erreurs restantes du projet sont préexistantes, hors de mon périmètre : prisma/seed.ts, api/super/*, superadmin…).
+- `bun run lint` (projet entier) : 2 erreurs résiduelles dans `src/components/shell/app-sidebar.tsx` (règle react-hooks/set-state-in-effect, lignes 115 et 131) — fichier du chef d'orchestre (T46), intouchable selon les règles, donc non corrigées ; AUCUNE erreur dans mes 9 fichiers.
+
+Stage Summary:
+- 9 fichiers convertis au patron store : portal-view, portal-terrain, shadow-view, shadow-overview, shadow-cartography, shadow-recensement, shadow-impact, shadow-reports, shadow-settings. Toutes les barres d'onglets horizontales de ces modules ont disparu (la sidebar T46 porte la navigation) ; les contenus (bandeaux, KPIs, TabsContent, callbacks de deep-link) sont intacts.
+- Points d'attention : (1) les ids de sous-navigation respectent EXACTEMENT le contrat sidebar (vérifié par lecture de app-sidebar.tsx) ; (2) `portal-terrain` utilise un useCallback pour setSection afin de préserver la stabilité de `onOpenMission` (deps exhaustive-deps) ; (3) `bun run lint` global reste rouge à cause de 2 erreurs préexistantes dans app-sidebar.tsx (fichier intouchable) — mes dossiers sont verts ; (4) valeurs de store non persistées (partialize) → retour au défaut après rechargement, conforme au commentaire du store.
+
+---
+Task ID: 2-b
+Agent: general-purpose (conversion superadmin + backoffice + observatoire + mobile)
+Task: Piloter Super Admin / Back-office / Implantation / Calculateurs / aperçu mobile par le store (sidebar T46)
+
+Work Log:
+- Lecture du worklog (120 premières lignes : conventions palette/UI FR), de `src/store/app-store.ts` (nav/setNav, partialize sans nav) et de `app-sidebar.tsx` en lecture seule (vérification des clés navKey `superadmin`, `backoffice`, `implantation`, `calculators`, `mobile`, `agents` et des ids feuilles — conformes au contrat).
+- `superadmin/superadmin-view.tsx` : `useState("overview")` remplacé par le store (`nav.superadmin ?? "overview"`, setTab = setNav("superadmin", …)) ; TabsList des 9 onglets (Démographie incluse) supprimé — bandeau Card racine et les 9 TabsContent conservés ; `SaOverview onNavigate` branché sur le wrapper (deep-link vers contracts/invoices/audit → store) ; imports nettoyés (useState, TabsList/TabsTrigger, 9 icônes lucide des triggers).
+- `backoffice/backoffice-view.tsx` : `<Tabs defaultValue="moderation">` → Tabs contrôlé par le store (`nav.backoffice ?? "moderation"`) ; TabsList des 8 onglets + les 2 Badge de compteur (modération/missions) supprimés (la sidebar les affiche déjà) ; logiques `loadPending`/`pending`/`pendingError`/`openMissions` et le passage de props `<BoModeration pending loading error onRefresh>` STRICTEMENT conservées ; imports nettoyés (7 icônes de triggers).
+- `implantation/implantation-tab.tsx` : `<Tabs defaultValue="zones">` → contrôlé (`nav.implantation ?? "zones"`) ; TabsList SECTION_TABS (4 sous-outils) supprimé ainsi que la const SECTION_TABS ; les 4 TabsContent (zones/isochrones/comparateur/cannibalisation) et le chargement unique des 3 endpoints inchangés ; imports nettoyés (MapPinPlus/Clock/GitCompareArrows/Swords, TabsList/TabsTrigger).
+- `calculators/calculators-tab.tsx` : `useState<CalcId>("trafic")` → store (`(nav.calculators as CalcId | undefined) ?? "trafic"`, setActive = setNav("calculators", id)) ; bloc `<nav>` des 6 cartes CALC_DEFS SUPPRIMÉ intégralement ; en compensation, Badge `variant="outline"` « calculateur actif » (`{CALC_DEFS.find(d => d.id === active)?.title}`, icône Calculator) ajouté dans l'en-tête à côté du Badge « N scénarios » (les deux dans un div flex) ; `selectCalc` et `handleReload` écrivent dans le store via setActive ; section calculateur actif (key de restauration) + liste des scénarios sauvegardés conservées ; import `Check` retiré.
+- `mobile/mobile-app.tsx` — synchronisation bidirectionnelle avec le store :
+  - Prop optionnelle `navKey?: "mobile" | "agents"` ajoutée à la signature de `MobileApp` ; import `useAppStore` ajouté.
+  - État local renommé `setScreenState` + wrapper `setScreen(s)` : pousse l'écran dans le store (`setNav(navKey, s)`) pour que la sidebar suive le téléphone ; TOUS les appels existants (openStation, agentLogin, agentBack, TabBar…) fonctionnent sans modification.
+  - Ref `internalNav` : les navigations internes (déjà validées par l'app — ex. `agentLogin` réussit AVANT `setScreen("agent-home")`) sont ignorées par l'abonnement store→écran, sinon la garde agent-home contredirait le login (le subscribe zustand se déclenche de façon synchrone pendant le setNav, avant que l'effet de synchro de `agentRef` ne s'exécute).
+  - Abonnement `useAppStore.subscribe((state, prev) => …)` : applique `nav[navKey]` au téléphone (cast `as Screen`) ; garde anti-écran-vide généralisée — tout écran `agent-*` (hors `agent-login`) sans session agent (`agentRef.current` null, ref miroir synchronisée par effet) redirige l'écran ET le store vers `agent-login` (AgentHomeScreen rend `null` sans agent → écran vide sinon).
+  - Écran initial restauré depuis le store via initialiseur lazy sur une whitelist `ROOT_SCREENS` (écrans racine seulement : les écrans poussés fiche/signalement/avis/rapport dépendent d'états locaux volatils ; « agent-home » non restauré, la reconnexion silencieuse rebascule dessus si session).
+- `mobile/mobile-b2c-view.tsx` : `<MobileApp navKey="mobile" />` ; `mobile/mobile-agent-view.tsx` : `<MobileApp startInAgentSpace navKey="agents" />` (overlay Shadow Market intact).
+- Vérifications : `bunx eslint` sur les 7 fichiers → 0 erreur ; `bunx tsc --noEmit` → 0 erreur dans superadmin (sauf sa-comptes.tsx préexistant, non touché), backoffice, implantation, calculators, mobile ; GET / → HTTP 200 (dev.log sans erreur de compilation).
+- `bun run lint` (projet entier) : seules 2 erreurs résiduelles dans `src/components/shell/app-sidebar.tsx` (react-hooks/set-state-in-effect, lignes 115/131) — fichier du chef d'orchestre intouchable, préexistant (confirmé aussi par l'agent 2-a) ; AUCUNE erreur dans mes fichiers.
+
+Stage Summary:
+- 7 fichiers modifiés : superadmin-view.tsx, backoffice-view.tsx, implantation-tab.tsx, calculators-tab.tsx, mobile-app.tsx, mobile-b2c-view.tsx, mobile-agent-view.tsx. Toutes les barres d'onglets horizontales visées ont disparu (sidebar T46 = seule navigation) ; contenus, bandeaux, logiques de chargement et deep-links intacts ; styles inchangés, palette sans bleu, UI FR.
+- Synchronisation mobile : bidirectionnelle (téléphone → store via wrapper setScreen ; store → téléphone via subscribe) avec double garde anti-écran-vide (ref internalNav pour les navigations app-validées, ref agent pour les écrans agent sans session) et restauration au montage limitée aux écrans racine.
+- Points d'attention : (1) `openMissions` du back-office reste compté localement mais n'est plus affiché dans la vue (badge porté par la sidebar, qui fait son propre fetch) — logique conservée conformément à la consigne ; (2) `selectCalc` conservé bien que son unique caller (grille de cartes) ait été supprimé — il écrit dans le store comme demandé ; (3) `bun run lint` global reste rouge uniquement à cause des 2 erreurs préexistantes d'app-sidebar.tsx (fichier interdit) ; (4) valeurs nav non persistées (partialize) → défauts après rechargement, conforme au design du store.
+
+---
+
+Task ID: 3 (T46 — Sidebar verticale en accordéon)
+Agent: Chef d'orchestration (Z.ai Code) + 2 subagents (2-a, 2-b)
+Task: Demande utilisateur — garder le menu haut figé ; transformer tous les menus horizontaux en sidebar verticale avec icônes, menus et sous-menus en accordéon.
+
+Work Log:
+- Store (`src/store/app-store.ts`) : ajout `nav: Record<string, string>` + `setNav(key, value)` (sous-navigation par module), `sidebarCollapsed` (persisté), `mobileNavOpen` (Sheet).
+- i18n (`src/lib/i18n/fr.ts`) : clés `sb.*` (groupes Observatoire, sous-menus implantation/calculateurs, libellés d'interface sidebar).
+- **Nouveau composant `src/components/shell/app-sidebar.tsx`** : sidebar verticale sticky sous l'en-tête figé (`top: var(--cs-header-h)`), groupes libellés, items à icônes, accordéons animés (framer-motion) pour les sous-menus, rail replié 64px avec tooltips (Ctrl/Cmd+B), Sheet mobile (side RTL-aware), badges back-office (modération + missions), verrous par rôle (TAB_ACCESS) + onglet Démographie conditionnel (sonde /api/demographie/acces).
+- `src/app/page.tsx` : layout `AppHeader` (sticky) → `flex flex-1` → `AppSidebar + main` ; suppression de `<TabNav />`.
+- `src/components/shell/app-header.tsx` : bouton hamburger (`Menu`) ouvrant le Sheet sous le breakpoint (md pour la plupart des modes, xl pour mobile/agents) ; header toujours sticky top-0.
+- Task 2-a (subagent) : portail-view, portal-terrain, shadow-view + 6 sous-modules shadow (overview, cartography, recensement, impact, reports, settings) → navigation pilotée par `nav[...]` ; tous les TabsList horizontaux supprimés.
+- Task 2-b (subagent) : superadmin-view, backoffice-view, implantation-tab, calculators-tab → pilotage store (Badge « calculateur actif » ajouté en compensation de la grille supprimée) ; mobile-app.tsx synchronisation bidirectionnelle (wrapper setScreen + subscribe zustand + garde agent-home sans session → agent-login) ; navKey="mobile"/"agents" passé par mobile-b2c-view / mobile-agent-view.
+- QA agent-browser complète : connexion, superadmin (9 items), observatoire (groupes + accordéons implantation/calculators + navigation sous-menu), rail replié/déplié, portail (5 items + terrain sous-menu), shadow (6 sections + sous-menus), backoffice (badges 9/5), aperçu mobile (sidebar pilote le téléphone : Fidélité/Promotions), viewport 390px (hamburger + Sheet + fermeture auto), RTL arabe (sidebar à droite), footer sticky mesuré (bottom exact), console/net/erreurs vérifiées.
+- **Fix bugs découverts en QA** : clés React dupliquées dans `redzones-tab.tsx` (2 occurrences `${label}-${gouvernorat}` → + index) ; erreurs lint react-hooks/set-state-in-effect dans app-sidebar (branches synchrones → dérivation/catch silencieux).
+- Redémarrage du serveur dev avec `setsid` (le processus mourait avec la session bash).
+- `bun run lint` : **0 erreur** ; page compile (200) ; dev.log sans erreur.
+
+Stage Summary:
+- **T46 livré** : l'en-tête reste figé en haut ; toutes les barres horizontales (TabNav + navigations internes portail/shadow/superadmin/back-office + sous-onglets implantation/calculateurs/portal-terrain/shadow-*) sont remplacées par UNE sidebar verticale à accordéons, par mode produit, avec rail repliable, Sheet mobile, badges, verrous rôles et support RTL.
+- Contrat de navigation (source de vérité) : clés `nav` = portail, portal-terrain, shadow, shadow-overview, shadow-cartography, shadow-recensement, shadow-impact, shadow-reports, shadow-settings, superadmin, backoffice, implantation, calculators, mobile, agents (défauts dans `NAV_DEFAULTS` de app-sidebar.tsx). Les vues lisent `nav[key] ?? "défaut"`.
+- Vérifié : navigation end-to-end dans les 7 modes, accordéons, sous-menus, rail + tooltips, Sheet mobile, RTL, footer sticky, console propre, lint 0 erreur.
+- Risques mineurs : `nav` non persisté (retour aux défauts au rechargement — voulu) ; les Tabs internes de 3ᵉ niveau (sa-demographie, sa-support, sa-config) restent des onglets de contenu ; `tab-nav.tsx` conservé mais inutilisé (poubelle douce — à supprimer dans une prochaine phase).
+- Priorités suivantes recommandées : badges live sur la sidebar observatoire (alertes critiques), recherche/filtre dans la sidebar (⌘K), sous-menus pour « stations » et « prices » si besoin, suppression du fichier mort tab-nav.tsx, i18n AR/EN des libellés sidebar (repli FR actuel).
+

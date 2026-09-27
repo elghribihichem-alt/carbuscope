@@ -123,7 +123,8 @@ export function MobileB2CView() {
             <p className="mt-1 text-xs text-muted-foreground">Le Waze du carburant — aperçu interactif</p>
           </div>
           <PhoneFrame>
-            <MobileApp />
+            {/* T46 — l'écran du téléphone est synchronisé avec la sidebar (nav.mobile) */}
+            <MobileApp navKey="mobile" />
           </PhoneFrame>
         </div>
 

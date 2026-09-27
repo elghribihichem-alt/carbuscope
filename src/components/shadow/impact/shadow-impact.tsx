@@ -8,7 +8,8 @@
 
 import { useEffect, useState } from "react"
 import type { ShadowMapResponse, ShadowMapStationDTO, ShadowStationImpactResponse, ShadowTypologyDTO } from "@/lib/types"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { useAppStore } from "@/store/app-store"
 import { TabStationLoss } from "./tab-station-loss"
 import { TabRegionLoss } from "./tab-region-loss"
 import { TabCannibalisation } from "./tab-cannibalisation"
@@ -16,7 +17,10 @@ import { TabTrend } from "./tab-trend"
 import { TabSimulation } from "./tab-simulation"
 
 export function ShadowImpact() {
-  const [tab, setTab] = useState("station")
+  // Onglet actif piloté par la sidebar (store T46, clé « shadow-impact »).
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav["shadow-impact"]) ?? "station"
+  const setTab = (v: string) => setNav("shadow-impact", v)
 
   // ---- Référentiel stations menacées (une seule requête /api/shadow/map) ----
   const [stations, setStations] = useState<ShadowMapStationDTO[] | null>(null)
@@ -77,24 +81,6 @@ export function ShadowImpact() {
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-      <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-stone-100 p-1 dark:bg-stone-900">
-        <TabsTrigger value="station" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>💸</span> Perte par Station
-        </TabsTrigger>
-        <TabsTrigger value="region" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>📉</span> Perte par Région
-        </TabsTrigger>
-        <TabsTrigger value="cannibalisation" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>⚖️</span> Cannibalisation
-        </TabsTrigger>
-        <TabsTrigger value="tendance" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>📈</span> Tendance
-        </TabsTrigger>
-        <TabsTrigger value="simulation" className="gap-1.5 text-xs data-[state=active]:bg-white data-[state=active]:text-stone-900 dark:data-[state=active]:bg-stone-800 dark:data-[state=active]:text-stone-50 sm:text-[13px]">
-          <span aria-hidden>🎯</span> Simulation
-        </TabsTrigger>
-      </TabsList>
-
       <TabsContent value="station" className="mt-0">
         <TabStationLoss
           stations={stationList}

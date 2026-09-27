@@ -7,8 +7,9 @@
 // après await), segments routiers chargés paresseusement par l'onglet axe.
 
 import { useCallback, useEffect, useState } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
+import { useAppStore } from "@/store/app-store"
 import { SectionHeader } from "@/components/shadow/shadow-shared"
 import type { ShadowMapResponse } from "@/lib/types"
 import { NationalTab } from "./national-tab"
@@ -18,6 +19,9 @@ import { RoadTab } from "./road-tab"
 import { RedzonesTab } from "./redzones-tab"
 
 export function ShadowCartography() {
+  // Onglet actif piloté par la sidebar (store T46, clé « shadow-cartography »).
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav["shadow-cartography"]) ?? "national"
   const [data, setData] = useState<ShadowMapResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,24 +58,8 @@ export function ShadowCartography() {
         title="Cartographie du marché parallèle"
         description={`${data.points.length} points informels géolocalisés, ${data.stations.length} stations menacées, ${data.redZones.length} zones rouges — analyse nationale, par district, par station et par axe routier.`}
       />
-      <Tabs defaultValue="national">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
-          <TabsTrigger value="national" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>🌍</span> Carte Nationale
-          </TabsTrigger>
-          <TabsTrigger value="district" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>🎯</span> Par District
-          </TabsTrigger>
-          <TabsTrigger value="station" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>📍</span> Par Station
-          </TabsTrigger>
-          <TabsTrigger value="road" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>🛣️</span> Par Axe Routier
-          </TabsTrigger>
-          <TabsTrigger value="redzones" className="gap-1.5 text-xs sm:text-sm">
-            <span aria-hidden>⚠️</span> Zones Rouges
-          </TabsTrigger>
-        </TabsList>
+      {/* Contenu de l'onglet actif — la navigation (5 onglets) est portée par la sidebar */}
+      <Tabs value={tab} onValueChange={v => setNav("shadow-cartography", v)}>
         <TabsContent value="national" className="mt-4">
           <NationalTab data={data} />
         </TabsContent>

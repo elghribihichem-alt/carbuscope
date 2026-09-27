@@ -12,13 +12,14 @@ import * as React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { CalendarDays, FileDown, FileSpreadsheet, FileText, Loader2, RefreshCw } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useAppStore } from "@/store/app-store"
 import { SectionHeader, ShadowKpiCard, formatTnd, monthLabelFr } from "../shadow-shared"
 import { ReportPaper } from "./report-paper"
 import { downloadMonthlyReportCsv, monthlySynthesis, topGov } from "./report-utils"
@@ -209,6 +210,9 @@ function MonthlyTab({
 // ---------------------------------------------------------------------------
 
 export function ShadowReports() {
+  // Onglet actif piloté par la sidebar (store T46, clé « shadow-reports »).
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav["shadow-reports"]) ?? "monthly"
   const [reports, setReports] = useState<ShadowReportsResponse | null>(null)
   const [overview, setOverview] = useState<ShadowOverviewResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -329,13 +333,8 @@ export function ShadowReports() {
         <ShadowKpiCard label="En attente de validation" value={k.pendingValidation.toLocaleString("fr-FR")} sub="signalements BRUT / VERIFIE" tone="yellow" />
       </div>
 
-      <Tabs defaultValue="monthly">
-        <TabsList className="h-auto flex-wrap">
-          <TabsTrigger value="monthly">📄 Rapport Mensuel</TabsTrigger>
-          <TabsTrigger value="brand">🏢 Rapport par Enseigne</TabsTrigger>
-          <TabsTrigger value="custom">🗓️ Rapport Personnalisé</TabsTrigger>
-          <TabsTrigger value="export">📤 Export / Partage</TabsTrigger>
-        </TabsList>
+      {/* Contenu de l'onglet actif — la navigation (4 onglets) est portée par la sidebar */}
+      <Tabs value={tab} onValueChange={v => setNav("shadow-reports", v)}>
         <TabsContent value="monthly">
           <MonthlyTab
             ctx={ctx}

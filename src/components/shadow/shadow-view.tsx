@@ -8,7 +8,6 @@
 // pour la Super Administration uniquement.
 
 import * as React from "react"
-import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Ghost, Crown, Building2, ShieldAlert } from "lucide-react"
@@ -20,21 +19,15 @@ import { ShadowImpact } from "./impact/shadow-impact"
 import { ShadowReports } from "./reports/shadow-reports"
 import { ShadowSettings } from "./settings/shadow-settings"
 
-const SECTIONS = [
-  { id: "overview", emoji: "📈", label: "Vue d'Ensemble" },
-  { id: "cartography", emoji: "🗺️", label: "Cartographie" },
-  { id: "recensement", emoji: "📋", label: "Recensement" },
-  { id: "impact", emoji: "💰", label: "Analyse d'Impact" },
-  { id: "reports", emoji: "📑", label: "Rapports" },
-  { id: "settings", emoji: "⚙️", label: "Paramètres" },
-] as const
-
-type SectionId = (typeof SECTIONS)[number]["id"]
+type SectionId = "overview" | "cartography" | "recensement" | "impact" | "reports" | "settings"
 
 export function ShadowView() {
-  const [section, setSection] = useState<SectionId>("overview")
   const session = useAppStore(s => s.session)
   const brandSlug = useAppStore(s => s.brandSlug)
+  const setNav = useAppStore(s => s.setNav)
+  // Section active pilotée par la sidebar (store T46, clé « shadow »).
+  const section = (useAppStore(s => s.nav.shadow) ?? "overview") as SectionId
+  const setSection = (id: string) => setNav("shadow", id)
   const isSuperAdmin = session?.role === "SUPER_ADMIN"
 
   return (
@@ -92,34 +85,10 @@ export function ShadowView() {
         </CardContent>
       </Card>
 
-      {/* Navigation des 6 sections */}
-      <nav
-        className="sticky top-[var(--cs-header-h,57px)] z-30 border-b border-stone-200 bg-white/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95"
-        aria-label="Navigation Shadow Market"
-      >
-        <div className="mx-auto flex max-w-[1600px] items-center gap-1 overflow-x-auto px-1 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {SECTIONS.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setSection(s.id)}
-              aria-current={section === s.id ? "true" : undefined}
-              className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
-                section === s.id
-                  ? "bg-stone-900 text-white shadow-sm dark:bg-white dark:text-stone-900"
-                  : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
-              }`}
-            >
-              <span aria-hidden>{s.emoji}</span>
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      {/* Contenu de la section active */}
-      {section === "overview" && <ShadowOverview onNavigate={id => setSection(id as SectionId)} />}
+      {/* Contenu de la section active — la navigation des 6 sections est portée par la sidebar */}
+      {section === "overview" && <ShadowOverview onNavigate={setSection} />}
       {section === "cartography" && <ShadowCartography />}
-      {section === "recensement" && <ShadowRecensement onNavigate={id => setSection(id as SectionId)} />}
+      {section === "recensement" && <ShadowRecensement onNavigate={setSection} />}
       {section === "impact" && <ShadowImpact />}
       {section === "reports" && <ShadowReports />}
       {section === "settings" && <ShadowSettings />}

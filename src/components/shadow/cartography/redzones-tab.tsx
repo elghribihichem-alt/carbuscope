@@ -129,11 +129,12 @@ export function RedzonesTab({ data }: { data: ShadowMapResponse }) {
           </CardHeader>
           <CardContent>
             <ul className="max-h-[520px] space-y-1.5 overflow-y-auto pr-1.5 scroll-coffee">
-              {zones.map(z => {
+              {zones.map((z, zi) => {
                 const key = `${z.label}-${z.gouvernorat}`
                 const active = selected === key
                 return (
-                  <li key={key}>
+                  // Clé + index : deux zones homonymes peuvent coexister (données).
+                  <li key={`${key}-${zi}`}>
                     <button
                       type="button"
                       onClick={() => selectZone(z, key)}
@@ -216,7 +217,9 @@ export function RedzonesTab({ data }: { data: ShadowMapResponse }) {
               <TableBody>
                 {zones.map((z, i) => (
                   <TableRow
-                    key={`${z.label}-${z.gouvernorat}`}
+                    // Clé composite + index : deux zones homonymes peuvent exister
+                    // dans le même gouvernorat (données de recensement).
+                    key={`${z.label}-${z.gouvernorat}-${i}`}
                     className="cursor-pointer"
                     onClick={() => selectZone(z, `${z.label}-${z.gouvernorat}`)}
                   >

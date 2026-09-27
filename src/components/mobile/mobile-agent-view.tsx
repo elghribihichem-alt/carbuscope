@@ -154,7 +154,8 @@ export function MobileAgentView() {
           </div>
           <PhoneFrame>
             <div className="relative flex min-h-0 flex-1 flex-col">
-              <MobileApp startInAgentSpace />
+              {/* T46 — l'écran du téléphone est synchronisé avec la sidebar (nav.agents) */}
+              <MobileApp startInAgentSpace navKey="agents" />
               {shadowOpen ? (
                 <motion.div
                   key="agent-shadow"

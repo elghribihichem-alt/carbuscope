@@ -3,13 +3,11 @@
 // Module D — Back-office plateforme : le cœur opérationnel de la qualité de la donnée (agent 5-e)
 
 import { useCallback, useEffect, useState } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  ServerCog, ShieldAlert, Database, TimerReset, UserCog, BarChart3, MapPin, Inbox, Radar, Banknote,
-  ClipboardList,
-} from "lucide-react"
+import { ServerCog, ShieldAlert, MapPin, Inbox } from "lucide-react"
+import { useAppStore } from "@/store/app-store"
 import type { ContributionDTO, MissionDTO } from "@/lib/types"
 import { BoModeration } from "./bo-moderation"
 import { BoSovereign } from "./bo-sovereign"
@@ -21,7 +19,12 @@ import { BoDecrees } from "./bo-decrees"
 import { BoMissions } from "./bo-missions"
 
 export function BackofficeView() {
-  // File de modération partagée : badge d'onglet + onglet Modération
+  // T46 — sous-navigation pilotée par la sidebar (store) : nav.backoffice ?? "moderation"
+  const setNav = useAppStore(s => s.setNav)
+  const tab = useAppStore(s => s.nav.backoffice) ?? "moderation"
+
+  // File de modération partagée : compteur du bandeau + onglet Modération
+  // (la sidebar affiche également ce compteur)
   const [pending, setPending] = useState<ContributionDTO[] | null>(null)
   const [pendingError, setPendingError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -42,7 +45,8 @@ export function BackofficeView() {
     void loadPending()
   }, [loadPending, reloadKey])
 
-  // Compteur de missions ouvertes (badge de l'onglet « Missions terrain »)
+  // Compteur de missions ouvertes — T46 : le badge est porté par la sidebar,
+  // la logique de comptage est conservée (le bandeau pourrait la réutiliser).
   const [openMissions, setOpenMissions] = useState<number | null>(null)
 
   useEffect(() => {
@@ -59,6 +63,7 @@ export function BackofficeView() {
 
   const pendingCount = pending?.length ?? null
   const moderationLoading = pending === null && !pendingError
+  const setTab = (v: string) => setNav("backoffice", v)
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -98,47 +103,10 @@ export function BackofficeView() {
         </CardContent>
       </Card>
 
-      {/* Navigation interne (8 onglets) */}
-      <Tabs defaultValue="moderation" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
-          <TabsTrigger value="moderation" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <ShieldAlert className="h-4 w-4" aria-hidden /> Modération
-            <Badge
-              className="ml-0.5 h-4 min-w-4 rounded-full px-1 text-[10px] tabular-nums"
-              variant={(pendingCount ?? 0) > 0 ? "destructive" : "secondary"}
-            >
-              {pendingCount ?? "…"}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="sovereign" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Database className="h-4 w-4" aria-hidden /> Données souveraines
-          </TabsTrigger>
-          <TabsTrigger value="freshness" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <TimerReset className="h-4 w-4" aria-hidden /> Fraîcheur
-          </TabsTrigger>
-          <TabsTrigger value="agents" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <UserCog className="h-4 w-4" aria-hidden /> Agents terrain
-          </TabsTrigger>
-          <TabsTrigger value="alerts" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Radar className="h-4 w-4" aria-hidden /> Veille & alertes
-          </TabsTrigger>
-          <TabsTrigger value="stats" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <BarChart3 className="h-4 w-4" aria-hidden /> Stats plateforme
-          </TabsTrigger>
-          <TabsTrigger value="decrees" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <Banknote className="h-4 w-4" aria-hidden /> Prix &amp; décrets
-          </TabsTrigger>
-          <TabsTrigger value="missions" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
-            <ClipboardList className="h-4 w-4" aria-hidden /> Missions
-            <Badge
-              className="ml-0.5 h-4 min-w-4 rounded-full px-1 text-[10px] tabular-nums"
-              variant={(openMissions ?? 0) > 0 ? "default" : "secondary"}
-            >
-              {openMissions ?? "…"}
-            </Badge>
-          </TabsTrigger>
-        </TabsList>
-
+      {/* Sections (8) — T46 : la sous-navigation (et ses compteurs de modération
+          et de missions) est portée par la sidebar verticale, plus de barre
+          d'onglets horizontale ici. */}
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsContent value="moderation" className="mt-0 space-y-4">
           <BoModeration
             pending={pending}

@@ -4,7 +4,7 @@
 
 import * as React from "react"
 import { toast } from "sonner"
-import { BookmarkPlus, Calculator, Check, History, Sparkles } from "lucide-react"
+import { BookmarkPlus, Calculator, History, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -38,7 +38,10 @@ export function CalculatorsTab() {
   const [data, setData] = React.useState<CalcData | null>(null)
   const [savedList, setSavedList] = React.useState<SavedCalculationDTO[]>([])
   const [error, setError] = React.useState<string | null>(null)
-  const [active, setActive] = React.useState<CalcId>("trafic")
+  // T46 — calculateur actif piloté par la sidebar (store) : nav.calculators ?? "trafic"
+  const setNav = useAppStore((s) => s.setNav)
+  const active = (useAppStore((s) => s.nav.calculators) as CalcId | undefined) ?? "trafic"
+  const setActive = (id: CalcId) => setNav("calculators", id)
   const [restore, setRestore] = React.useState<{ nonce: number; scenario: InitialScenario } | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [reloadNonce, setReloadNonce] = React.useState(0)
@@ -150,45 +153,22 @@ export function CalculatorsTab() {
             planifiez vos investissements avec des données réelles du réseau tunisien.
           </p>
         </div>
-        <Badge variant="secondary" className="gap-1">
-          <Sparkles className="h-3 w-3" />
-          {knownScenarios.length} scénario{knownScenarios.length > 1 ? "s" : ""} au total
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* T46 — la sélection des calculateurs est portée par la sidebar :
+              badge de compensation affichant le calculateur actif. */}
+          <Badge variant="outline" className="gap-1">
+            <Calculator className="h-3 w-3" />
+            {CALC_DEFS.find((d) => d.id === active)?.title}
+          </Badge>
+          <Badge variant="secondary" className="gap-1">
+            <Sparkles className="h-3 w-3" />
+            {knownScenarios.length} scénario{knownScenarios.length > 1 ? "s" : ""} au total
+          </Badge>
+        </div>
       </header>
 
-      {/* Navigation secondaire : une carte par calculateur */}
-      <nav className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-label="Choisir un calculateur">
-        {CALC_DEFS.map((def) => {
-          const Icon = def.icon
-          const isActive = active === def.id
-          return (
-            <button
-              key={def.id}
-              type="button"
-              onClick={() => selectCalc(def.id)}
-              aria-current={isActive ? "true" : undefined}
-              className={cn(
-                "flex h-full flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all hover:shadow-md",
-                isActive
-                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border bg-card hover:border-primary/40"
-              )}
-            >
-              <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", def.tint)}>
-                <Icon className="h-4 w-4" />
-              </span>
-              <span className="text-sm font-semibold leading-tight">{def.title}</span>
-              <span className="text-[11px] leading-tight text-muted-foreground">{def.description}</span>
-              {isActive && (
-                <span className="mt-auto inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
-                  <Check className="h-3 w-3" />
-                  Calculateur actif
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </nav>
+      {/* T46 — la navigation secondaire (grille de cartes CALC_DEFS) est portée
+          par la sidebar verticale : plus de sélecteur ici. */}
 
       {/* Calculateur actif (remonté via key pour restaurer un scénario) */}
       <section aria-label={`Calculateur : ${CALC_DEFS.find((d) => d.id === active)?.title ?? ""}`}>
