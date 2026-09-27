@@ -184,7 +184,7 @@ export function BoStats() {
             <CardTitle className="flex items-center gap-2 text-base">
               <PieIcon className="h-4 w-4 text-emerald-600" aria-hidden /> Part de marché par enseigne
             </CardTitle>
-            <CardDescription>Répartition des stations actives (1 814 fiches, 6 enseignes + indépendants).</CardDescription>
+            <CardDescription>Répartition des stations actives (2 985 fiches, 6 enseignes + indépendants).</CardDescription>
           </CardHeader>
           <CardContent>
             {loading || !marketShare ? (

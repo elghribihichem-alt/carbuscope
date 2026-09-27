@@ -382,6 +382,7 @@ export const en: Partial<Dict> = {
   "chrome.modeMobile": "B2C Mobile",
   "chrome.modeAgents": "Field agents",
   "chrome.modeBackoffice": "Back-office",
+  "chrome.modeShadow": "Shadow Market",
   "chrome.modeSuperadmin": "Super Admin",
   "chrome.superadminHint": "Super Administration — SaaS platform management",
   "chrome.brand": "Connected brand",
@@ -415,7 +416,7 @@ export const en: Partial<Dict> = {
   "chrome.langAutoHint": "Device language",
   // ---------- Footer ----------
   "footer.brand": "CarbuScope — “The Waze of fuel”",
-  "footer.stations": "1,814 stations · 24 governorates",
+  "footer.stations": "2,985 stations · 24 governorates",
   "footer.brands": "6 brands tracked",
   "footer.data": "Demo data for illustration purposes",
   "footer.copyright": "© 2025 CarbuScope · B2B/B2C/B2B2B platform",

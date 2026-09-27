@@ -172,6 +172,7 @@ const TAB_LABELS: Record<Tab, string> = {
   prices: "Prix & marges",
   veille: "Veille",
   reports: "Rapports",
+  demographie: "Démographie",
   settings: "Paramètres",
 }
 

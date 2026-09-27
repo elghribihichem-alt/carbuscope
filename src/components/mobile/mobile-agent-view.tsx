@@ -10,13 +10,15 @@
 
 import { useEffect, useState } from "react"
 import {
-  Camera, ClipboardCheck, ClipboardList, Fuel, KeyRound, ListChecks, MousePointerClick,
+  Camera, ClipboardCheck, ClipboardList, Fuel, Ghost, KeyRound, ListChecks, MousePointerClick,
   Radar, Radio, Route, Zap,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { motion } from "framer-motion"
 import { PhoneFrame } from "./phone-frame"
 import { MobileApp } from "./mobile-app"
+import { AgentShadowScreen } from "./screens/agent-shadow-screen"
 import { BrandDot } from "./shared"
 
 type AgentRow = {
@@ -63,6 +65,9 @@ export function MobileAgentView() {
   // Codes de démonstration : agents réels du seed avec leur charge de missions.
   const [agents, setAgents] = useState<AgentRow[] | null>(null)
   const [brandColors, setBrandColors] = useState<Record<string, string>>({})
+  // T44-e — « Recensement parallèle » : overlay Shadow Market au-dessus de
+  // l'app agent (les missions existantes restent intactes en dessous).
+  const [shadowOpen, setShadowOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -148,7 +153,31 @@ export function MobileAgentView() {
             <p className="mt-1 text-xs text-muted-foreground">Missions, relevés et rapports — aperçu interactif</p>
           </div>
           <PhoneFrame>
-            <MobileApp startInAgentSpace />
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <MobileApp startInAgentSpace />
+              {shadowOpen ? (
+                <motion.div
+                  key="agent-shadow"
+                  initial={{ opacity: 0, x: 36 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 24 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="absolute inset-0 z-30 flex min-h-0 flex-1 flex-col bg-[#f6f7f5]"
+                >
+                  <AgentShadowScreen onClose={() => setShadowOpen(false)} />
+                </motion.div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShadowOpen(true)}
+                  aria-label="Recenser un vendeur clandestin (Shadow Market)"
+                  className="absolute bottom-4 end-3 z-20 flex h-10 max-w-[85%] items-center gap-1.5 rounded-full bg-[#E53935] px-3.5 text-[10.5px] font-bold text-white shadow-lg shadow-black/25 transition-transform hover:scale-[1.03] active:scale-95"
+                >
+                  <Ghost className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="truncate">Recenser un vendeur clandestin</span>
+                </button>
+              )}
+            </div>
           </PhoneFrame>
         </div>
 

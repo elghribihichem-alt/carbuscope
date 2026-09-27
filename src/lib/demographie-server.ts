@@ -4,7 +4,7 @@
 // uniquement — messages d'erreur en français.
 
 import { db } from "@/lib/db"
-import { logAudit, serializeDemographicDelegation, serializeDemographicGouvernorat } from "@/lib/saas-server"
+import { logAudit, serializeDemographicCite, serializeDemographicDelegation, serializeDemographicGouvernorat } from "@/lib/saas-server"
 import { VEHICLE_CATEGORIES } from "@/lib/saas"
 
 // ---- Champs éditables ----
@@ -59,6 +59,7 @@ export function fmtAuditValue(field: string, v: number): string {
 
 export type DelegationValues = Record<string, number | null>
 export type GouvernoratValues = Record<string, number | null>
+export type CiteValues = Record<string, number | null>
 
 // ---- Import en masse (T37) : champs acceptés côté serveur ----
 
@@ -91,6 +92,16 @@ export const DELEG_IMPORT_ALIASES: Record<string, string> = {
   population: "population",
   urbanPct: "urbain (%)",
   ruralPct: "rural (%)",
+  ...Object.fromEntries(VEHICLE_CATEGORIES.map(v => [v.key, v.label.toLowerCase()])),
+}
+
+/** Champs acceptés à l'import — volet Cités (T45, identité + valeurs). */
+export const CITE_IMPORT_ALIASES: Record<string, string> = {
+  gouvernorat: "gouvernorat",
+  delegation: "délégation",
+  cite: "cité",
+  population: "population",
+  urbanPct: "urbain (%)",
   ...Object.fromEntries(VEHICLE_CATEGORIES.map(v => [v.key, v.label.toLowerCase()])),
 }
 
@@ -198,6 +209,45 @@ export function validateGouvernoratValues(rawValues: unknown): { ok: true; value
   return { ok: true, values }
 }
 
+// ---- Validation : cité (T45 — volet Cités, Super Administration) ----
+
+/** Champs éditables d'une cité (l'ordre suit les colonnes du tableau). */
+export const CITE_INT_FIELDS = ["population", ...VEHICLE_CATEGORIES.map(v => v.key)] as const
+
+export function validateCiteValues(rawValues: unknown): { ok: true; values: CiteValues } | { ok: false; error: string } {
+  if (!rawValues || typeof rawValues !== "object" || Array.isArray(rawValues)) {
+    return { ok: false, error: "Champ « values » invalide" }
+  }
+  const values: CiteValues = {}
+  for (const [field, raw] of Object.entries(rawValues as Record<string, unknown>)) {
+    if (field !== "urbanPct" && !CITE_INT_FIELDS.includes(field as (typeof CITE_INT_FIELDS)[number])) {
+      return { ok: false, error: `Champ non modifiable : ${field}` }
+    }
+    if (raw === null || raw === "") {
+      values[field] = null
+      continue
+    }
+    if (typeof raw !== "number" || !Number.isFinite(raw)) {
+      return { ok: false, error: `Valeur invalide pour « ${DEMOGRAPHIE_FIELD_LABELS[field] ?? field} » — nombre attendu` }
+    }
+    if (field === "urbanPct") {
+      if (raw < 0 || raw > 100) {
+        return { ok: false, error: "Le taux urbain doit être un nombre entre 0 et 100" }
+      }
+    } else {
+      const max = field === "population" ? 10_000_000 : 5_000_000
+      if (!Number.isInteger(raw) || raw < 0 || raw > max) {
+        return { ok: false, error: `« ${DEMOGRAPHIE_FIELD_LABELS[field] ?? field} » doit être un nombre entier positif` }
+      }
+    }
+    values[field] = raw
+  }
+  if (Object.keys(values).length === 0) {
+    return { ok: false, error: "Aucune valeur à enregistrer" }
+  }
+  return { ok: true, values }
+}
+
 // ---- Application des mises à jour (db + audit), partagée par les routes ----
 
 type ApplyResult<T> = { ok: true; row: T } | { ok: false; status: number; error: string }
@@ -246,4 +296,71 @@ export async function applyGouvernoratUpdate(
     actor,
   })
   return { ok: true, row: serializeDemographicGouvernorat(updated) }
+}
+
+// ---- T45 : cités (3ᵉ niveau — Super Administration uniquement) ----
+
+/** Enregistre un patch validé sur une cité + journalise l'audit. */
+export async function applyCiteUpdate(
+  id: string,
+  values: CiteValues,
+  actor: string | undefined,
+): Promise<ApplyResult<ReturnType<typeof serializeDemographicCite>>> {
+  const row = await db.demographicCite.findUnique({ where: { id } })
+  if (!row) return { ok: false, status: 404, error: "Cité introuvable" }
+  const updated = await db.demographicCite.update({
+    where: { id },
+    data: { ...values, updatedAt: new Date(), updatedBy: actor ?? "system" },
+  })
+  const changes = Object.entries(values)
+    .map(([field, v]) => `${DEMOGRAPHIE_FIELD_LABELS[field] ?? field} ${v === null ? "effacé" : fmtAuditValue(field, v)}`)
+    .join(" · ")
+  await logAudit({
+    kind: "DEMOGRAPHIE",
+    message: `Démographie — cité ${row.gouvernorat} / ${row.delegation} / ${row.cite} : ${changes}`,
+    actor,
+  })
+  return { ok: true, row: serializeDemographicCite(updated) }
+}
+
+/** Supprime une cité (3ᵉ niveau) + journalise l'audit. */
+export async function applyCiteDelete(
+  id: string,
+  actor: string | undefined,
+): Promise<{ ok: true; cite: string } | { ok: false; status: number; error: string }> {
+  const row = await db.demographicCite.findUnique({ where: { id } })
+  if (!row) return { ok: false, status: 404, error: "Cité introuvable" }
+  await db.demographicCite.delete({ where: { id } })
+  await logAudit({
+    kind: "DEMOGRAPHIE",
+    message: `Démographie — cité supprimée : ${row.gouvernorat} / ${row.delegation} / ${row.cite}`,
+    actor,
+  })
+  return { ok: true, cite: `${row.gouvernorat} / ${row.delegation} / ${row.cite}` }
+}
+
+/** Avertissement de cohérence du parc (import en masse) : motorisation
+ *  dépassant 0,9 véhicule par habitant — la ligne est appliquée mais
+ *  signalée à la Super Administration. */
+export function parcCoherenceWarning(
+  population: number | null,
+  fleet: {
+    vehiclesLight?: number | null
+    vehiclesUtility?: number | null
+    vehiclesHeavy?: number | null
+    vehiclesBuses?: number | null
+    vehiclesMotorcycles?: number | null
+    vehicles?: number | null
+  },
+): string | null {
+  if (population === null || population <= 0) return null
+  const keys: ("vehiclesLight" | "vehiclesUtility" | "vehiclesHeavy" | "vehiclesBuses" | "vehiclesMotorcycles" | "vehicles")[]
+    = ["vehiclesLight", "vehiclesUtility", "vehiclesHeavy", "vehiclesBuses", "vehiclesMotorcycles", "vehicles"]
+  const total = keys.reduce((s, k) => s + (fleet[k] ?? 0), 0)
+  if (total <= 0) return null
+  const rate = total / population
+  if (rate > 0.9) {
+    return `Motorisation de ${(rate * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} % — cohérence à vérifier (somme des véhicules vs population)`
+  }
+  return null
 }

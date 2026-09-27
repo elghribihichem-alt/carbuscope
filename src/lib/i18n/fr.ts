@@ -381,6 +381,7 @@ export const fr = {
   "chrome.modeMobile": "Mobile B2C",
   "chrome.modeAgents": "Agents terrain",
   "chrome.modeBackoffice": "Back-office",
+  "chrome.modeShadow": "Shadow Market",
   "chrome.modeSuperadmin": "Super Admin",
   "chrome.superadminHint": "Super Administration — gestion SaaS de la plateforme",
   "chrome.brand": "Enseigne connectée",
@@ -414,7 +415,7 @@ export const fr = {
   "chrome.langAutoHint": "Langue du terminal",
   // ---------- Pied de page ----------
   "footer.brand": "CarbuScope — « Le Waze du carburant »",
-  "footer.stations": "1 814 stations · 24 gouvernorats",
+  "footer.stations": "2 985 stations · 24 gouvernorats",
   "footer.brands": "6 enseignes suivies",
   "footer.data": "Données de démonstration à valeur d'illustration",
   "footer.copyright": "© 2025 CarbuScope · Plateforme B2B/B2C/B2B2B",

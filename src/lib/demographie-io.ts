@@ -103,7 +103,7 @@ function cellValue(v: ExportValue, type: ExportColumnType, style: "display" | "r
 
 export async function exportDemographie(options: {
   format: ExportFormat
-  scope: "gouvernorats" | "delegations"
+  scope: "gouvernorats" | "delegations" | "cites"
   title: string
   columns: ExportColumn[]
   rows: ExportRow[]
@@ -271,7 +271,9 @@ function parseImportJson(text: string): { headers: string[]; rows: Record<string
 }
 
 function parseImportCsv(text: string): { headers: string[]; rows: Record<string, ExportValue>[] } {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim() !== "")
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/)
+    // Les lignes de commentaires (« # … ») des modèles d'import sont ignorées.
+    .filter(l => l.trim() !== "" && !l.trim().startsWith("#"))
   if (lines.length < 2) throw new Error("CSV vide ou incomplet — en-tête + lignes attendues.")
   const sep = [";", "\t", ","].map(s => ({ s, n: lines[0].split(s).length })).sort((a, b) => b.n - a.n)[0].s
   const split = (line: string): string[] => {
@@ -375,24 +377,46 @@ export const DELEG_IMPORT_ALIASES: Record<string, string[]> = {
   })),
 }
 
+/** Alias d'en-têtes acceptés pour chaque champ importable (volet Cités — T45). */
+export const CITES_IMPORT_ALIASES: Record<string, string[]> = {
+  gouvernorat: ["gouvernorat"],
+  delegation: ["délégation", "delegation", "délégation (nom)"],
+  cite: ["cité", "cite", "nom", "name", "cité (nom)", "quartier"],
+  population: ["population", "habitants", "hab", "population (hab.)"],
+  urbanPct: ["urbain (%)", "urbain", "taux urbain (%)", "urbanpct", "taux d'urbanisation (%)", "taux d'urbanisation"],
+  ...Object.fromEntries(VEHICLE_CATEGORIES.flatMap(v => {
+    const base = [v.key, v.label.toLowerCase(), v.short.toLowerCase()]
+    switch (v.key) {
+      case "vehiclesLight": return [[v.key, [...base, "voitures", "voitures légères"]]]
+      case "vehiclesUtility": return [[v.key, [...base, "utilitaires et pick-up", "pick-up"]]]
+      case "vehiclesHeavy": return [[v.key, [...base, "pl"]]]
+      case "vehiclesBuses": return [[v.key, [...base, "bus", "autocars et bus"]]]
+      case "vehiclesMotorcycles": return [[v.key, [...base, "motocyclettes", "motos", "deux roues"]]]
+      default: return [[v.key, base]]
+    }
+  })),
+}
+
 /** Champs numériques (identité = texte, autres = nombres). */
 export const GOV_NUMERIC_FIELDS = new Set(["population", "menPct", "womenPct", "areaKm2", "urbanPct", "ruralPct", "vehicles", "motorizationRate", "avgFleetAge"])
 export const DELEG_NUMERIC_FIELDS = new Set(["population", "urbanPct", "ruralPct", ...VEHICLE_CATEGORIES.map(v => v.key)])
+export const CITE_NUMERIC_FIELDS = new Set(["population", "urbanPct", ...VEHICLE_CATEGORIES.map(v => v.key)])
 
 /** En-têtes volontairement ignorés à l'import (métadonnées d'export). */
 const IMPORT_IGNORED_HEADERS = new Set([
   "delegations", "delegation count", "estimation", "est.", "modifie par", "modifie le",
   "derniere modification", "source", "genere le", "genere", "ligne", "code iso (tn-xx)",
+  "total", "total vehicules", "total véhicules",
 ])
 
 /** Convertit les lignes analysées en lignes normalisées (clés API). Renvoie
  *  aussi les en-têtes non reconnus pour un retour utilisateur honnête. */
 export function normalizeImportRows(
-  scope: "gouvernorats" | "delegations",
+  scope: "gouvernorats" | "delegations" | "cites",
   parsed: ParsedImport,
 ): { rows: Record<string, ExportValue>[]; unknownHeaders: string[] } {
-  const aliases = scope === "gouvernorats" ? GOV_IMPORT_ALIASES : DELEG_IMPORT_ALIASES
-  const numeric = scope === "gouvernorats" ? GOV_NUMERIC_FIELDS : DELEG_NUMERIC_FIELDS
+  const aliases = scope === "gouvernorats" ? GOV_IMPORT_ALIASES : scope === "cites" ? CITES_IMPORT_ALIASES : DELEG_IMPORT_ALIASES
+  const numeric = scope === "gouvernorats" ? GOV_NUMERIC_FIELDS : scope === "cites" ? CITE_NUMERIC_FIELDS : DELEG_NUMERIC_FIELDS
   const map = new Map<string, string>()
   for (const [field, names] of Object.entries(aliases)) {
     for (const n of names) map.set(normKey(n), field)
@@ -425,4 +449,56 @@ export function normalizeImportRows(
     return row
   }).filter(r => Object.values(r).some(v => v !== null && v !== ""))
   return { rows, unknownHeaders }
+}
+
+// ---- Modèles d'import (T45 — alimentation en masse des véhicules) ----
+
+const csvEscapeTpl = (s: string) => (/[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
+
+/** Assemble un CSV modèle : commentaires FR (#…), en-tête, lignes d'exemple. */
+export function buildCsvTemplate(comments: string[], headers: string[], lines: (string | number)[][]): string {
+  const head = headers.map(csvEscapeTpl).join(";")
+  const body = lines.map(l => l.map(c => csvEscapeTpl(String(c))).join(";")).join("\n")
+  return `\uFEFF${comments.map(c => `# ${c}`).join("\n")}\n${head}\n${body}\n`
+}
+
+/** Télécharge un CSV modèle (BOM UTF-8, séparateur ; — Excel FR). */
+export function downloadCsvTemplate(filename: string, content: string): void {
+  downloadBlob(new Blob([content], { type: "text/csv;charset=utf-8" }), filename)
+}
+
+/** Modèle d'import des véhicules par CITÉ (volet Cités) — 3 lignes d'exemple. */
+export function downloadCitesVehiculesTemplate(): void {
+  const content = buildCsvTemplate(
+    [
+      "CarbuScope — modèle d'import du parc automobile par cité (module Démographie, Super Administration).",
+      "Renseignez le gouvernorat, la délégation et la cité : une cité inconnue est créée ; un couple gouvernorat/délégation inconnu rejette la ligne.",
+      "Colonnes facultatives : ne remplissez que les valeurs à importer (valeurs FR acceptées : « 52 400 », « 88,5 », « 88 % »).",
+      "Contrôles : population de la cité ≤ population de la délégation (avertissement sinon), cohérence véhicules/population.",
+    ],
+    ["Gouvernorat", "Délégation", "Cité", "Population", "Urbain (%)", "Voitures légères", "Utilitaires & pick-up", "Poids lourds", "Autocars & bus", "Deux-roues motorisés"],
+    [
+      ["Ariana", "Ariana Ville", "Cité El Manar", 38500, 98, 11935, 2888, 963, 193, 3273],
+      ["Sfax", "Sfax Ville", "Cité Ezzouhour", 51200, 96, 9421, 2280, 760, 153, 2575],
+      ["Tunis", "El Menzah", "Cité El Ghazala", 24600, 100, 7626, 1845, 615, 123, 2075],
+    ],
+  )
+  downloadCsvTemplate("modele-import-cites-vehicules.csv", content)
+}
+
+/** Modèle d'import des véhicules par DÉLÉGATION (volet Délégations) — 2 lignes d'exemple. */
+export function downloadDelegationsVehiculesTemplate(): void {
+  const content = buildCsvTemplate(
+    [
+      "CarbuScope — modèle d'import du parc automobile par délégation (module Démographie, Super Administration).",
+      "Renseignez le gouvernorat et la délégation (doivent exister dans le référentiel) ; ne remplissez que les colonnes véhicules à mettre à jour.",
+      "Contrôle de cohérence : somme des véhicules vs population de la délégation (avertissement si motorisation > 90 %).",
+    ],
+    ["Gouvernorat", "Délégation", "Voitures légères", "Utilitaires & pick-up", "Poids lourds", "Autocars & bus", "Deux-roues motorisés"],
+    [
+      ["Tunis", "El Menzah", 11890, 2878, 959, 192, 3257],
+      ["Nabeul", "Hammamet", 8230, 1993, 664, 133, 2251],
+    ],
+  )
+  downloadCsvTemplate("modele-import-vehicules-delegations.csv", content)
 }

@@ -745,3 +745,352 @@ export interface RelancePostResponse {
   skipped: number
   notifiedBrand: string
 }
+
+// ---------- T44 : module Shadow Market (marché parallèle du carburant) ----------
+// Recensement des points de vente informels (vendeurs clandestins), cartographie,
+// analyse de cannibalisation et pertes estimées. Accessible à la Super
+// Administration (vision nationale) et aux enseignes (leurs pertes).
+// Couleurs métier : rouge #E53935 (critique) · orange #FF9800 (modéré) ·
+// jaune #FFC107 (vigilance) · vert #4CAF50 (calme) · bleu #2196F3 (info) ·
+// gris #9E9E9E (inactif).
+
+export const SHADOW_LEVELS = ["RED", "ORANGE", "YELLOW", "GREEN"] as const
+export type ShadowLevel = (typeof SHADOW_LEVELS)[number]
+
+export const SHADOW_STATUS_LABELS: Record<string, string> = {
+  BRUT: "Brut",
+  VERIFIE: "Vérifié",
+  VALIDE: "Validé",
+  REJETE: "Rejeté",
+  DOUBLON: "Doublon",
+}
+
+export const SHADOW_UPDATE_KIND_LABELS: Record<string, string> = {
+  APPARITION: "Apparition",
+  DISPARITION: "Disparition",
+  REAPPARITION: "Réapparition",
+  VOLUME: "Volume",
+  PRIX: "Prix",
+  TYPE: "Typologie",
+  DEPLACEMENT: "Déplacement",
+  STATUT: "Statut",
+}
+
+export const SHADOW_SOURCE_LABELS: Record<string, string> = {
+  AGENT: "Agent terrain",
+  CONTROLEUR: "Contrôleur mobile",
+  AUDIT: "Audit plateforme",
+  CONTRIBUTION: "Contribution citoyen",
+}
+
+export type ShadowTypologyDTO = {
+  code: string
+  label: string
+  description: string
+  icon: string
+  color: string
+  volumeLJ: number
+  active: boolean
+  sortOrder: number
+}
+
+export type ShadowPointDTO = {
+  id: string
+  code: string
+  typologyCode: string
+  status: string
+  gouvernorat: string
+  delegation: string
+  cite: string | null
+  lat: number
+  lng: number
+  volumeLJ: number
+  priceMillimes: number | null
+  photoUrl: string | null
+  notes: string
+  source: string
+  reporter: string
+  brandThreat: string | null
+  firstSeenAt: string
+  lastCheckAt: string
+  active: boolean
+  /** Perte mensuelle estimée pour ce point (DT) — calcul serveur. */
+  lossTnd: number
+  /** Station la plus proche (calcul serveur, distance en mètres). */
+  nearestStation: { code: string; name: string; brandSlug: string; brandName: string; distanceM: number } | null
+}
+
+export type ShadowPointInput = {
+  typologyCode: string
+  gouvernorat: string
+  delegation: string
+  cite?: string | null
+  lat: number
+  lng: number
+  volumeLJ: number
+  priceMillimes?: number | null
+  photoUrl?: string | null
+  notes?: string
+  reporter?: string
+  source?: string
+}
+
+export type ShadowUpdateDTO = {
+  id: string
+  pointCode: string
+  pointTypology: string
+  kind: string
+  oldValue: string | null
+  newValue: string | null
+  author: string
+  date: string
+  gouvernorat: string
+}
+
+export type ShadowAuditorDTO = {
+  id: string
+  name: string
+  zone: string
+  brandSlug: string
+  phone: string
+  pointsDone: number
+  rechecks: number
+  active: boolean
+}
+
+export type ShadowCensusEventDTO = {
+  id: string
+  teamLabel: string
+  zone: string
+  kind: string
+  date: string
+  pointsTargeted: number
+  pointsFound: number
+  status: string
+}
+
+export type ShadowAlertDTO = {
+  id: string
+  severity: string
+  kind: string
+  title: string
+  detail: string
+  zone: string
+  stationCode: string | null
+  stationName: string | null
+  lossTnd: number
+  date: string
+}
+
+export type ShadowMonthlyStatDTO = {
+  month: string
+  label: string
+  activePoints: number
+  newPoints: number
+  closedPoints: number
+  estLossTnd: number
+  note: string | null
+}
+
+export type ShadowGovLossDTO = {
+  gouvernorat: string
+  points: number
+  volumeLJ: number
+  lossTnd: number
+  stationsThreatened: number
+  level: ShadowLevel
+}
+
+export type ShadowThreatStationDTO = {
+  code: string
+  name: string
+  brandSlug: string
+  brandName: string
+  brandColor: string
+  gouvernorat: string
+  delegation: string
+  lat: number
+  lng: number
+  traffic: number
+  points: number
+  volumeStolenLJ: number
+  lossTnd: number
+  level: ShadowLevel
+  worstDistanceM: number | null
+}
+
+export type ShadowTypologyStatDTO = {
+  code: string
+  label: string
+  color: string
+  count: number
+  pct: number
+  volumeLJ: number
+  lossTnd: number
+}
+
+export type ShadowConfigDTO = {
+  radiiM: number[]
+  cannibRadiusM: number
+  redZoneThreshold: number
+  lossRedTnd: number
+  lossOrangeTnd: number
+  notifyRadiusM: number
+  notifyActive: boolean
+  marginTndPerL: number
+}
+
+export type ShadowOverviewKpis = {
+  activePoints: number
+  estLossTnd: number
+  stationsThreatened: number
+  stationsThreatenedRed: number
+  monthVariationPct: number
+  lossVariationPct: number
+  marketShareStolenPct: number
+  volumeLJ: number
+  pendingValidation: number
+  newThisWeek: number
+}
+
+export type ShadowOverviewResponse = {
+  month: string
+  monthLabel: string
+  scope: "NATIONAL" | "BRAND"
+  brandSlug: string | null
+  kpis: ShadowOverviewKpis
+  alerts: ShadowAlertDTO[]
+  govLosses: ShadowGovLossDTO[]
+  typologies: ShadowTypologyStatDTO[]
+  monthly: ShadowMonthlyStatDTO[]
+  topThreats: ShadowThreatStationDTO[]
+  calendar: ShadowCensusEventDTO[]
+}
+
+export type ShadowMapStationDTO = {
+  code: string
+  name: string
+  brandSlug: string
+  brandName: string
+  brandColor: string
+  gouvernorat: string
+  delegation: string
+  lat: number
+  lng: number
+  points: number
+  lossTnd: number
+  level: ShadowLevel
+}
+
+export type ShadowRedZoneDTO = {
+  label: string
+  gouvernorat: string
+  lat: number
+  lng: number
+  radiusM: number
+  points: number
+  lossTnd: number
+}
+
+export type ShadowRoadStatDTO = {
+  code: string
+  name: string
+  type: string
+  tmj: number
+  points: number
+  lossTnd: number
+}
+
+export type ShadowMapResponse = {
+  scope: "NATIONAL" | "BRAND"
+  points: ShadowPointDTO[]
+  stations: ShadowMapStationDTO[]
+  govHeat: ShadowGovLossDTO[]
+  redZones: ShadowRedZoneDTO[]
+  roads: ShadowRoadStatDTO[]
+  typologies: ShadowTypologyDTO[]
+  config: ShadowConfigDTO
+}
+
+export type ShadowPointWithDistanceDTO = ShadowPointDTO & {
+  distanceM: number
+  capturedLJ: number
+}
+
+export type ShadowStationImpactResponse = {
+  station: {
+    code: string
+    name: string
+    brandSlug: string
+    brandName: string
+    brandColor: string
+    gouvernorat: string
+    delegation: string
+    lat: number
+    lng: number
+    traffic: number
+    status: string
+  }
+  points: ShadowPointWithDistanceDTO[]
+  lossTnd: number
+  volumeStolenLJ: number
+  capturedPct: number
+  level: ShadowLevel
+  nearbyStations: { code: string; name: string; brandName: string; brandColor: string; lossTnd: number; points: number }[]
+  config: ShadowConfigDTO
+}
+
+export type ShadowBrandLossDTO = {
+  brandSlug: string
+  brandName: string
+  brandColor: string
+  lossTnd: number
+  stationsThreatened: number
+  points: number
+  sharePct: number
+}
+
+export type ShadowRegionImpactResponse = {
+  gouvernorats: ShadowGovLossDTO[]
+  brands: ShadowBrandLossDTO[]
+  total: { points: number; lossTnd: number; stationsThreatened: number; volumeLJ: number }
+}
+
+export type ShadowSimulationResponse = {
+  baseline: { lossTnd: number; points: number; volumeLJ: number }
+  projected: { lossTnd: number; points: number; volumeLJ: number; recoveredTnd: number }
+  curve: { week: number; baselineTnd: number; projectedTnd: number }[]
+  assumptions: { elasticity: number; informalSensitivity: number; priceCutMillimes: number; note: string }
+  scopeLabel: string
+}
+
+export type ShadowReportsResponse = {
+  month: string
+  monthLabel: string
+  generatedAt: string
+  summary: {
+    activePoints: number
+    estLossTnd: number
+    stationsThreatened: number
+    newPoints: number
+    neutralized: number
+    pendingValidation: number
+    topGouvernorat: string
+  }
+  topThreats: ShadowThreatStationDTO[]
+  govLosses: ShadowGovLossDTO[]
+  recommendations: string[]
+  brands: ShadowBrandLossDTO[]
+  exports: { id: string; name: string; format: string; sizeKb: number; createdAt: string; scope: string }[]
+}
+
+export type ShadowAccessDTO = {
+  email: string
+  name: string
+  role: string
+  scope: "NATIONAL" | "BRAND" | "ZONE"
+  brandSlug: string | null
+  brandName: string | null
+  shadowAccess: boolean
+  zone: string | null
+}

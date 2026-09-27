@@ -239,7 +239,7 @@ export function CompetitionTab() {
           )}
         </div>
         <p className="max-w-4xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-          Source : données internes CarbuScope (1 814 stations recensées, tous réseaux confondus). Benchmark de référence :
+          Source : données internes CarbuScope (2 985 stations recensées, tous réseaux confondus). Benchmark de référence :
           1 station pour 1 200 véhicules. L&apos;indice de saturation est mesuré à 5 km autour de chaque site ;
           le rayon d&apos;analyse ci-dessous délimite la zone concurrentielle prise en compte.
         </p>

@@ -263,11 +263,33 @@ export interface DemographicDelegationDTO {
   updatedBy: string | null
 }
 
+// ---- Module Démographie (T45) : niveau « cité » du découpage administratif
+// (gouvernorat → délégation → cité) — population et parc automobile par cité,
+// alimentés en masse par la Super Administration (import scope « cites »).
+
+/** Ligne éditable (Super Admin uniquement) : une cité. */
+export interface DemographicCiteDTO {
+  id: string
+  gouvernorat: string
+  delegation: string
+  cite: string
+  population: number | null
+  urbanPct: number | null
+  vehiclesLight: number | null
+  vehiclesUtility: number | null
+  vehiclesHeavy: number | null
+  vehiclesBuses: number | null
+  vehiclesMotorcycles: number | null
+  source: string
+  updatedAt: string | null
+  updatedBy: string | null
+}
+
 // ---- Module Démographie (T37, volet « Paramétrage ») : visibilité par
 // utilisateur — accès accordé depuis la Super Administration, effet dans
 // l'Observatoire B2B de l'utilisateur (onglet « Démographie »).
 
-export type DemographicAccessLevel = "GOUVERNORATS" | "DELEGATIONS"
+export type DemographicAccessLevel = "GOUVERNORATS" | "DELEGATIONS" | "CITES"
 
 export interface DemographicAccessDTO {
   userId: string
@@ -284,4 +306,5 @@ export interface DemographicAccessDTO {
 export const DEMOGRAPHIC_LEVELS: { value: DemographicAccessLevel; label: string; hint: string }[] = [
   { value: "GOUVERNORATS", label: "Gouvernorats", hint: "Vue des 24 gouvernorats (lecture des délégations masquée)" },
   { value: "DELEGATIONS", label: "Gouvernorats + délégations", hint: "Vue complète : gouvernorats et 277 délégations" },
+  { value: "CITES", label: "Gouvernorats + délégations + cités", hint: "Vue complète : gouvernorats, délégations et cités (3ᵉ niveau)" },
 ]

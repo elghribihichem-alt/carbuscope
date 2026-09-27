@@ -49,6 +49,27 @@ function toIntOrNull(v: unknown): number | null {
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
+  // T45-b : ?scope=b2b → rapports éditoriaux du module A.8 « Rapports »
+  // (modèle Report — CONCURRENCE/IMPLANTATION/PERFORMANCE/VEILLE/SHADOW).
+  // Sans scope (ou scope=terrain) : rapports de visite terrain (T28, défaut —
+  // consommateurs : app mobile agents, back-office missions).
+  if (sp.get("scope") === "b2b") {
+    const rows = await db.report.findMany({ orderBy: { createdAt: "desc" }, take: 100 })
+    return NextResponse.json({
+      reports: rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        type: r.type,
+        period: r.period,
+        scope: r.scope,
+        format: r.format,
+        status: r.status,
+        generatedBy: r.generatedBy,
+        sizeKb: r.sizeKb,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    })
+  }
   const missionId = sp.get("missionId")
   const agentCode = sp.get("agentCode")
   const stationCode = sp.get("stationCode")
@@ -79,8 +100,51 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
-  if (!body || typeof body.taskId !== "string" || typeof body.agentCode !== "string") {
-    return NextResponse.json({ error: "Champs 'taskId' et 'agentCode' requis." }, { status: 400 })
+  if (!body) return NextResponse.json({ error: "Corps JSON invalide." }, { status: 400 })
+
+  // T45-b : corps SANS taskId/agentCode → génération d'un rapport éditorial
+  // du module A.8 (modèle Report) — rétablit le flux « Générer » B2B qui
+  // partageait cet endpoint avec les rapports de visite terrain (T28).
+  if (typeof body.taskId !== "string" || typeof body.agentCode !== "string") {
+    const type = String(body.type ?? "VEILLE").toUpperCase()
+    const TYPES = ["CONCURRENCE", "IMPLANTATION", "PERFORMANCE", "VEILLE", "SHADOW"]
+    if (!TYPES.includes(type)) {
+      return NextResponse.json({ error: `Type invalide (${TYPES.join(" / ")}).` }, { status: 400 })
+    }
+    const format = ["PDF", "Excel", "PowerPoint", "CSV"].includes(String(body.format)) ? String(body.format) : "PDF"
+    const name =
+      typeof body.name === "string" && body.name.trim()
+        ? body.name.trim().slice(0, 120)
+        : `Rapport ${type.charAt(0) + type.slice(1).toLowerCase()} — ${String(body.period ?? "12 derniers mois")}`
+    const r = await db.report.create({
+      data: {
+        name,
+        type,
+        period: String(body.period ?? "12 derniers mois").slice(0, 80),
+        scope: String(body.scope ?? "National").slice(0, 80),
+        format,
+        status: "GENERATED",
+        generatedBy: String(body.generatedBy ?? "Utilisateur CarbuScope").slice(0, 120),
+        sizeKb: Number.isFinite(Number(body.sizeKb)) ? Math.max(1, Math.round(Number(body.sizeKb))) : 20 + Math.floor(Math.random() * 80),
+      },
+    })
+    return NextResponse.json(
+      {
+        report: {
+          id: r.id,
+          name: r.name,
+          type: r.type,
+          period: r.period,
+          scope: r.scope,
+          format: r.format,
+          status: r.status,
+          generatedBy: r.generatedBy,
+          sizeKb: r.sizeKb,
+          createdAt: r.createdAt.toISOString(),
+        },
+      },
+      { status: 201 },
+    )
   }
 
   const agent = await db.fieldAgent.findUnique({ where: { code: body.agentCode } })

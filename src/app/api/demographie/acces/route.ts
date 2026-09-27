@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!access) return NextResponse.json({ access: null })
   return NextResponse.json({
     access: {
-      level: access.level === "DELEGATIONS" ? "DELEGATIONS" : "GOUVERNORATS",
+      level: access.level === "CITES" ? "CITES" : access.level === "DELEGATIONS" ? "DELEGATIONS" : "GOUVERNORATS",
       canEdit: access.canEdit,
     },
   })

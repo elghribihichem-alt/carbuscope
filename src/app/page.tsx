@@ -2,6 +2,7 @@
 
 // CarbuScope — « Le Waze du carburant » (cahier des charges v2.0)
 // Page orchestratrice : 4 produits partageant une même base de données.
+// T44 : + module Shadow Market (marché parallèle — SA & enseignes).
 // Module A : Observatoire Web B2B (10 onglets) — Module B : Mobile B2C (aperçu)
 // Module C : Portail Enseigne — Module D : Back-office plateforme.
 // V7 : accès conditionné à une session réelle (cookie signé, /api/auth/session).
@@ -29,6 +30,7 @@ import { MobileAgentView } from '@/components/mobile/mobile-agent-view'
 import { PortalView } from '@/components/portal/portal-view'
 import { BackofficeView } from '@/components/backoffice/backoffice-view'
 import { SuperAdminView } from '@/components/superadmin/superadmin-view'
+import { ShadowView } from '@/components/shadow/shadow-view'
 import { LoginGate } from '@/components/auth/login-gate'
 import { AuthSplash } from '@/components/auth/login-screen'
 import type { SessionUser } from '@/lib/types'
@@ -119,6 +121,7 @@ export default function Home() {
         {effectiveMode === 'agents' && <MobileAgentView />}
         {effectiveMode === 'backoffice' && <BackofficeView />}
         {effectiveMode === 'superadmin' && <SuperAdminView />}
+        {effectiveMode === 'shadow' && <ShadowView />}
       </main>
       <AppFooter />
     </div>

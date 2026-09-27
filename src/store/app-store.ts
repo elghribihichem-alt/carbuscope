@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import type { SessionUser } from "@/lib/types"
 
-export type Mode = "observatoire" | "portail" | "mobile" | "agents" | "backoffice" | "superadmin"
+export type Mode = "observatoire" | "portail" | "mobile" | "agents" | "backoffice" | "superadmin" | "shadow"
 
 export type Tab =
   | "dashboard"

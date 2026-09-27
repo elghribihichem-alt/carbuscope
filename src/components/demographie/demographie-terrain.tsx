@@ -1,15 +1,18 @@
 'use client'
 
-// CarbuScope — Onglet « Démographie » de l'Observatoire B2B (T37) : vue du
+// CarbuScope — Onglet « Démographie » de l'Observatoire B2B (T37/T45) : vue du
 // module démographique pour les utilisateurs AUTORISÉS par la Super
 // Administration (volet Paramétrage). Niveau GOUVERNORATS → tableau des 24
-// gouvernorats ; niveau DELEGATIONS → également les 277 délégations. Édition
-// en ligne si accordée (canEdit) — mêmes validations serveur et même audit
-// que la Super Administration, via /api/demographie (lecture + écriture).
+// gouvernorats ; niveau DELEGATIONS → également les 277 délégations ; niveau
+// CITES (T45) → drill-down 3ᵉ niveau : les cités de chaque délégation
+// s'affichent sous la ligne déployée (lecture seule — l'édition des cités
+// reste réservée à la Super Administration). Édition en ligne si accordée
+// (canEdit) — mêmes validations serveur et même audit que la Super
+// Administration, via /api/demographie (lecture + écriture).
 
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Eye, Info, Loader2, Lock, PencilLine, Search, Table2, Users } from "lucide-react"
+import { Building2, ChevronDown, ChevronRight, Eye, Info, Loader2, Lock, PencilLine, Search, Table2, Users } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAppStore } from "@/store/app-store"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
-import { type DemographicAccessLevel, type DemographicDelegationDTO, type DemographicGouvernoratDTO } from "@/lib/saas"
+import { type DemographicAccessLevel, type DemographicCiteDTO, type DemographicDelegationDTO, type DemographicGouvernoratDTO } from "@/lib/saas"
 import { fmtDate, timeAgo } from "@/components/superadmin/sa-shared"
 import { DemographieGouvernoratsPanel } from "./demographie-gouvernorats"
 import { EditableCell } from "@/components/superadmin/sa-demographie"
@@ -33,6 +36,13 @@ interface TerrainPage {
   access: { level: DemographicAccessLevel; canEdit: boolean }
   governorats: DemographicGouvernoratDTO[]
   delegations: DemographicDelegationDTO[]
+  cites: DemographicCiteDTO[]
+}
+
+const LEVEL_LABELS: Record<DemographicAccessLevel, string> = {
+  GOUVERNORATS: "Gouvernorats",
+  DELEGATIONS: "Gouvernorats + délégations",
+  CITES: "Gouvernorats + délégations + cités",
 }
 
 /** Cellules de lecture seule d'une délégation (accès sans édition). */
@@ -68,9 +78,18 @@ export function DemographieTerrain() {
   const [denied, setDenied] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Onglet Délégations (niveau DELEGATIONS uniquement)
+  // Onglet Délégations (niveaux DELEGATIONS et CITES)
   const [query, setQuery] = useState("")
   const [govFilter, setGovFilter] = useState("TOUS")
+  // Drill-down cités (niveau CITES) : délégations déployées
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const toggleExpand = (id: string) => setExpanded(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
 
   useEffect(() => {
     let alive = true
@@ -83,16 +102,25 @@ export function DemographieTerrain() {
           if (alive) { setDenied(true); setPage(null) }
           return
         }
-        if (alive) { setDenied(false); setLoadError(null); setPage({ access: j.access, governorats: j.governorats ?? [], delegations: j.delegations ?? [] }) }
+        if (alive) {
+          setDenied(false)
+          setLoadError(null)
+          setPage({
+            access: j.access,
+            governorats: j.governorats ?? [],
+            delegations: j.delegations ?? [],
+            cites: j.cites ?? [],
+          })
+        }
       })
       .catch(e => { if (alive) setLoadError(e instanceof Error ? e.message : "Erreur inconnue") })
     return () => { alive = false }
   }, [email])
 
-  // ---- Délégations visibles (niveau DELEGATIONS) ----
+  // ---- Délégations visibles (niveaux DELEGATIONS et CITES) ----
 
   const groups = useMemo(() => {
-    if (!page || page.access.level !== "DELEGATIONS") return []
+    if (!page || page.access.level === "GOUVERNORATS") return []
     const q = norm(query.trim())
     return page.governorats
       .filter(g => govFilter === "TOUS" || govFilter === g.name)
@@ -106,6 +134,19 @@ export function DemographieTerrain() {
   }, [page, query, govFilter])
 
   const visibleRows = useMemo(() => groups.reduce((n, g) => n + g.rows.length, 0), [groups])
+
+  // Cités par délégation (niveau CITES — drill-down 3ᵉ niveau)
+  const citesByDeleg = useMemo(() => {
+    if (!page || page.access.level !== "CITES") return new Map<string, DemographicCiteDTO[]>()
+    const map = new Map<string, DemographicCiteDTO[]>()
+    for (const c of page.cites) {
+      const key = `${c.gouvernorat}|${c.delegation}`
+      const list = map.get(key) ?? []
+      list.push(c)
+      map.set(key, list)
+    }
+    return map
+  }, [page])
 
   // ---- Écritures (si canEdit) : POST /api/demographie, optimiste + rollback ----
 
@@ -218,17 +259,19 @@ export function DemographieTerrain() {
             <div className="min-w-0">
               <h1 className="text-lg font-bold leading-tight">Démographie — statistiques territoriales</h1>
               <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Population, urbanisation et parc automobile de la Tunisie (source INS 2024) —
-                {page.access.level === "DELEGATIONS"
-                  ? ` ${page.governorats.length} gouvernorats et ${page.delegations.length} délégations.`
-                  : ` ${page.governorats.length} gouvernorats.`}
+                Population, urbanisation et parc automobile de la Tunisie (source INS 2024) —{" "}
+                {page.access.level === "CITES"
+                  ? ` ${page.governorats.length} gouvernorats, ${page.delegations.length} délégations et ${page.cites.length} cités.`
+                  : page.access.level === "DELEGATIONS"
+                    ? ` ${page.governorats.length} gouvernorats et ${page.delegations.length} délégations.`
+                    : ` ${page.governorats.length} gouvernorats.`}
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="gap-1.5 border-emerald-300 bg-emerald-50 text-[11px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
               <Eye className="h-3.5 w-3.5" aria-hidden />
-              {page.access.level === "DELEGATIONS" ? "Gouvernorats + délégations" : "Gouvernorats"}
+              {LEVEL_LABELS[page.access.level]}
             </Badge>
             <Badge variant="outline" className={`gap-1.5 text-[11px] font-medium ${canEdit
               ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
@@ -256,8 +299,8 @@ export function DemographieTerrain() {
         </CardContent>
       </Card>
 
-      {/* Délégations (niveau DELEGATIONS) */}
-      {page.access.level === "DELEGATIONS" && (
+      {/* Délégations (niveaux DELEGATIONS et CITES) */}
+      {page.access.level !== "GOUVERNORATS" && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -266,6 +309,7 @@ export function DemographieTerrain() {
             <CardDescription>
               Une ligne par délégation : population, taux urbain/rural et parc automobile par
               catégorie{canEdit ? " — édition en ligne au clic" : " (valeurs alimentées par la Super Administration)"}.
+              {page.access.level === "CITES" && " Cliquez sur la flèche d'une délégation pour déployer ses cités (3ᵉ niveau)."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -293,6 +337,7 @@ export function DemographieTerrain() {
               </Select>
               <span className="whitespace-nowrap text-xs text-muted-foreground" aria-live="polite">
                 {visibleRows} / {page.delegations.length} délégations
+                {page.access.level === "CITES" ? ` · ${page.cites.length} cités` : ""}
               </span>
             </div>
 
@@ -341,13 +386,34 @@ export function DemographieTerrain() {
                           </div>
                         </TableCell>
                       </TableRow>
-                      {rows.map(row => (
-                        <TableRow key={row.id} className="group">
-                          <TableCell className="sticky left-0 z-10 bg-background text-xs text-muted-foreground group-hover:bg-muted/50">
-                            <span className="block truncate" title={row.gouvernorat}>{row.gouvernorat}</span>
-                          </TableCell>
-                          <TableCell className="sticky left-32 z-10 bg-background group-hover:bg-muted/50">
-                            <span className="block truncate text-sm font-medium" title={row.delegation}>{row.delegation}</span>
+                      {rows.map(row => {
+                        const rowCites = citesByDeleg.get(`${row.gouvernorat}|${row.delegation}`) ?? []
+                        const isExpanded = expanded.has(row.id)
+                        return (
+                          <Fragment key={row.id}>
+                            <TableRow className="group">
+                              <TableCell className="sticky left-0 z-10 bg-background text-xs text-muted-foreground group-hover:bg-muted/50">
+                                <span className="block truncate" title={row.gouvernorat}>{row.gouvernorat}</span>
+                              </TableCell>
+                              <TableCell className="sticky left-32 z-10 bg-background group-hover:bg-muted/50">
+                                <div className="flex items-center gap-1.5">
+                                  {page.access.level === "CITES" && rowCites.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpand(row.id)}
+                                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-emerald-700 transition-colors hover:bg-emerald-200/70 dark:text-emerald-400 dark:hover:bg-emerald-800/60"
+                                      aria-expanded={isExpanded}
+                                      aria-label={isExpanded
+                                        ? `Replier les cités de ${row.delegation}`
+                                        : `Déployer les cités de ${row.delegation} (${rowCites.length})`}
+                                    >
+                                      {isExpanded
+                                        ? <ChevronDown className="h-4 w-4" aria-hidden />
+                                        : <ChevronRight className="h-4 w-4" aria-hidden />}
+                                    </button>
+                              )}
+                              <span className="block truncate text-sm font-medium" title={row.delegation}>{row.delegation}</span>
+                            </div>
                           </TableCell>
                           {canEdit ? (
                             <>
@@ -386,8 +452,84 @@ export function DemographieTerrain() {
                               </span>
                             ) : "—"}
                           </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableRow>
+
+                            {/* Drill-down 3ᵉ niveau (T45) : cités de la délégation déployée */}
+                            {page.access.level === "CITES" && isExpanded && rowCites.length > 0 && (
+                              <TableRow className="bg-emerald-50/40 dark:bg-emerald-950/20">
+                                <TableCell colSpan={11} className="p-3">
+                                  <div className="flex items-center gap-2 pb-2">
+                                    <Building2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+                                    <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
+                                      Cités de {row.delegation}
+                                    </p>
+                                    <Badge variant="outline" className="border-emerald-300/70 bg-emerald-100/70 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+                                      {rowCites.length}
+                                    </Badge>
+                                    <span className="text-[10.5px] text-muted-foreground">
+                                      lecture seule — administrées par la Super Administration
+                                    </span>
+                                  </div>
+                                  <div
+                                    className="max-h-96 overflow-y-auto rounded-lg border bg-background"
+                                    role="region"
+                                    aria-label={`Cités de la délégation ${row.delegation}`}
+                                    tabIndex={0}
+                                  >
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-44">Cité</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24 text-right">Population</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-20 text-right" title="Taux d'urbanisation (%)">Urbain</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24 text-right" title="Voitures légères">Véh. légères</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24 text-right" title="Utilitaires & pick-up">Utilitaires</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24 text-right">Poids lourds</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24 text-right" title="Autocars & bus">Autocars</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24 text-right" title="Deux-roues motorisés">Deux-roues</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24 text-right">Total véh.</TableHead>
+                                          <TableHead className="sticky top-0 z-10 bg-background w-24">Source</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {rowCites.map(c => {
+                                          const total = ["vehiclesLight", "vehiclesUtility", "vehiclesHeavy", "vehiclesBuses", "vehiclesMotorcycles"]
+                                            .reduce((s, k) => s + ((c as unknown as Record<string, number | null>)[k] ?? 0), 0)
+                                          return (
+                                            <TableRow key={c.id}>
+                                              <TableCell className="text-sm font-medium">{c.cite}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums">{c.population !== null ? fmtInt(c.population) : "—"}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums">{c.urbanPct !== null ? fmtPct(c.urbanPct) : "—"}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums">{c.vehiclesLight !== null ? fmtInt(c.vehiclesLight) : "—"}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums">{c.vehiclesUtility !== null ? fmtInt(c.vehiclesUtility) : "—"}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums">{c.vehiclesHeavy !== null ? fmtInt(c.vehiclesHeavy) : "—"}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums">{c.vehiclesBuses !== null ? fmtInt(c.vehiclesBuses) : "—"}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums">{c.vehiclesMotorcycles !== null ? fmtInt(c.vehiclesMotorcycles) : "—"}</TableCell>
+                                              <TableCell className="text-right font-mono text-xs tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                                                {total > 0 ? fmtInt(total) : "—"}
+                                              </TableCell>
+                                              <TableCell>
+                                                <Badge
+                                                  variant="outline"
+                                                  className={c.source === "Import SA"
+                                                    ? "border-violet-300 bg-violet-50 text-[10px] text-violet-700 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                                                    : "border-emerald-300/70 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}
+                                                >
+                                                  {c.source}
+                                                </Badge>
+                                              </TableCell>
+                                            </TableRow>
+                                          )
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </Fragment>
+                        )
+                      })}
                     </Fragment>
                   ))}
                 </TableBody>

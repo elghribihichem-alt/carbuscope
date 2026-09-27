@@ -382,6 +382,7 @@ export const ar: Partial<Dict> = {
   "chrome.modeMobile": "تطبيق B2C",
   "chrome.modeAgents": "وكلاء الميدان",
   "chrome.modeBackoffice": "الإدارة الخلفية",
+  "chrome.modeShadow": "سوق الظل",
   "chrome.modeSuperadmin": "المشرف الأعلى",
   "chrome.superadminHint": "الإدارة العليا — إدارة المنصة",
   "chrome.brand": "العلامة المتصلة",
@@ -415,7 +416,7 @@ export const ar: Partial<Dict> = {
   "chrome.langAutoHint": "لغة الجهاز",
   // ---------- Pied de page ----------
   "footer.brand": "CarbuScope — « واز الوقود »",
-  "footer.stations": "1814 محطة · 24 ولاية",
+  "footer.stations": "2985 محطة · 24 ولاية",
   "footer.brands": "6 علامات متابعة",
   "footer.data": "بيانات تجريبية لأغراض التوضيح",
   "footer.copyright": "© 2025 CarbuScope · منصة B2B/B2C/B2B2B",

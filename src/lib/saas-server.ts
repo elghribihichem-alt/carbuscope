@@ -4,7 +4,7 @@
 import { db } from "@/lib/db"
 import type { Prisma } from "@prisma/client"
 import {
-  type AiTaskDTO, type DemographicAccessDTO, type DemographicDelegationDTO, type DemographicGouvernoratDTO, type SaasAuditDTO, type SaasContractDTO, type SaasInvoiceDTO, type SaasPlanDTO, type SaasUserDTO,
+  type AiTaskDTO, type DemographicAccessDTO, type DemographicCiteDTO, type DemographicDelegationDTO, type DemographicGouvernoratDTO, type SaasAuditDTO, type SaasContractDTO, type SaasInvoiceDTO, type SaasPlanDTO, type SaasUserDTO,
 } from "@/lib/saas"
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts"
 
@@ -177,7 +177,7 @@ export function serializeDemographicAccess(
     email: user.email,
     name: user.name,
     brandSlug: user.brandSlug,
-    level: a.level === "DELEGATIONS" ? "DELEGATIONS" : "GOUVERNORATS",
+    level: a.level === "CITES" ? "CITES" : a.level === "DELEGATIONS" ? "DELEGATIONS" : "GOUVERNORATS",
     canEdit: a.canEdit,
     updatedAt: a.updatedAt.toISOString(),
     updatedBy: a.updatedBy,
@@ -185,6 +185,28 @@ export function serializeDemographicAccess(
 }
 
 type DemographicDelegationFull = Prisma.DemographicDelegationGetPayload<Record<string, never>>
+
+type DemographicCiteFull = Prisma.DemographicCiteGetPayload<Record<string, never>>
+
+/** Sérialise une ligne de cité du tableau démographique (T45 — 3ᵉ niveau). */
+export function serializeDemographicCite(c: DemographicCiteFull): DemographicCiteDTO {
+  return {
+    id: c.id,
+    gouvernorat: c.gouvernorat,
+    delegation: c.delegation,
+    cite: c.cite,
+    population: c.population,
+    urbanPct: c.urbanPct,
+    vehiclesLight: c.vehiclesLight,
+    vehiclesUtility: c.vehiclesUtility,
+    vehiclesHeavy: c.vehiclesHeavy,
+    vehiclesBuses: c.vehiclesBuses,
+    vehiclesMotorcycles: c.vehiclesMotorcycles,
+    source: c.source,
+    updatedAt: c.updatedAt?.toISOString() ?? null,
+    updatedBy: c.updatedBy,
+  }
+}
 
 /** Sérialise une ligne de délégation du tableau démographique. */
 export function serializeDemographicDelegation(d: DemographicDelegationFull): DemographicDelegationDTO {

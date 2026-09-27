@@ -37,7 +37,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     role: "ADMIN",
     mode: "observatoire",
     color: "#059669",
-    bio: "Pilotage du réseau Agil : 228 stations, prix, marges et conformité.",
+    bio: "Pilotage du réseau Agil : 1 230 stations, prix, marges et conformité.",
   },
   {
     id: "karim",

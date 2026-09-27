@@ -1,0 +1,716 @@
+     1→'use client'
+     2→
+     3→// CarbuScope — Module A.4 « Mes stations » : gestion du parc propre de l'enseigne.
+     4→// Sous-onglets (toutes / actives / rénovation / projet / sous tension), barre d'actions
+     5→// (recherche, gouvernorat, tri, ajouter, exports CSV/Excel/PDF), tableau responsive
+     6→// avec en-tête sticky + pagination, fiche complète et éditeur en Dialog.
+     7→
+     8→import { useCallback, useEffect, useMemo, useState } from "react"
+     9→import {
+    10→  ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, FileDown,
+    11→  FileSpreadsheet, GitCompareArrows, MapPin, Pencil, Plus, Printer, Search, SearchX, X,
+    12→} from "lucide-react"
+    13→import { toast } from "sonner"
+    14→import { useAppStore } from "@/store/app-store"
+    15→import type { StationDTO, StationStatus } from "@/lib/types"
+    16→import { SERVICE_LABELS, STATUS_LABELS } from "@/lib/types"
+    17→import { num } from "@/lib/chart"
+    18→import { cn } from "@/lib/utils"
+    19→import { Badge } from "@/components/ui/badge"
+    20→import { Button } from "@/components/ui/button"
+    21→import { Card, CardContent } from "@/components/ui/card"
+    22→import { Checkbox } from "@/components/ui/checkbox"
+    23→import { Input } from "@/components/ui/input"
+    24→import { ScrollArea } from "@/components/ui/scroll-area"
+    25→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+    26→import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+    27→import { StatusBadge } from "@/components/shell/badges"
+    28→import { ErrorState, TabSkeleton } from "@/components/shell/loading"
+    29→import { ServiceChips } from "./service-chip"
+    30→import { StationCompareDialog, MAX_COMPARE_STATIONS } from "./station-compare-dialog"
+    31→import { StationDetailDialog } from "./station-detail-dialog"
+    32→import { StationFormDialog } from "./station-form-dialog"
+    33→import { buildStationsCsv, downloadText, formatDateFr, normalizeFr, todayStamp } from "./station-utils"
+    34→
+    35→const PAGE_SIZE = 20
+    36→const TENSION_THRESHOLD = 1100 // trafic captif (véh./j) sous lequel une station active est « sous tension »
+    37→const MAX_COMPARE = MAX_COMPARE_STATIONS // nombre maximal de stations comparables côte à côte
+    38→
+    39→type SubTabKey = "all" | "ACTIVE" | "RENOVATION" | "PROJECT" | "TENSION"
+    40→type SortKey =
+    41→  | "traffic-desc" | "traffic-asc"
+    42→  | "name-asc" | "name-desc"
+    43→  | "gov-asc" | "gov-desc"
+    44→  | "verified-desc" | "verified-asc"
+    45→  | "rating-desc" | "rating-asc"
+    46→  | "code-asc" | "code-desc"
+    47→  | "status-asc" | "status-desc"
+    48→
+    49→const SUB_TABS: { key: SubTabKey; label: string }[] = [
+    50→  { key: "all", label: "Toutes" },
+    51→  { key: "ACTIVE", label: "Actives" },
+    52→  { key: "RENOVATION", label: "En rénovation" },
+    53→  { key: "PROJECT", label: "En projet" },
+    54→  { key: "TENSION", label: "Sous tension" },
+    55→]
+    56→
+    57→const SORT_SELECT_OPTIONS: { value: SortKey; label: string }[] = [
+    58→  { value: "traffic-desc", label: "Trafic décroissant" },
+    59→  { value: "traffic-asc", label: "Trafic croissant" },
+    60→  { value: "name-asc", label: "Nom (A → Z)" },
+    61→  { value: "name-desc", label: "Nom (Z → A)" },
+    62→  { value: "verified-desc", label: "Vérification (récente)" },
+    63→  { value: "verified-asc", label: "Vérification (ancienne)" },
+    64→  { value: "rating-desc", label: "Note (décroissante)" },
+    65→  { value: "rating-asc", label: "Note (croissante)" },
+    66→  { value: "code-asc", label: "Code (A → Z)" },
+    67→]
+    68→
+    69→const STATUS_ORDER: Record<string, number> = { ACTIVE: 0, RENOVATION: 1, PROJECT: 2, CLOSED: 3 }
+    70→
+    71→const PRINT_CSS = `
+    72→@media print {
+    73→  header, footer { display: none !important; }
+    74→  #contenu > *:not(.cs-print-root) { display: none !important; }
+    75→  .cs-print-root > .cs-screen { display: none !important; }
+    76→  .cs-print-root > .cs-print { display: block !important; }
+    77→}
+    78→@page { size: A4 landscape; margin: 10mm; }
+    79→`
+    80→
+    81→function sortField(key: SortKey): string {
+    82→  return key.slice(0, key.lastIndexOf("-"))
+    83→}
+    84→
+    85→function toggleSort(cur: SortKey, target: SortKey): SortKey {
+    86→  if (sortField(cur) !== sortField(target)) return target
+    87→  const field = sortField(cur)
+    88→  return cur.endsWith("-asc") ? (`${field}-desc` as SortKey) : (`${field}-asc` as SortKey)
+    89→}
+    90→
+    91→function compareStations(a: StationDTO, b: StationDTO, sort: SortKey): number {
+    92→  const field = sortField(sort)
+    93→  const mul = sort.endsWith("-asc") ? 1 : -1
+    94→  let r = 0
+    95→  if (field === "code") r = a.code.localeCompare(b.code, "fr")
+    96→  else if (field === "name") r = a.name.localeCompare(b.name, "fr")
+    97→  else if (field === "gov") r = a.gouvernorat.localeCompare(b.gouvernorat, "fr") || a.delegation.localeCompare(b.delegation, "fr")
+    98→  else if (field === "traffic") r = a.traffic - b.traffic
+    99→  else if (field === "verified") r = new Date(a.lastVerified).getTime() - new Date(b.lastVerified).getTime()
+   100→  else if (field === "rating") r = a.rating - b.rating
+   101→  else if (field === "status") r = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
+   102→  if (r === 0) return a.code.localeCompare(b.code, "fr")
+   103→  return r * mul
+   104→}
+   105→
+   106→function SortTh({
+   107→  label, target, sort, onSort, className,
+   108→}: {
+   109→  label: string
+   110→  target: SortKey
+   111→  sort: SortKey
+   112→  onSort: (k: SortKey) => void
+   113→  className?: string
+   114→}) {
+   115→  const isActive = sortField(sort) === sortField(target)
+   116→  const asc = sort.endsWith("-asc")
+   117→  return (
+   118→    <th scope="col" className={cn("h-10 whitespace-nowrap px-2 text-left align-middle font-medium", className)}>
+   119→      <button
+   120→        type="button"
+   121→        onClick={() => onSort(target)}
+   122→        className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+   123→        aria-label={`Trier par ${label}${isActive ? (asc ? " (croissant)" : " (décroissant)") : ""}`}
+   124→      >
+   125→        {label}
+   126→        {isActive
+   127→          ? (asc ? <ArrowUp className="h-3 w-3" aria-hidden /> : <ArrowDown className="h-3 w-3" aria-hidden />)
+   128→          : <ArrowUpDown className="h-3 w-3 opacity-40" aria-hidden />}
+   129→      </button>
+   130→    </th>
+   131→  )
+   132→}
+   133→
+   134→function PlainTh({ label, className }: { label: string; className?: string }) {
+   135→  return (
+   136→    <th scope="col" className={cn("h-10 whitespace-nowrap px-2 text-left align-middle text-[11px] font-medium uppercase tracking-wide text-muted-foreground", className)}>
+   137→      {label}
+   138→    </th>
+   139→  )
+   140→}
+   141→
+   142→function TrafficCell({ station, maxTraffic }: { station: StationDTO; maxTraffic: number }) {
+   143→  const pct = maxTraffic > 0 ? Math.min(100, Math.round((station.traffic / maxTraffic) * 100)) : 0
+   144→  return (
+   145→    <div className="flex items-center gap-2">
+   146→      <span className="w-14 text-right font-medium tabular-nums">{num(station.traffic)}</span>
+   147→      <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+   148→        <div
+   149→          className={cn("h-full rounded-full", station.status === "ACTIVE" && station.traffic < TENSION_THRESHOLD ? "bg-amber-500" : "bg-primary")}
+   150→          style={{ width: `${pct}%` }}
+   151→        />
+   152→      </div>
+   153→    </div>
+   154→  )
+   155→}
+   156→
+   157→export function StationsTab() {
+   158→  const brandSlug = useAppStore((s) => s.brandSlug)
+   159→  const setTab = useAppStore((s) => s.setTab)
+   160→  const setFocusStation = useAppStore((s) => s.setFocusStation)
+   161→
+   162→  const [data, setData] = useState<{ brand: string; stations: StationDTO[] } | null>(null)
+   163→  const [error, setError] = useState<string | null>(null)
+   164→  const [reloadKey, setReloadKey] = useState(0)
+   165→
+   166→  const [subTab, setSubTab] = useState<SubTabKey>("all")
+   167→  const [search, setSearch] = useState("")
+   168→  const [govFilter, setGovFilter] = useState("all")
+   169→  const [sort, setSort] = useState<SortKey>("traffic-desc")
+   170→  const [page, setPage] = useState(0)
+   171→
+   172→  const [detailId, setDetailId] = useState<string | null>(null)
+   173→  const [formOpen, setFormOpen] = useState(false)
+   174→  const [formStation, setFormStation] = useState<StationDTO | null>(null)
+   175→
+   176→  // ---- Comparateur de stations (2 à 3) ----
+   177→  const [compareIds, setCompareIds] = useState<string[]>([])
+   178→  const [compareOpen, setCompareOpen] = useState(false)
+   179→
+   180→  // ---- Chargement du parc de l'enseigne connectée ----
+   181→  useEffect(() => {
+   182→    const ctrl = new AbortController()
+   183→    fetch(`/api/stations?brand=${encodeURIComponent(brandSlug)}&limit=400&sort=traffic`, { signal: ctrl.signal })
+   184→      .then((res) => {
+   185→        if (!res.ok) throw new Error(`Erreur ${res.status}`)
+   186→        return res.json() as Promise<{ stations: StationDTO[] }>
+   187→      })
+   188→      .then((json) => {
+   189→        setData({ brand: brandSlug, stations: json.stations ?? [] })
+   190→        setError(null)
+   191→      })
+   192→      .catch((e: unknown) => {
+   193→        if (e instanceof Error && e.name === "AbortError") return
+   194→        setError(e instanceof Error ? e.message : "Erreur inconnue")
+   195→      })
+   196→    return () => ctrl.abort()
+   197→  }, [brandSlug, reloadKey])
+   198→
+   199→  // Données affichables : seulement si elles correspondent à l'enseigne courante (sinon → squelette)
+   200→  const stations = data !== null && data.brand === brandSlug ? data.stations : null
+   201→  const brandName = stations?.[0]?.brandName ?? brandSlug
+   202→
+   203→  // ---- Sélecteurs d'action ----
+   204→  const locate = useCallback((code: string) => {
+   205→    setFocusStation(code)
+   206→    setTab("map")
+   207→  }, [setFocusStation, setTab])
+   208→
+   209→  const openCreate = useCallback(() => {
+   210→    setFormStation(null)
+   211→    setFormOpen(true)
+   212→  }, [])
+   213→
+   214→  const openEdit = useCallback((s: StationDTO) => {
+   215→    setFormStation(s)
+   216→    setFormOpen(true)
+   217→  }, [])
+   218→
+   219→  const handleSaved = useCallback((station: StationDTO, created: boolean) => {
+   220→    // Fusion immédiate dans la liste affichée, puis resynchronisation en arrière-plan.
+   221→    setData((prev) => {
+   222→      if (prev === null || prev.brand !== brandSlug) return prev
+   223→      const next = created
+   224→        ? [station, ...prev.stations]
+   225→        : prev.stations.map((s) => (s.id === station.id ? station : s))
+   226→      return { ...prev, stations: next }
+   227→    })
+   228→    setReloadKey((k) => k + 1)
+   229→  }, [brandSlug])
+   230→
+   231→  // ---- Valeurs dérivées ----
+   232→  const govOptions = useMemo(() => {
+   233→    if (stations === null) return []
+   234→    return Array.from(new Set(stations.map((s) => s.gouvernorat))).sort((a, b) => a.localeCompare(b, "fr"))
+   235→  }, [stations])
+   236→
+   237→  const counts = useMemo(() => {
+   238→    const base: Record<SubTabKey, number> = { all: 0, ACTIVE: 0, RENOVATION: 0, PROJECT: 0, TENSION: 0 }
+   239→    let closed = 0
+   240→    for (const s of stations ?? []) {
+   241→      base.all += 1
+   242→      if (s.status === "ACTIVE") base.ACTIVE += 1
+   243→      else if (s.status === "RENOVATION") base.RENOVATION += 1
+   244→      else if (s.status === "PROJECT") base.PROJECT += 1
+   245→      else closed += 1
+   246→      if (s.status === "ACTIVE" && s.traffic < TENSION_THRESHOLD) base.TENSION += 1
+   247→    }
+   248→    return { ...base, CLOSED: closed }
+   249→  }, [stations])
+   250→
+   251→  const effectiveGov = govFilter === "all" || govOptions.includes(govFilter) ? govFilter : "all"
+   252→  const q = normalizeFr(search.trim())
+   253→
+   254→  const filtered = useMemo(() => {
+   255→    if (stations === null) return []
+   256→    let list = stations
+   257→    if (subTab === "TENSION") list = list.filter((s) => s.status === "ACTIVE" && s.traffic < TENSION_THRESHOLD)
+   258→    else if (subTab !== "all") list = list.filter((s) => s.status === (subTab as StationStatus))
+   259→    if (effectiveGov !== "all") list = list.filter((s) => s.gouvernorat === effectiveGov)
+   260→    if (q !== "") list = list.filter((s) => normalizeFr(`${s.name} ${s.code} ${s.gouvernorat} ${s.delegation} ${s.address}`).includes(q))
+   261→    return [...list].sort((a, b) => compareStations(a, b, sort))
+   262→  }, [stations, subTab, effectiveGov, q, sort])
+   263→
+   264→  const maxTraffic = useMemo(() => filtered.reduce((m, s) => Math.max(m, s.traffic), 1), [filtered])
+   265→
+   266→  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+   267→  const safePage = Math.min(page, pageCount - 1)
+   268→  const paged = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+   269→
+   270→  const sortValueInSelect = SORT_SELECT_OPTIONS.some((o) => o.value === sort) ? sort : ""
+   271→
+   272→  // ---- Exports ----
+   273→  const doExportCsv = useCallback(() => {
+   274→    if (filtered.length === 0) {
+   275→      toast.error("Aucune station à exporter", { description: "Ajustez les filtres avant d'exporter." })
+   276→      return
+   277→    }
+   278→    downloadText(buildStationsCsv(filtered), `carbuscope-stations-${brandSlug}-${todayStamp()}.csv`, "text/csv")
+   279→    toast.success("Export CSV généré", { description: `${filtered.length} stations exportées (séparateur « ; », UTF-8).` })
+   280→  }, [filtered, brandSlug])
+   281→
+   282→  const doExportExcel = useCallback(() => {
+   283→    if (filtered.length === 0) {
+   284→      toast.error("Aucune station à exporter", { description: "Ajustez les filtres avant d'exporter." })
+   285→      return
+   286→    }
+   287→    downloadText(buildStationsCsv(filtered), `carbuscope-stations-${brandSlug}-${todayStamp()}.xls`, "application/vnd.ms-excel")
+   288→    toast.info("Export Excel généré", {
+   289→      description: "Fichier .xls au contenu CSV (UTF-8, séparateur « ; ») — s'ouvre directement dans Excel ou LibreOffice.",
+   290→    })
+   291→  }, [filtered, brandSlug])
+   292→
+   293→  const doExportPdf = useCallback(() => {
+   294→    if (filtered.length === 0) {
+   295→      toast.error("Aucune station à imprimer", { description: "Ajustez les filtres avant d'exporter." })
+   296→      return
+   297→    }
+   298→    toast.info("Impression de la liste", { description: "Choisissez « Enregistrer au format PDF » dans la boîte d'impression." })
+   299→    window.setTimeout(() => window.print(), 500)
+   300→  }, [filtered])
+   301→
+   302→  const resetFilters = useCallback(() => {
+   303→    setSubTab("all")
+   304→    setSearch("")
+   305→    setGovFilter("all")
+   306→    setPage(0)
+   307→  }, [])
+   308→
+   309→  // ---- Comparateur : sélection de 2 à 3 stations ----
+   310→  const toggleCompare = useCallback((s: StationDTO) => {
+   311→    if (compareIds.includes(s.id)) {
+   312→      setCompareIds(compareIds.filter((x) => x !== s.id))
+   313→      return
+   314→    }
+   315→    if (compareIds.length >= MAX_COMPARE) {
+   316→      const lastId = compareIds[compareIds.length - 1]
+   317→      const lastName = stations?.find((x) => x.id === lastId)?.name ?? "une station"
+   318→      toast.info(`Maximum ${MAX_COMPARE} stations en comparaison`, {
+   319→        description: `Retirez « ${lastName} » avant d'en ajouter une autre.`,
+   320→      })
+   321→      return
+   322→    }
+   323→    setCompareIds([...compareIds, s.id])
+   324→  }, [compareIds, stations])
+   325→
+   326→  const compareSelection = useMemo(() => {
+   327→    if (stations === null) return []
+   328→    return stations.filter((s) => compareIds.includes(s.id))
+   329→  }, [stations, compareIds])
+   330→
+   331→  const onSortClick = useCallback((target: SortKey) => {
+   332→    setPage(0)
+   333→    setSort((cur) => toggleSort(cur, target))
+   334→  }, [])
+   335→
+   336→  // ---- États de chargement ----
+   337→  if (stations === null && error === null) {
+   338→    return <TabSkeleton title="Chargement des stations…" />
+   339→  }
+   340→  if (stations === null && error !== null) {
+   341→    return <ErrorState message={`Impossible de charger le parc ${brandSlug} : ${error}`} retry={() => setReloadKey((k) => k + 1)} />
+   342→  }
+   343→
+   344→  const subTabLabel = SUB_TABS.find((t) => t.key === subTab)?.label ?? "Toutes"
+   345→
+   346→  return (
+   347→    <div className="cs-print-root">
+   348→      <style>{PRINT_CSS}</style>
+   349→
+   350→      <div className="cs-screen space-y-4 p-4 md:p-6">
+   351→        {/* En-tête */}
+   352→        <div>
+   353→          <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Mes stations</h2>
+   354→          <p className="mt-0.5 text-sm text-muted-foreground">
+   355→            Parc {brandName} · {counts.all} stations
+   356→            {counts.CLOSED > 0 ? ` (dont ${counts.CLOSED} fermée${counts.CLOSED > 1 ? "s" : ""})` : ""} —
+   357→            fiches, vérification et suivi du trafic captif.
+   358→          </p>
+   359→        </div>
+   360→
+   361→        {/* Barre d'actions */}
+   362→        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+   363→          <div className="relative min-w-0 flex-1">
+   364→            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+   365→            <Input
+   366→              value={search}
+   367→              onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+   368→              placeholder="Rechercher (nom, code, ville, adresse)…"
+   369→              className="pl-9 pr-9"
+   370→              aria-label="Rechercher une station"
+   371→              inputMode="search"
+   372→            />
+   373→            {search !== "" && (
+   374→              <button
+   375→                type="button"
+   376→                onClick={() => { setSearch(""); setPage(0) }}
+   377→                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+   378→                aria-label="Effacer la recherche"
+   379→              >
+   380→                <X className="h-3.5 w-3.5" aria-hidden />
+   381→              </button>
+   382→            )}
+   383→          </div>
+   384→
+   385→          <div className="flex flex-wrap items-center gap-2">
+   386→            <Select value={effectiveGov} onValueChange={(v) => { setGovFilter(v); setPage(0) }}>
+   387→              <SelectTrigger className="h-9 w-[168px]" aria-label="Filtrer par gouvernorat">
+   388→                <SelectValue placeholder="Gouvernorat" />
+   389→              </SelectTrigger>
+   390→              <SelectContent className="max-h-72">
+   391→                <SelectItem value="all">Tous les gouvernorats</SelectItem>
+   392→                {govOptions.map((g) => (
+   393→                  <SelectItem key={g} value={g}>{g}</SelectItem>
+   394→                ))}
+   395→              </SelectContent>
+   396→            </Select>
+   397→
+   398→            <Select value={sortValueInSelect} onValueChange={(v) => { setSort(v as SortKey); setPage(0) }}>
+   399→              <SelectTrigger className="h-9 w-[200px]" aria-label="Trier la liste">
+   400→                <SelectValue placeholder="Tri personnalisé" />
+   401→              </SelectTrigger>
+   402→              <SelectContent>
+   403→                {SORT_SELECT_OPTIONS.map((o) => (
+   404→                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+   405→                ))}
+   406→              </SelectContent>
+   407→            </Select>
+   408→
+   409→            <Button size="sm" className="gap-1.5" onClick={openCreate}>
+   410→              <Plus className="h-4 w-4" aria-hidden />
+   411→              Ajouter une station
+   412→            </Button>
+   413→          </div>
+   414→
+   415→          <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
+   416→            <Button variant="outline" size="sm" className="gap-1.5" onClick={doExportCsv}>
+   417→              <FileDown className="h-4 w-4" aria-hidden />
+   418→              Exporter CSV
+   419→            </Button>
+   420→            <Button variant="outline" size="sm" className="gap-1.5" onClick={doExportExcel}>
+   421→              <FileSpreadsheet className="h-4 w-4" aria-hidden />
+   422→              Exporter Excel
+   423→            </Button>
+   424→            <Button variant="outline" size="sm" className="gap-1.5" onClick={doExportPdf}>
+   425→              <Printer className="h-4 w-4" aria-hidden />
+   426→              Exporter PDF
+   427→            </Button>
+   428→            <Button
+   429→              variant="outline" size="sm" className="gap-1.5"
+   430→              disabled={compareIds.length < 2}
+   431→              onClick={() => setCompareOpen(true)}
+   432→              title={compareIds.length < 2 ? "Sélectionnez au moins 2 stations à comparer" : `Comparer ${compareIds.length} stations`}
+   433→            >
+   434→              <GitCompareArrows className="h-4 w-4" aria-hidden />
+   435→              Comparer {compareIds.length > 0 ? `(${compareIds.length}/${MAX_COMPARE})` : ""}
+   436→            </Button>
+   437→          </div>
+   438→        </div>
+   439→
+   440→        {/* Sous-onglets (A.4.1) */}
+   441→        <Tabs value={subTab} onValueChange={(v) => { setSubTab(v as SubTabKey); setPage(0) }}>
+   442→          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1 sm:grid-cols-5">
+   443→            {SUB_TABS.map((t) => (
+   444→              <TabsTrigger key={t.key} value={t.key} className="gap-1.5 px-2 py-1.5 text-xs sm:text-[13px]">
+   445→                <span className="truncate">{t.label}</span>
+   446→                <span className="rounded-full bg-muted px-1.5 py-px text-[10px] font-semibold tabular-nums text-muted-foreground">
+   447→                  {counts[t.key]}
+   448→                </span>
+   449→              </TabsTrigger>
+   450→            ))}
+   451→          </TabsList>
+   452→        </Tabs>
+   453→
+   454→        {/* Contenu */}
+   455→        {filtered.length === 0 ? (
+   456→          <Card>
+   457→            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+   458→              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+   459→                <SearchX className="h-6 w-6" aria-hidden />
+   460→              </div>
+   461→              <div>
+   462→                <p className="font-semibold">Aucune station ne correspond à vos filtres</p>
+   463→                <p className="mt-1 text-sm text-muted-foreground">
+   464→                  Ajustez la recherche, le gouvernorat ou le sous-onglet « {subTabLabel} ».
+   465→                </p>
+   466→              </div>
+   467→              <Button variant="outline" size="sm" onClick={resetFilters}>Réinitialiser les filtres</Button>
+   468→            </CardContent>
+   469→          </Card>
+   470→        ) : (
+   471→          <>
+   472→            {/* Tableau (desktop) */}
+   473→            <div className="hidden overflow-hidden rounded-xl border md:block">
+   474→              <ScrollArea className="max-h-[520px]">
+   475→                <table className="w-full text-sm">
+   476→                  <thead className="sticky top-0 z-10 bg-background">
+   477→                    <tr className="border-b">
+   478→                      <PlainTh label="Comparer" className="w-[64px]" />
+   479→                      <SortTh label="ID" target="code-asc" sort={sort} onSort={onSortClick} className="w-[104px]" />
+   480→                      <SortTh label="Nom" target="name-asc" sort={sort} onSort={onSortClick} />
+   481→                      <SortTh label="Gouvernorat" target="gov-asc" sort={sort} onSort={onSortClick} className="w-[150px]" />
+   482→                      <PlainTh label="Services" className="w-[168px]" />
+   483→                      <SortTh label="Trafic captif" target="traffic-desc" sort={sort} onSort={onSortClick} className="w-[150px]" />
+   484→                      <SortTh label="Statut" target="status-asc" sort={sort} onSort={onSortClick} className="w-[118px]" />
+   485→                      <SortTh label="Vérification" target="verified-desc" sort={sort} onSort={onSortClick} className="w-[150px]" />
+   486→                      <PlainTh label="Actions" className="w-[122px] text-right" />
+   487→                    </tr>
+   488→                  </thead>
+   489→                  <tbody>
+   490→                    {paged.map((s) => (
+   491→                      <tr key={s.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
+   492→                        <td className="px-2 py-2 align-middle">
+   493→                          <Checkbox
+   494→                            checked={compareIds.includes(s.id)}
+   495→                            onCheckedChange={() => toggleCompare(s)}
+   496→                            aria-label={`Comparer ${s.name}`}
+   497→                            title="Ajouter au comparateur"
+   498→                          />
+   499→                        </td>
+   500→                        <td className="px-2 py-2 align-middle font-mono text-xs text-muted-foreground">{s.code}</td>
+   501→                        <td className="max-w-[300px] px-2 py-2 align-middle">
+   502→                          <div className="flex items-center gap-2">
+   503→                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.brandColor }} aria-hidden />
+   504→                            <button
+   505→                              type="button"
+   506→                              onClick={() => setDetailId(s.id)}
+   507→                              className="max-w-[190px] truncate text-left font-medium hover:underline focus-visible:underline"
+   508→                              title={`Voir la fiche — ${s.name}`}
+   509→                            >
+   510→                              {s.name}
+   511→                            </button>
+   512→                            <StatusBadge status={s.status} />
+   513→                          </div>
+   514→                        </td>
+   515→                        <td className="px-2 py-2 align-middle">
+   516→                          <p className="text-[13px] font-medium leading-tight">{s.gouvernorat}</p>
+   517→                          <p className="text-[11px] leading-tight text-muted-foreground">{s.delegation}</p>
+   518→                        </td>
+   519→                        <td className="px-2 py-2 align-middle">
+   520→                          <ServiceChips services={s.services} max={4} />
+   521→                        </td>
+   522→                        <td className="px-2 py-2 align-middle">
+   523→                          <TrafficCell station={s} maxTraffic={maxTraffic} />
+   524→                        </td>
+   525→                        <td className="px-2 py-2 align-middle">
+   526→                          <StatusBadge status={s.status} />
+   527→                        </td>
+   528→                        <td className="px-2 py-2 align-middle">
+   529→                          <p className="text-[13px] leading-tight">{formatDateFr(s.lastVerified)}</p>
+   530→                          <p className="max-w-[130px] truncate text-[11px] leading-tight text-muted-foreground" title={s.verifiedBy}>
+   531→                            {s.verifiedBy || "—"}
+   532→                          </p>
+   533→                        </td>
+   534→                        <td className="px-2 py-2 align-middle">
+   535→                          <div className="flex items-center justify-end gap-0.5">
+   536→                            <Button
+   537→                              variant="ghost" size="icon" className="h-8 w-8"
+   538→                              onClick={() => setDetailId(s.id)}
+   539→                              title="Voir la fiche"
+   540→                              aria-label={`Voir la fiche de ${s.name}`}
+   541→                            >
+   542→                              <Eye className="h-4 w-4" aria-hidden />
+   543→                            </Button>
+   544→                            <Button
+   545→                              variant="ghost" size="icon" className="h-8 w-8"
+   546→                              onClick={() => openEdit(s)}
+   547→                              title="Modifier la fiche"
+   548→                              aria-label={`Modifier ${s.name}`}
+   549→                            >
+   550→                              <Pencil className="h-4 w-4" aria-hidden />
+   551→                            </Button>
+   552→                            <Button
+   553→                              variant="ghost" size="icon" className="h-8 w-8"
+   554→                              onClick={() => locate(s.code)}
+   555→                              title="Voir sur la carte"
+   556→                              aria-label={`Voir ${s.name} sur la carte`}
+   557→                            >
+   558→                              <MapPin className="h-4 w-4" aria-hidden />
+   559→                            </Button>
+   560→                          </div>
+   561→                        </td>
+   562→                      </tr>
+   563→                    ))}
+   564→                  </tbody>
+   565→                </table>
+   566→              </ScrollArea>
+   567→            </div>
+   568→
+   569→            {/* Cartes empilées (mobile) */}
+   570→            <div className="space-y-3 md:hidden">
+   571→              {paged.map((s) => (
+   572→                <Card key={s.id} className="p-3">
+   573→                  <div className="flex items-start justify-between gap-2">
+   574→                    <div className="flex min-w-0 items-center gap-2">
+   575→                      <Checkbox
+   576→                        checked={compareIds.includes(s.id)}
+   577→                        onCheckedChange={() => toggleCompare(s)}
+   578→                        aria-label={`Comparer ${s.name}`}
+   579→                        className="mt-0.5"
+   580→                      />
+   581→                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.brandColor }} aria-hidden />
+   582→                      <button
+   583→                        type="button"
+   584→                        onClick={() => setDetailId(s.id)}
+   585→                        className="min-w-0 truncate text-left font-semibold hover:underline"
+   586→                        title={`Voir la fiche — ${s.name}`}
+   587→                      >
+   588→                        {s.name}
+   589→                      </button>
+   590→                    </div>
+   591→                    <StatusBadge status={s.status} />
+   592→                  </div>
+   593→                  <p className="mt-1.5 text-xs text-muted-foreground">
+   594→                    <span className="font-mono">{s.code}</span> · {s.gouvernorat} — {s.delegation}
+   595→                  </p>
+   596→                  <div className="mt-2">
+   597→                    <ServiceChips services={s.services} max={4} />
+   598→                  </div>
+   599→                  <div className="mt-2.5 flex items-center justify-between gap-3">
+   600→                    <div className="flex items-center gap-2">
+   601→                      <span className="text-sm font-semibold tabular-nums">{num(s.traffic)}</span>
+   602→                      <span className="text-[11px] text-muted-foreground">véh./j</span>
+   603→                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+   604→                        <div
+   605→                          className={cn("h-full rounded-full", s.status === "ACTIVE" && s.traffic < TENSION_THRESHOLD ? "bg-amber-500" : "bg-primary")}
+   606→                          style={{ width: `${maxTraffic > 0 ? Math.min(100, Math.round((s.traffic / maxTraffic) * 100)) : 0}%` }}
+   607→                        />
+   608→                      </div>
+   609→                    </div>
+   610→                    <p className="text-[11px] text-muted-foreground">Vérif. {formatDateFr(s.lastVerified)}</p>
+   611→                  </div>
+   612→                  <div className="mt-3 grid grid-cols-3 gap-2">
+   613→                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => setDetailId(s.id)}>
+   614→                      <Eye className="h-3.5 w-3.5" aria-hidden />Fiche
+   615→                    </Button>
+   616→                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => openEdit(s)}>
+   617→                      <Pencil className="h-3.5 w-3.5" aria-hidden />Modifier
+   618→                    </Button>
+   619→                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => locate(s.code)}>
+   620→                      <MapPin className="h-3.5 w-3.5" aria-hidden />Carte
+   621→                    </Button>
+   622→                  </div>
+   623→                </Card>
+   624→              ))}
+   625→            </div>
+   626→
+   627→            {/* Pagination */}
+   628→            <div className="flex flex-wrap items-center justify-between gap-2">
+   629→              <p className="text-xs text-muted-foreground">
+   630→                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} stations
+   631→                · page {safePage + 1} / {pageCount}
+   632→              </p>
+   633→              <div className="flex items-center gap-1.5">
+   634→                <Button
+   635→                  variant="outline" size="sm" className="gap-1"
+   636→                  disabled={safePage === 0}
+   637→                  onClick={() => setPage(safePage - 1)}
+   638→                >
+   639→                  <ChevronLeft className="h-4 w-4" aria-hidden />
+   640→                  Précédent
+   641→                </Button>
+   642→                <Button
+   643→                  variant="outline" size="sm" className="gap-1"
+   644→                  disabled={safePage >= pageCount - 1}
+   645→                  onClick={() => setPage(safePage + 1)}
+   646→                >
+   647→                  Suivant
+   648→                  <ChevronRight className="h-4 w-4" aria-hidden />
+   649→                </Button>
+   650→              </div>
+   651→            </div>
+   652→          </>
+   653→        )}
+   654→      </div>
+   655→
+   656→      {/* Vue imprimable — « Exporter PDF » passe par la boîte d'impression du navigateur */}
+   657→      <div className="cs-print hidden p-6 text-slate-900">
+   658→        <h1 className="text-xl font-bold">CarbuScope — Mes stations · {brandName}</h1>
+   659→        <p className="mt-1 text-xs text-slate-600">
+   660→          {filtered.length} station{filtered.length > 1 ? "s" : ""} ({subTabLabel.toLowerCase()})
+   661→          {effectiveGov !== "all" ? ` · gouvernorat : ${effectiveGov}` : ""}
+   662→          {q !== "" ? ` · recherche « ${search.trim()} »` : ""}
+   663→          {" "}— généré le {formatDateFr(new Date().toISOString())}
+   664→        </p>
+   665→        <table className="mt-4 w-full border-collapse text-[11px]">
+   666→          <thead>
+   667→            <tr className="border-b-2 border-slate-400 text-left">
+   668→              {["Code", "Nom", "Gouvernorat", "Trafic", "Statut", "Services", "Vérification"].map((h) => (
+   669→                <th key={h} scope="col" className="px-2 py-1.5 font-semibold">{h}</th>
+   670→              ))}
+   671→            </tr>
+   672→          </thead>
+   673→          <tbody>
+   674→            {filtered.map((s) => (
+   675→              <tr key={s.id} className="border-b border-slate-200 align-top">
+   676→                <td className="px-2 py-1 font-mono">{s.code}</td>
+   677→                <td className="px-2 py-1 font-medium">{s.name}</td>
+   678→                <td className="px-2 py-1">{s.gouvernorat} — {s.delegation}</td>
+   679→                <td className="px-2 py-1 tabular-nums">{num(s.traffic)}</td>
+   680→                <td className="px-2 py-1">{STATUS_LABELS[s.status] ?? s.status}</td>
+   681→                <td className="px-2 py-1">{s.services.map((x) => SERVICE_LABELS[x] ?? x).join(", ") || "—"}</td>
+   682→                <td className="px-2 py-1">{formatDateFr(s.lastVerified)}</td>
+   683→              </tr>
+   684→            ))}
+   685→          </tbody>
+   686→        </table>
+   687→        <p className="mt-3 text-[10px] text-slate-500">
+   688→          Source : données internes CarbuScope — document généré depuis l&apos;onglet « Mes stations ».
+   689→        </p>
+   690→      </div>
+   691→
+   692→      <StationCompareDialog
+   693→        open={compareOpen}
+   694→        stations={compareSelection}
+   695→        onClose={() => setCompareOpen(false)}
+   696→        onOpenDetail={(id) => { setCompareOpen(false); setDetailId(id) }}
+   697→      />
+   698→      <StationDetailDialog
+   699→        stationId={detailId}
+   700→        onClose={() => setDetailId(null)}
+   701→        onEdit={(s) => { setDetailId(null); openEdit(s) }}
+   702→        onLocate={(code) => { setDetailId(null); locate(code) }}
+   703→        onCompare={toggleCompare}
+   704→        isStationPinned={(s) => compareIds.includes(s.id)}
+   705→      />
+   706→      <StationFormDialog
+   707→        open={formOpen}
+   708→        station={formStation}
+   709→        brandSlug={brandSlug}
+   710→        onClose={() => setFormOpen(false)}
+   711→        onSaved={handleSaved}
+   712→      />
+   713→    </div>
+   714→  )
+   715→}
+   716→

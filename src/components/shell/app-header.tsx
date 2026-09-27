@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Bell, Building2, LineChart, Smartphone, ShieldCheck, Crown, ClipboardCheck } from "lucide-react"
+import { Bell, Building2, LineChart, Smartphone, ShieldCheck, Crown, ClipboardCheck, Ghost } from "lucide-react"
 import { ThemeToggle } from "@/components/app/theme-toggle"
 import { LangToggle } from "@/components/app/lang-toggle"
 import { UserMenu } from "@/components/auth/user-menu"
@@ -14,12 +14,13 @@ import { useAppStore, type Mode } from "@/store/app-store"
 import type { BrandDTO, AlertDTO } from "@/lib/types"
 import { CarbuscopeLogo } from "./carbuscope-logo"
 
-const MODES: { value: Mode; labelKey: "chrome.modeObservatoire" | "chrome.modePortail" | "chrome.modeMobile" | "chrome.modeAgents" | "chrome.modeBackoffice" | "chrome.modeSuperadmin"; icon: React.ComponentType<{ className?: string }>; superOnly?: boolean }[] = [
+const MODES: { value: Mode; labelKey: "chrome.modeObservatoire" | "chrome.modePortail" | "chrome.modeMobile" | "chrome.modeAgents" | "chrome.modeBackoffice" | "chrome.modeSuperadmin" | "chrome.modeShadow"; icon: React.ComponentType<{ className?: string }>; superOnly?: boolean }[] = [
   { value: "observatoire", labelKey: "chrome.modeObservatoire", icon: LineChart },
   { value: "portail", labelKey: "chrome.modePortail", icon: Building2 },
   { value: "mobile", labelKey: "chrome.modeMobile", icon: Smartphone },
   { value: "agents", labelKey: "chrome.modeAgents", icon: ClipboardCheck },
   { value: "backoffice", labelKey: "chrome.modeBackoffice", icon: ShieldCheck },
+  { value: "shadow", labelKey: "chrome.modeShadow", icon: Ghost },
   { value: "superadmin", labelKey: "chrome.modeSuperadmin", icon: Crown, superOnly: true },
 ]
 

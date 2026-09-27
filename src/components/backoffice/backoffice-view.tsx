@@ -92,7 +92,7 @@ export function BackofficeView() {
               <MapPin className="h-3 w-3" aria-hidden /> 24 gouvernorats
             </Badge>
             <Badge variant="outline" className="gap-1">
-              <ShieldAlert className="h-3 w-3" aria-hidden /> 1 814 fiches stations
+              <ShieldAlert className="h-3 w-3" aria-hidden /> 2 985 fiches stations
             </Badge>
           </div>
         </CardContent>

@@ -1,6 +1,7 @@
 /**
  * CarbuScope — Seed de la base « Waze du Carburant »
- * Données réalistes Tunisie : 1 814 stations, 24 gouvernorats, 6 enseignes.
+ * Données réalistes Tunisie : 2 985 stations, 24 gouvernorats, 6 enseignes
+ * (Agil 1 230 · Shell 170 · Ola Energy 180 · TotalEnergies 160 · Staroil 120 · Indépendants 1 125).
  * Exécution : bun prisma/seed.ts
  */
 import { PrismaClient } from '@prisma/client'
@@ -19,44 +20,49 @@ const pick = <T,>(arr: T[]): T => arr[Math.floor(rnd() * arr.length)]
 const range = (min: number, max: number) => min + rnd() * (max - min)
 const iRange = (min: number, max: number) => Math.floor(range(min, max + 1))
 const r1 = (v: number) => Math.round(v * 10) / 10
+// Précision géographique réelle (≈ 1,1 m) — T44 : les analyses de rayon du
+// module Shadow Market (cercles 500 m / 1 km / 2 km, cannibalisation) exigent
+// des coordonnées non quantifiées ; l'ancien r1 (1 décimale ≈ 11 km) plaquait
+// plusieurs stations sur le même point et faussait les distances.
+const r5 = (v: number) => Math.round(v * 100000) / 100000
 
 // ---------- Gouvernorats : [nom, nbStations, population, tauxMotorisation, âgeParc, délégations, [ancres: nom, lng, lat, poids]] ----------
 type Anchor = [string, number, number, number]
 type Gov = { name: string; count: number; pop: number; motor: number; age: number; deleg: number; anchors: Anchor[] }
 
 const GOVS: Gov[] = [
-  { name: "Tunis", count: 283, pop: 1119000, motor: 0.52, age: 9.1, deleg: 21, anchors: [["Tunis Centre", 10.178, 36.798, 4], ["La Marsa", 10.323, 36.878, 2], ["Le Bardo", 10.137, 36.743, 2], ["El Menzah", 10.17, 36.83, 2], ["La Goulette", 10.30, 36.75, 1.5], ["El Kabaria", 10.16, 36.72, 2], ["El Ouardia", 10.14, 36.77, 1], ["Sidi Houssine", 10.12, 36.80, 1]] },
-  { name: "Ariana", count: 127, pop: 576000, motor: 0.48, age: 9.3, deleg: 7, anchors: [["Ariana", 10.19, 36.86, 3], ["Soukra", 10.28, 36.84, 2], ["Raoued", 10.31, 36.91, 1.5], ["Ettadhamen", 10.13, 36.83, 2], ["Kalaat el-Andalous", 10.14, 36.93, 1]] },
-  { name: "Ben Arous", count: 120, pop: 640000, motor: 0.47, age: 9.4, deleg: 12, anchors: [["Ben Arous", 10.23, 36.75, 3], ["Mégrine", 10.24, 36.73, 1.5], ["El Mourouj", 10.22, 36.71, 2], ["Hammam Lif", 10.32, 36.72, 1.5], ["Radès", 10.29, 36.77, 1.5], ["Mornag", 10.30, 36.64, 1.5]] },
-  { name: "Nabeul", count: 155, pop: 826000, motor: 0.42, age: 10.1, deleg: 16, anchors: [["Nabeul", 10.74, 36.45, 3], ["Hammamet", 10.61, 36.40, 2.5], ["Korba", 10.86, 36.57, 2], ["Menzel Temime", 10.97, 36.62, 2], ["Soliman", 10.48, 36.68, 1.5], ["Beni Khiar", 10.79, 36.51, 1], ["El Haouaria", 11.05, 37.03, 0.8], ["Takelsa", 10.79, 36.61, 1]] },
-  { name: "Sfax", count: 197, pop: 955000, motor: 0.41, age: 10.4, deleg: 16, anchors: [["Sfax Centre", 10.76, 34.74, 4], ["Sakiet Ezzit", 10.90, 34.82, 2], ["Sidi Mansour", 10.70, 34.80, 1.5], ["Mahres", 10.53, 34.52, 1.5], ["Skhira", 10.38, 34.35, 1], ["Agareb", 10.72, 34.65, 1.5], ["Kerkennah", 11.07, 34.74, 0.4]] },
-  { name: "Sousse", count: 134, pop: 700000, motor: 0.43, age: 9.8, deleg: 16, anchors: [["Sousse", 10.63, 35.83, 4], ["Akouda", 10.63, 35.90, 1.5], ["Msaken", 10.59, 35.73, 2], ["Hammam Sousse", 10.62, 35.88, 2], ["Kalâa Kebira", 10.68, 35.87, 1.5], ["Enfidha", 10.80, 36.13, 1.2], ["Bouficha", 10.73, 36.06, 1]] },
-  { name: "Monastir", count: 77, pop: 425000, motor: 0.44, age: 9.6, deleg: 31, anchors: [["Monastir", 10.83, 35.78, 3], ["Sahline", 10.73, 35.77, 1.5], ["Moknine", 10.82, 35.63, 2], ["Jemmal", 10.75, 35.62, 1.5], ["Ksar Hellal", 10.77, 35.64, 1.5], ["Lamta", 10.88, 35.67, 1], ["Bembla", 10.81, 35.70, 1]] },
-  { name: "Mahdia", count: 56, pop: 412000, motor: 0.36, age: 10.6, deleg: 11, anchors: [["Mahdia", 11.06, 35.50, 3], ["Ksour Essef", 10.97, 35.42, 1.5], ["El Jem", 10.55, 35.30, 2], ["Chebba", 11.08, 35.24, 1], ["Sidi Alouane", 10.89, 35.37, 1], ["Ouled Chamekh", 10.72, 35.30, 1]] },
-  { name: "Bizerte", count: 91, pop: 385000, motor: 0.37, age: 10.8, deleg: 14, anchors: [["Bizerte", 9.87, 37.27, 3], ["Menzel Bourguiba", 9.78, 37.16, 2], ["Mateur", 9.64, 37.07, 2], ["Ras Jbel", 10.02, 37.13, 1.5], ["Ghar El Melh", 10.19, 37.16, 0.8], ["Sejnane", 9.48, 37.20, 1], ["Tinja", 9.87, 37.12, 1]] },
-  { name: "Kairouan", count: 70, pop: 400000, motor: 0.29, age: 11.2, deleg: 11, anchors: [["Kairouan", 10.09, 35.68, 4], ["Sbikha", 10.06, 35.90, 1.5], ["Bouhajla", 10.46, 35.61, 1.5], ["Haffouz", 9.90, 35.60, 1], ["Nasrallah", 10.07, 35.51, 1], ["Hajeb Layoun", 10.07, 35.81, 1]] },
-  { name: "Zaghouan", count: 21, pop: 193000, motor: 0.26, age: 11.4, deleg: 6, anchors: [["Zaghouan", 10.14, 36.40, 3], ["El Fahs", 9.91, 36.38, 2], ["Bir Mcherga", 10.13, 36.45, 1], ["Zriba", 10.24, 36.43, 1]] },
-  { name: "Béja", count: 42, pop: 285000, motor: 0.27, age: 11.3, deleg: 9, anchors: [["Béja", 9.18, 36.72, 3], ["Medjez El Bab", 9.61, 36.55, 2], ["Nefza", 9.04, 36.83, 1], ["Amdoun", 9.15, 36.79, 1], ["Téboursouk", 9.24, 36.55, 1.5], ["Zahret Medien", 9.30, 36.63, 1]] },
-  { name: "Jendouba", count: 42, pop: 265000, motor: 0.25, age: 11.6, deleg: 14, anchors: [["Jendouba", 8.78, 36.50, 3], ["Ghardimaou", 8.68, 36.46, 1], ["Tabarka", 8.75, 36.95, 1.5], ["Aïn Draham", 8.68, 36.78, 1], ["Bou Salem", 8.99, 36.62, 1.5], ["Fernana", 8.78, 36.65, 1]] },
-  { name: "Le Kef", count: 28, pop: 262000, motor: 0.23, age: 11.8, deleg: 11, anchors: [["Le Kef", 8.70, 36.17, 3], ["Tajerouine", 8.57, 36.10, 1.5], ["Kalâat Senan", 8.71, 35.88, 1], ["Dahmani", 8.92, 36.15, 1.5], ["Nebeur", 8.83, 36.34, 1]] },
-  { name: "Siliana", count: 21, pop: 234000, motor: 0.22, age: 11.9, deleg: 11, anchors: [["Siliana", 9.37, 36.08, 3], ["Bargou", 9.53, 36.10, 1], ["El Krib", 9.39, 35.95, 1], ["Makthar", 9.20, 35.86, 1], ["Gaâfour", 9.53, 36.20, 1], ["Bou Arada", 9.68, 36.33, 1.5]] },
-  { name: "Sidi Bouzid", count: 49, pop: 470000, motor: 0.24, age: 11.5, deleg: 12, anchors: [["Sidi Bouzid", 9.48, 35.38, 4], ["Meknassy", 9.55, 34.95, 1.5], ["Jelma", 9.45, 35.19, 1.5], ["Regueb", 9.36, 35.23, 1.5], ["Menzel Bouzaiene", 9.61, 34.99, 1], ["Sidi Ali Ben Aoun", 9.22, 35.27, 1]] },
-  { name: "Kasserine", count: 42, pop: 480000, motor: 0.23, age: 11.7, deleg: 13, anchors: [["Kasserine", 8.83, 35.17, 3], ["Sbeitla", 9.37, 35.24, 2], ["Feriana", 8.61, 34.98, 1.5], ["Thala", 8.68, 35.58, 1.5], ["Haidra", 8.89, 35.57, 0.8], ["Sbiba", 9.05, 35.27, 1]] },
-  { name: "Gabès", count: 63, pop: 375000, motor: 0.30, age: 10.9, deleg: 10, anchors: [["Gabès", 10.11, 33.89, 4], ["Métouia", 10.02, 33.95, 1.5], ["El Hamma", 9.94, 33.80, 1.5], ["Matmata", 10.04, 33.54, 1], ["Mareth", 10.25, 33.60, 1.5], ["Ghannouche", 10.09, 33.93, 1]] },
-  { name: "Médenine", count: 56, pop: 415000, motor: 0.31, age: 10.7, deleg: 9, anchors: [["Médenine", 10.50, 33.35, 2.5], ["Houmt Souk", 10.86, 33.88, 2.5], ["Midoun", 11.00, 33.81, 2], ["Zarzis", 11.10, 33.42, 1.5], ["Ben Guerdane", 11.53, 33.38, 1.5], ["El Hamma", 10.55, 33.44, 1]] },
-  { name: "Tataouine", count: 14, pop: 150000, motor: 0.21, age: 12.1, deleg: 7, anchors: [["Tataouine", 10.92, 32.93, 3], ["Remada", 10.45, 32.31, 1], ["Ghomrassen", 10.42, 33.10, 1.5], ["Dehibat", 10.70, 32.20, 0.6]] },
-  { name: "Gafsa", count: 56, pop: 350000, motor: 0.27, age: 11.4, deleg: 13, anchors: [["Gafsa", 8.78, 34.42, 3], ["Métlaoui", 8.57, 34.35, 1.5], ["Redeyef", 8.43, 34.38, 1.5], ["Moularès", 8.55, 34.46, 1], ["El Guettar", 9.05, 34.34, 1.5], ["Ksar", 9.31, 34.38, 1]] },
-  { name: "Tozeur", count: 14, pop: 110000, motor: 0.24, age: 11.2, deleg: 5, anchors: [["Tozeur", 8.13, 33.92, 3], ["Nefta", 7.88, 33.96, 2], ["Degache", 9.02, 34.00, 1.5], ["Tamerza", 7.97, 34.02, 0.8]] },
-  { name: "Kébili", count: 14, pop: 160000, motor: 0.25, age: 11.0, deleg: 6, anchors: [["Kébili", 8.77, 33.70, 3], ["Douz", 9.02, 33.46, 2], ["Souk El Ahad", 8.55, 33.75, 0.8], ["Faouar", 8.99, 33.32, 0.6]] },
-  { name: "Manouba", count: 42, pop: 380000, motor: 0.41, age: 9.7, deleg: 9, anchors: [["Manouba", 10.10, 36.81, 3], ["Oued Ellil", 10.01, 36.82, 1.5], ["Tebourba", 9.82, 36.92, 1.5], ["Djedeida", 10.06, 36.86, 1.5], ["El Battan", 9.82, 36.85, 1], ["Mornaguia", 10.09, 36.83, 1.5]] },
+  { name: "Tunis", count: 465, pop: 1119000, motor: 0.52, age: 9.1, deleg: 21, anchors: [["Tunis Centre", 10.178, 36.798, 4], ["La Marsa", 10.323, 36.878, 2], ["Le Bardo", 10.137, 36.743, 2], ["El Menzah", 10.17, 36.83, 2], ["La Goulette", 10.30, 36.75, 1.5], ["El Kabaria", 10.16, 36.72, 2], ["El Ouardia", 10.14, 36.77, 1], ["Sidi Houssine", 10.12, 36.80, 1]] },
+  { name: "Ariana", count: 209, pop: 576000, motor: 0.48, age: 9.3, deleg: 7, anchors: [["Ariana", 10.19, 36.86, 3], ["Soukra", 10.28, 36.84, 2], ["Raoued", 10.31, 36.91, 1.5], ["Ettadhamen", 10.13, 36.83, 2], ["Kalaat el-Andalous", 10.14, 36.93, 1]] },
+  { name: "Ben Arous", count: 197, pop: 640000, motor: 0.47, age: 9.4, deleg: 12, anchors: [["Ben Arous", 10.23, 36.75, 3], ["Mégrine", 10.24, 36.73, 1.5], ["El Mourouj", 10.22, 36.71, 2], ["Hammam Lif", 10.32, 36.72, 1.5], ["Radès", 10.29, 36.77, 1.5], ["Mornag", 10.30, 36.64, 1.5]] },
+  { name: "Nabeul", count: 255, pop: 826000, motor: 0.42, age: 10.1, deleg: 16, anchors: [["Nabeul", 10.74, 36.45, 3], ["Hammamet", 10.61, 36.40, 2.5], ["Korba", 10.86, 36.57, 2], ["Menzel Temime", 10.97, 36.62, 2], ["Soliman", 10.48, 36.68, 1.5], ["Beni Khiar", 10.79, 36.51, 1], ["El Haouaria", 11.05, 37.03, 0.8], ["Takelsa", 10.79, 36.61, 1]] },
+  { name: "Sfax", count: 324, pop: 955000, motor: 0.41, age: 10.4, deleg: 16, anchors: [["Sfax Centre", 10.76, 34.74, 4], ["Sakiet Ezzit", 10.90, 34.82, 2], ["Sidi Mansour", 10.70, 34.80, 1.5], ["Mahres", 10.53, 34.52, 1.5], ["Skhira", 10.38, 34.35, 1], ["Agareb", 10.72, 34.65, 1.5], ["Kerkennah", 11.07, 34.74, 0.4]] },
+  { name: "Sousse", count: 221, pop: 700000, motor: 0.43, age: 9.8, deleg: 16, anchors: [["Sousse", 10.63, 35.83, 4], ["Akouda", 10.63, 35.90, 1.5], ["Msaken", 10.59, 35.73, 2], ["Hammam Sousse", 10.62, 35.88, 2], ["Kalâa Kebira", 10.68, 35.87, 1.5], ["Enfidha", 10.80, 36.13, 1.2], ["Bouficha", 10.73, 36.06, 1]] },
+  { name: "Monastir", count: 127, pop: 425000, motor: 0.44, age: 9.6, deleg: 31, anchors: [["Monastir", 10.83, 35.78, 3], ["Sahline", 10.73, 35.77, 1.5], ["Moknine", 10.82, 35.63, 2], ["Jemmal", 10.75, 35.62, 1.5], ["Ksar Hellal", 10.77, 35.64, 1.5], ["Lamta", 10.88, 35.67, 1], ["Bembla", 10.81, 35.70, 1]] },
+  { name: "Mahdia", count: 92, pop: 412000, motor: 0.36, age: 10.6, deleg: 11, anchors: [["Mahdia", 11.06, 35.50, 3], ["Ksour Essef", 10.97, 35.42, 1.5], ["El Jem", 10.55, 35.30, 2], ["Chebba", 11.08, 35.24, 1], ["Sidi Alouane", 10.89, 35.37, 1], ["Ouled Chamekh", 10.72, 35.30, 1]] },
+  { name: "Bizerte", count: 150, pop: 385000, motor: 0.37, age: 10.8, deleg: 14, anchors: [["Bizerte", 9.87, 37.27, 3], ["Menzel Bourguiba", 9.78, 37.16, 2], ["Mateur", 9.64, 37.07, 2], ["Ras Jbel", 10.02, 37.13, 1.5], ["Ghar El Melh", 10.19, 37.16, 0.8], ["Sejnane", 9.48, 37.20, 1], ["Tinja", 9.87, 37.12, 1]] },
+  { name: "Kairouan", count: 115, pop: 400000, motor: 0.29, age: 11.2, deleg: 11, anchors: [["Kairouan", 10.09, 35.68, 4], ["Sbikha", 10.06, 35.90, 1.5], ["Bouhajla", 10.46, 35.61, 1.5], ["Haffouz", 9.90, 35.60, 1], ["Nasrallah", 10.07, 35.51, 1], ["Hajeb Layoun", 10.07, 35.81, 1]] },
+  { name: "Zaghouan", count: 35, pop: 193000, motor: 0.26, age: 11.4, deleg: 6, anchors: [["Zaghouan", 10.14, 36.40, 3], ["El Fahs", 9.91, 36.38, 2], ["Bir Mcherga", 10.13, 36.45, 1], ["Zriba", 10.24, 36.43, 1]] },
+  { name: "Béja", count: 69, pop: 285000, motor: 0.27, age: 11.3, deleg: 9, anchors: [["Béja", 9.18, 36.72, 3], ["Medjez El Bab", 9.61, 36.55, 2], ["Nefza", 9.04, 36.83, 1], ["Amdoun", 9.15, 36.79, 1], ["Téboursouk", 9.24, 36.55, 1.5], ["Zahret Medien", 9.30, 36.63, 1]] },
+  { name: "Jendouba", count: 69, pop: 265000, motor: 0.25, age: 11.6, deleg: 14, anchors: [["Jendouba", 8.78, 36.50, 3], ["Ghardimaou", 8.68, 36.46, 1], ["Tabarka", 8.75, 36.95, 1.5], ["Aïn Draham", 8.68, 36.78, 1], ["Bou Salem", 8.99, 36.62, 1.5], ["Fernana", 8.78, 36.65, 1]] },
+  { name: "Le Kef", count: 46, pop: 262000, motor: 0.23, age: 11.8, deleg: 11, anchors: [["Le Kef", 8.70, 36.17, 3], ["Tajerouine", 8.57, 36.10, 1.5], ["Kalâat Senan", 8.71, 35.88, 1], ["Dahmani", 8.92, 36.15, 1.5], ["Nebeur", 8.83, 36.34, 1]] },
+  { name: "Siliana", count: 35, pop: 234000, motor: 0.22, age: 11.9, deleg: 11, anchors: [["Siliana", 9.37, 36.08, 3], ["Bargou", 9.53, 36.10, 1], ["El Krib", 9.39, 35.95, 1], ["Makthar", 9.20, 35.86, 1], ["Gaâfour", 9.53, 36.20, 1], ["Bou Arada", 9.68, 36.33, 1.5]] },
+  { name: "Sidi Bouzid", count: 81, pop: 470000, motor: 0.24, age: 11.5, deleg: 12, anchors: [["Sidi Bouzid", 9.48, 35.38, 4], ["Meknassy", 9.55, 34.95, 1.5], ["Jelma", 9.45, 35.19, 1.5], ["Regueb", 9.36, 35.23, 1.5], ["Menzel Bouzaiene", 9.61, 34.99, 1], ["Sidi Ali Ben Aoun", 9.22, 35.27, 1]] },
+  { name: "Kasserine", count: 69, pop: 480000, motor: 0.23, age: 11.7, deleg: 13, anchors: [["Kasserine", 8.83, 35.17, 3], ["Sbeitla", 9.37, 35.24, 2], ["Feriana", 8.61, 34.98, 1.5], ["Thala", 8.68, 35.58, 1.5], ["Haidra", 8.89, 35.57, 0.8], ["Sbiba", 9.05, 35.27, 1]] },
+  { name: "Gabès", count: 104, pop: 375000, motor: 0.30, age: 10.9, deleg: 10, anchors: [["Gabès", 10.11, 33.89, 4], ["Métouia", 10.02, 33.95, 1.5], ["El Hamma", 9.94, 33.80, 1.5], ["Matmata", 10.04, 33.54, 1], ["Mareth", 10.25, 33.60, 1.5], ["Ghannouche", 10.09, 33.93, 1]] },
+  { name: "Médenine", count: 92, pop: 415000, motor: 0.31, age: 10.7, deleg: 9, anchors: [["Médenine", 10.50, 33.35, 2.5], ["Houmt Souk", 10.86, 33.88, 2.5], ["Midoun", 11.00, 33.81, 2], ["Zarzis", 11.10, 33.42, 1.5], ["Ben Guerdane", 11.53, 33.38, 1.5], ["El Hamma", 10.55, 33.44, 1]] },
+  { name: "Tataouine", count: 23, pop: 150000, motor: 0.21, age: 12.1, deleg: 7, anchors: [["Tataouine", 10.92, 32.93, 3], ["Remada", 10.45, 32.31, 1], ["Ghomrassen", 10.42, 33.10, 1.5], ["Dehibat", 10.70, 32.20, 0.6]] },
+  { name: "Gafsa", count: 92, pop: 350000, motor: 0.27, age: 11.4, deleg: 13, anchors: [["Gafsa", 8.78, 34.42, 3], ["Métlaoui", 8.57, 34.35, 1.5], ["Redeyef", 8.43, 34.38, 1.5], ["Moularès", 8.55, 34.46, 1], ["El Guettar", 9.05, 34.34, 1.5], ["Ksar", 9.31, 34.38, 1]] },
+  { name: "Tozeur", count: 23, pop: 110000, motor: 0.24, age: 11.2, deleg: 5, anchors: [["Tozeur", 8.13, 33.92, 3], ["Nefta", 7.88, 33.96, 2], ["Degache", 9.02, 34.00, 1.5], ["Tamerza", 7.97, 34.02, 0.8]] },
+  { name: "Kébili", count: 23, pop: 160000, motor: 0.25, age: 11.0, deleg: 6, anchors: [["Kébili", 8.77, 33.70, 3], ["Douz", 9.02, 33.46, 2], ["Souk El Ahad", 8.55, 33.75, 0.8], ["Faouar", 8.99, 33.32, 0.6]] },
+  { name: "Manouba", count: 69, pop: 380000, motor: 0.41, age: 9.7, deleg: 9, anchors: [["Manouba", 10.10, 36.81, 3], ["Oued Ellil", 10.01, 36.82, 1.5], ["Tebourba", 9.82, 36.92, 1.5], ["Djedeida", 10.06, 36.86, 1.5], ["El Battan", 9.82, 36.85, 1], ["Mornaguia", 10.09, 36.83, 1.5]] },
 ]
 
 const BRANDS = [
-  { slug: "agil", name: "Agil", color: "#dc2626", count: 228 },
-  { slug: "totalenergies", name: "TotalEnergies", color: "#ea580c", count: 151 },
+  { slug: "agil", name: "Agil", color: "#dc2626", count: 1230 },
+  { slug: "totalenergies", name: "TotalEnergies", color: "#ea580c", count: 160 },
   { slug: "staroil", name: "Staroil", color: "#059669", count: 120 },
-  { slug: "shell", name: "Shell", color: "#d9a514", count: 100 },
-  { slug: "ola", name: "Ola Energy", color: "#9333ea", count: 90 },
+  { slug: "shell", name: "Shell", color: "#d9a514", count: 170 },
+  { slug: "ola", name: "Ola Energy", color: "#9333ea", count: 180 },
   { slug: "independants", name: "Indépendants", color: "#64748b", count: 1125, isIndependents: true },
 ]
 
@@ -115,7 +121,7 @@ async function main() {
   const services = await Promise.all(SERVICES.map(s => db.service.create({ data: { slug: s.slug, name: s.name, icon: s.icon } })))
   const serviceBySlug = new Map(services.map(s => [s.slug, s]))
 
-  console.log("📍 Stations (1 814)…")
+  console.log("📍 Stations (2 985)…")
   // Attribution enseigne : quotas globaux + densité urbaine pour les grandes enseignes
   const brandSlots: string[] = []
   for (const b of BRANDS) for (let i = 0; i < b.count; i++) brandSlots.push(b.slug)
@@ -138,8 +144,8 @@ async function main() {
 
     for (let i = 0; i < gov.count; i++) {
       const anchor = anchors[anchorPool[Math.floor(rnd() * anchorPool.length)]]
-      const lat = r1(anchor[2] + range(-0.055, 0.055))
-      const lng = r1(anchor[1] + range(-0.055, 0.055))
+      const lat = r5(anchor[2] + range(-0.055, 0.055))
+      const lng = r5(anchor[1] + range(-0.055, 0.055))
 
       // statut
       const st = rnd()

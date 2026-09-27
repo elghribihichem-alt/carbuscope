@@ -31,7 +31,7 @@ const CURL_SAMPLE = `curl -X POST ${ENDPOINT} \\
   }'`
 
 const RESPONSE_SAMPLE = `{
-  "synced": 228,
+  "synced": 1230,
   "created": 1,
   "updated": 12,
   "pending": 2,

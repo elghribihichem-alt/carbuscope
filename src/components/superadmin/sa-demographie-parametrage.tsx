@@ -40,6 +40,7 @@ const LEVEL_SELECT_META: Record<LevelValue, { label: string; chip: string }> = {
   MASQUE: { label: "Masqué", chip: "border-slate-300 bg-slate-50 text-slate-500" },
   GOUVERNORATS: { label: "Gouvernorats", chip: "border-emerald-300/70 bg-emerald-50 text-emerald-700" },
   DELEGATIONS: { label: "Gouvernorats + délégations", chip: "border-teal-300/70 bg-teal-50 text-teal-700" },
+  CITES: { label: "Gouvernorats + délégations + cités", chip: "border-violet-300/70 bg-violet-50 text-violet-700" },
 }
 
 // Compte racine : accès permanent au module (Super Administration).
@@ -97,8 +98,9 @@ export function SaDemographieParametrage({ access, actor, onChanged }: {
     const granted = localAccess.length
     const gov = localAccess.filter(a => a.level === "GOUVERNORATS").length
     const deleg = localAccess.filter(a => a.level === "DELEGATIONS").length
+    const cites = localAccess.filter(a => a.level === "CITES").length
     const edit = localAccess.filter(a => a.canEdit).length
-    return { granted, gov, deleg, edit }
+    return { granted, gov, deleg, cites, edit }
   }, [localAccess])
 
   /** Applique un changement de visibilité (optimiste + rollback + audit). */
@@ -155,16 +157,17 @@ export function SaDemographieParametrage({ access, actor, onChanged }: {
           </CardTitle>
           <CardDescription>
             Choisissez quels utilisateurs voient le module Démographie dans leur Observatoire B2B — vue
-            gouvernorats ou gouvernorats + délégations, en lecture seule ou avec édition en ligne.
-            La super-administratrice garde un accès permanent (⚡).
+            gouvernorats, gouvernorats + délégations ou gouvernorats + délégations + cités (3ᵉ niveau), en
+            lecture seule ou avec édition en ligne. La super-administratrice garde un accès permanent (⚡).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {[
               { label: "Utilisateurs autorisés", value: stats.granted, icon: Eye },
               { label: "Vue gouvernorats", value: stats.gov, icon: Eye },
               { label: "Gouvernorats + délégations", value: stats.deleg, icon: Eye },
+              { label: "Avec cités (3ᵉ niv.)", value: stats.cites, icon: Eye },
               { label: "Édition autorisée", value: stats.edit, icon: PencilLine },
             ].map(s => {
               const Icon = s.icon

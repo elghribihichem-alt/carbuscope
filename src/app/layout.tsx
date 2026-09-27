@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CarbuScope — Le Waze du carburant | Tunisie",
   description:
-    "Observatoire B2B, application mobile B2C et portail enseigne pour le marché tunisien des stations-service : 1 814 stations, carte interactive, veille concurrentielle et calculateurs d'implantation.",
+    "Observatoire B2B, application mobile B2C et portail enseigne pour le marché tunisien des stations-service : 2 985 stations, carte interactive, veille concurrentielle et calculateurs d'implantation.",
   keywords: ["stations-service", "Tunisie", "carburant", "observatoire", "carte", "veille concurrentielle", "Agil", "TotalEnergies", "Shell"],
   authors: [{ name: "CarbuScope" }],
   openGraph: {

@@ -64,7 +64,7 @@ async function main() {
       brandSlug: "agil", brandName: "Agil", color: "#dc2626",
       plan: "ENTERPRISE", status: "ACTIF",
       startedAt: daysAgo(430), renewsAt: daysFromNow(76),
-      monthlyFee: 2450, seats: 25, stationQuota: 250,
+      monthlyFee: 3450, seats: 30, stationQuota: 1300,
       contactName: "Sonia Beji", contactEmail: "sonia.beji@agil.tn", contactPhone: "+216 71 123 456",
     },
     {
@@ -373,13 +373,14 @@ async function main() {
     }
   }
 
-  // T37 — volet « Paramétrage » : 2 accès de démonstration (lecture seule) :
+  // T37/T45 — volet « Paramétrage » : 2 accès de démonstration (lecture seule) :
   // Sonia Beji (Agil) voit les gouvernorats, Karim Trabelsi (Shell) voit
-  // gouvernorats + délégations. Les autres comptes démarrent sans accès.
+  // gouvernorats + délégations + cités (3ᵉ niveau T45 — drill-down B2B).
+  // Les autres comptes démarrent sans accès.
   console.log("🔐 Visibilité démographie — accès de démonstration…")
   const DEMO_ACCESS = [
     { email: "sonia.beji@agil.tn", level: "GOUVERNORATS", canEdit: false, updatedBy: "rania.feki@carbuscope.tn" },
-    { email: "karim.trabelsi@shell.tn", level: "DELEGATIONS", canEdit: false, updatedBy: "rania.feki@carbuscope.tn" },
+    { email: "karim.trabelsi@shell.tn", level: "CITES", canEdit: false, updatedBy: "rania.feki@carbuscope.tn" },
   ]
   for (const a of DEMO_ACCESS) {
     const u = await db.user.findUnique({ where: { email: a.email } })

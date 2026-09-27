@@ -15,7 +15,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { AnimatePresence, motion } from "framer-motion"
 import {
-  BarChart3, ChevronDown, ChevronRight, Info, Loader2, PieChart as PieIcon,
+  BarChart3, Building2, ChevronDown, ChevronRight, FileDown, Info, Loader2, PieChart as PieIcon,
   RotateCcw, Search, SlidersHorizontal, Table2, Users, List,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,11 +32,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAppStore } from "@/store/app-store"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import { useChartPalette } from "@/hooks/use-chart-palette"
-import { VEHICLE_CATEGORIES, type DemographicAccessDTO, type DemographicDelegationDTO, type DemographicGouvernoratDTO } from "@/lib/saas"
+import { VEHICLE_CATEGORIES, type DemographicAccessDTO, type DemographicCiteDTO, type DemographicDelegationDTO, type DemographicGouvernoratDTO } from "@/lib/saas"
 import { fmtDate, timeAgo } from "./sa-shared"
 import { DemographieGouvernoratsPanel, GOV_EXPORT_COLUMNS } from "@/components/demographie/demographie-gouvernorats"
+import { DemographieParcDashboard } from "@/components/demographie/demographie-parc-dashboard"
+import { downloadDelegationsVehiculesTemplate } from "@/lib/demographie-io"
 import { DemographieIoBar } from "./sa-demographie-io"
 import { SaDemographieParametrage } from "./sa-demographie-parametrage"
+import { SaDemographieCites } from "./sa-demographie-cites"
 import type { ExportColumn, ExportRow } from "@/lib/demographie-io"
 
 // ---- Helpers de format / parsing (fr) ----
@@ -99,6 +102,7 @@ const VEHICLE_KEYS = new Set(VEHICLE_CATEGORIES.map(v => v.key))
 interface DemographicPage {
   governorats: DemographicGouvernoratDTO[]
   delegations: DemographicDelegationDTO[]
+  cites: DemographicCiteDTO[]
   access: DemographicAccessDTO[]
 }
 
@@ -162,15 +166,15 @@ function mapGovRow(g: DemographicGouvernoratDTO): ExportRow {
   }
 }
 
-// ---- Cellule éditable en ligne (volet Délégations — partagée avec la vue
-// « Démographie » de l'Observatoire B2B des utilisateurs autorisés) ----
+// ---- Cellule éditable en ligne (volets Délégations et Cités — partagée avec
+// la vue « Démographie » de l'Observatoire B2B des utilisateurs autorisés) ----
 
-export function EditableCell({ row, field, kind, ariaName, onCommit }: {
-  row: DemographicDelegationDTO
+export function EditableCell<T extends object>({ row, field, kind, ariaName, onCommit }: {
+  row: T
   field: string
   kind: EditKind
   ariaName: string
-  onCommit: (row: DemographicDelegationDTO, field: string, v: number | null) => void
+  onCommit: (row: T, field: string, v: number | null) => void
 }) {
   const value = (row as unknown as Record<string, number | null>)[field] ?? null
   const [editing, setEditing] = useState(false)
@@ -374,7 +378,12 @@ export function SaDemographie() {
       .then(async r => {
         const j = await r.json().catch(() => null)
         if (!r.ok || !j?.governorats) throw new Error(j?.error ?? "Impossible de charger le référentiel démographique")
-        if (alive) setData({ governorats: j.governorats, delegations: j.delegations ?? [], access: j.access ?? [] })
+        if (alive) setData({
+          governorats: j.governorats,
+          delegations: j.delegations ?? [],
+          cites: j.cites ?? [],
+          access: j.access ?? [],
+        })
       })
       .catch(e => { if (alive) setLoadError(e instanceof Error ? e.message : "Erreur inconnue") })
     return () => { alive = false }
@@ -584,9 +593,10 @@ export function SaDemographie() {
               <h2 className="text-lg font-bold leading-tight">Démographie — statistiques territoriales</h2>
               <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 Fenêtre sur les données du terrain : population, urbanisation et parc automobile des
-                gouvernorats et délégations de Tunisie (source INS 2024).{' '}
-                {data.delegations.length} délégations réparties sur {data.governorats.length} gouvernorats,
-                gérées en trois volets — gouvernorats, délégations et paramétrage de visibilité.
+                gouvernorats, délégations et cités de Tunisie (source INS 2024).{' '}
+                {data.delegations.length} délégations et {data.cites.length} cités réparties sur{" "}
+                {data.governorats.length} gouvernorats, gérées en quatre volets — gouvernorats, délégations,
+                cités (3ᵉ niveau) et paramétrage de visibilité.
               </p>
             </div>
           </div>
@@ -609,14 +619,17 @@ export function SaDemographie() {
         </CardContent>
       </Card>
 
-      {/* Trois volets : Gouvernorats · Délégations · Paramétrage */}
+      {/* Quatre volets : Gouvernorats · Délégations · Cités · Paramétrage */}
       <Tabs value={volet} onValueChange={setVolet} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 sm:max-w-lg">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:max-w-2xl sm:grid-cols-4">
           <TabsTrigger value="gouvernorats" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <Table2 className="h-4 w-4" aria-hidden /> Gouvernorats
           </TabsTrigger>
           <TabsTrigger value="delegations" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <List className="h-4 w-4" aria-hidden /> Délégations
+          </TabsTrigger>
+          <TabsTrigger value="cites" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
+            <Building2 className="h-4 w-4" aria-hidden /> Cités
           </TabsTrigger>
           <TabsTrigger value="parametrage" className="gap-1.5 px-3 py-2 text-xs sm:text-sm">
             <SlidersHorizontal className="h-4 w-4" aria-hidden /> Paramétrage
@@ -659,6 +672,9 @@ export function SaDemographie() {
 
         {/* ---- Volet 2 : Délégations (vue délégation) ---- */}
         <TabsContent value="delegations" className="mt-0 space-y-4">
+          {/* Mini-tableau de bord « Parc automobile » (T45 — mission 2) */}
+          <DemographieParcDashboard delegations={data.delegations} />
+
           {/* Tableau démographique — édition en ligne */}
           <Card>
             <CardHeader>
@@ -698,6 +714,19 @@ export function SaDemographie() {
                   <span className="whitespace-nowrap text-xs text-muted-foreground" aria-live="polite">
                     {visibleRows} / {data.delegations.length} délégations
                   </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      downloadDelegationsVehiculesTemplate()
+                      toast.success("Modèle véhicules téléchargé", {
+                        description: "modele-import-vehicules-delegations.csv — 2 lignes d'exemple, commentaires inclus.",
+                      })
+                    }}
+                    title="Télécharger un modèle CSV d'import du parc par délégation (2 lignes d'exemple)"
+                  >
+                    <FileDown className="h-3.5 w-3.5" aria-hidden /> Modèle véhicules
+                  </Button>
                   <DemographieIoBar
                     scope="delegations"
                     title="Délégations de Tunisie — INS 2024"
@@ -920,7 +949,12 @@ export function SaDemographie() {
           </Card>
         </TabsContent>
 
-        {/* ---- Volet 3 : Paramétrage (visibilité des utilisateurs) ---- */}
+        {/* ---- Volet 3 : Cités (T45 — 3ᵉ niveau du découpage) ---- */}
+        <TabsContent value="cites" className="mt-0 space-y-4">
+          <SaDemographieCites cites={data.cites} actor={actor} onRefresh={refresh} />
+        </TabsContent>
+
+        {/* ---- Volet 4 : Paramétrage (visibilité des utilisateurs) ---- */}
         <TabsContent value="parametrage" className="mt-0 space-y-4">
           <SaDemographieParametrage access={data.access} actor={actor} onChanged={refresh} />
         </TabsContent>
@@ -933,8 +967,8 @@ export function SaDemographie() {
           Référence : Institut National de la Statistique (recensement 2024) — les valeurs marquées
           « est. » sont des estimations. Ce module est administré par la Super Administration ; la
           visibilité est paramétrable utilisateur par utilisateur (volet Paramétrage) et prend effet
-          dans l&apos;Observatoire B2B. Le découpage complet (gouvernorat → délégation → cité) pourra
-          être étendu ultérieurement.
+          dans l&apos;Observatoire B2B. Le découpage complet (gouvernorat → délégation → cité) est
+          disponible : les cités s&apos;alimentent en masse depuis le volet dédié (import + modèle).
         </AlertDescription>
       </Alert>
     </div>

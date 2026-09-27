@@ -1,0 +1,705 @@
+     1→'use client'
+     2→
+     3→// A.8 — Onglet « Rapports » : génération, rapports récents et programmations
+     4→
+     5→import * as React from "react"
+     6→import { toast } from "sonner"
+     7→import {
+     8→  BellRing,
+     9→  CalendarClock,
+    10→  CalendarDays,
+    11→  CalendarRange,
+    12→  Crosshair,
+    13→  Download,
+    14→  FileSpreadsheet,
+    15→  FileStack,
+    16→  FileText,
+    17→  Gauge,
+    18→  Loader2,
+    19→  MapPin,
+    20→  Plus,
+    21→  Presentation,
+    22→  Radar,
+    23→  Sparkles,
+    24→  Trash2,
+    25→  type LucideIcon,
+    26→} from "lucide-react"
+    27→import { Badge } from "@/components/ui/badge"
+    28→import { Button } from "@/components/ui/button"
+    29→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+    30→import { Input } from "@/components/ui/input"
+    31→import { Label } from "@/components/ui/label"
+    32→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+    33→import { Switch } from "@/components/ui/switch"
+    34→import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
+    35→import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+    36→import { KpiCard } from "@/components/shell/kpi-card"
+    37→import { ErrorState, TabSkeleton } from "@/components/shell/loading"
+    38→import { ROLE_LABELS, useAppStore } from "@/store/app-store"
+    39→import { REPORT_TYPE_LABELS, type GovernoratRow, type ReportDTO, type ReportScheduleDTO } from "@/lib/types"
+    40→import { cn } from "@/lib/utils"
+    41→import { downloadReportCsv } from "./report-csv"
+    42→
+    43→const REPORT_TYPES: { value: string; label: string; desc: string; icon: LucideIcon; tint: string }[] = [
+    44→  {
+    45→    value: "CONCURRENCE",
+    46→    label: "Analyse concurrentielle",
+    47→    desc: "Parts de marché, saturation et concurrents proches.",
+    48→    icon: Crosshair,
+    49→    tint: "bg-[#e07856]/15 text-[#b8542f] dark:text-[#e8a084]",
+    50→  },
+    51→  {
+    52→    value: "IMPLANTATION",
+    53→    label: "Potentiel d'implantation",
+    54→    desc: "Densité, parc automobile et zones sous-desservies.",
+    55→    icon: MapPin,
+    56→    tint: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+    57→  },
+    58→  {
+    59→    value: "PERFORMANCE",
+    60→    label: "Performance réseau",
+    61→    desc: "Trafic, tension et suivi des stations.",
+    62→    icon: Gauge,
+    63→    tint: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+    64→  },
+    65→  {
+    66→    value: "VEILLE",
+    67→    label: "Veille",
+    68→    desc: "Mouvements concurrentiels et alertes.",
+    69→    icon: Radar,
+    70→    tint: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400",
+    71→  },
+    72→]
+    73→
+    74→const REPORT_TYPE_BADGES: Record<string, string> = {
+    75→  CONCURRENCE: "border-[#e07856]/60 bg-[#e07856]/10 text-[#b8542f] dark:text-[#e8a084]",
+    76→  IMPLANTATION: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
+    77→  PERFORMANCE: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
+    78→  VEILLE: "border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400",
+    79→}
+    80→
+    81→const FORMAT_ICONS: Record<string, LucideIcon> = {
+    82→  PDF: FileText,
+    83→  Excel: FileSpreadsheet,
+    84→  PowerPoint: Presentation,
+    85→}
+    86→
+    87→const PERIODS = ["Mois courant", "Trimestre courant", "Semestre courant", "Année courante"]
+    88→
+    89→const CHANNELS = ["Email", "Email + plateforme", "Notification push"]
+    90→
+    91→const SCHEDULE_TYPE_LABELS: Record<string, string> = {
+    92→  WEEKLY: "Hebdomadaire",
+    93→  MONTHLY: "Mensuelle",
+    94→  REALTIME: "Temps réel",
+    95→}
+    96→
+    97→const SCHEDULE_TYPE_ICONS: Record<string, LucideIcon> = {
+    98→  WEEKLY: CalendarDays,
+    99→  MONTHLY: CalendarRange,
+   100→  REALTIME: BellRing,
+   101→}
+   102→
+   103→const SCHEDULE_TYPE_BADGES: Record<string, string> = {
+   104→  WEEKLY: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
+   105→  MONTHLY: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
+   106→  REALTIME: "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400",
+   107→}
+   108→
+   109→export function ReportsTab() {
+   110→  const role = useAppStore((s) => s.role)
+   111→  const [reports, setReports] = React.useState<ReportDTO[] | null>(null)
+   112→  const [schedules, setSchedules] = React.useState<ReportScheduleDTO[] | null>(null)
+   113→  const [governorats, setGovernorats] = React.useState<GovernoratRow[]>([])
+   114→  const [error, setError] = React.useState<string | null>(null)
+   115→  const [reloadNonce, setReloadNonce] = React.useState(0)
+   116→
+   117→  // Générateur
+   118→  const [gType, setGType] = React.useState("CONCURRENCE")
+   119→  const [gPeriod, setGPeriod] = React.useState(PERIODS[0])
+   120→  const [gScope, setGScope] = React.useState("National")
+   121→  const [gFormat, setGFormat] = React.useState("PDF")
+   122→  const [generating, setGenerating] = React.useState(false)
+   123→
+   124→  // Nouvelle programmation
+   125→  const [sName, setSName] = React.useState("")
+   126→  const [sType, setSType] = React.useState("WEEKLY")
+   127→  const [sTarget, setSTarget] = React.useState("National")
+   128→  const [sChannel, setSChannel] = React.useState(CHANNELS[0])
+   129→  const [creating, setCreating] = React.useState(false)
+   130→
+   131→  React.useEffect(() => {
+   132→    let cancelled = false
+   133→    Promise.all([
+   134→      fetch("/api/reports").then((r) => r.json()),
+   135→      fetch("/api/reports/schedules").then((r) => r.json()),
+   136→      fetch("/api/governorats").then((r) => r.json()),
+   137→    ])
+   138→      .then(
+   139→        ([rep, sch, gov]: [
+   140→          { reports?: ReportDTO[] },
+   141→          { schedules?: ReportScheduleDTO[] },
+   142→          { governorats?: GovernoratRow[] },
+   143→        ]) => {
+   144→          if (cancelled) return
+   145→          setReports(rep.reports ?? [])
+   146→          setSchedules(sch.schedules ?? [])
+   147→          setGovernorats(gov.governorats ?? [])
+   148→        }
+   149→      )
+   150→      .catch(() => {
+   151→        if (!cancelled) setError("Les rapports et programmations n'ont pas pu être chargés.")
+   152→      })
+   153→    return () => {
+   154→      cancelled = true
+   155→    }
+   156→  }, [reloadNonce])
+   157→
+   158→  const generate = () => {
+   159→    setGenerating(true)
+   160→    fetch("/api/reports", {
+   161→      method: "POST",
+   162→      headers: { "Content-Type": "application/json" },
+   163→      body: JSON.stringify({ type: gType, period: gPeriod, scope: gScope, format: gFormat, generatedBy: ROLE_LABELS[role] ?? "Utilisateur CarbuScope" }),
+   164→    })
+   165→      .then((r) => {
+   166→        if (!r.ok) throw new Error("generate failed")
+   167→        return r.json() as Promise<{ report: ReportDTO }>
+   168→      })
+   169→      .then((j) => {
+   170→        setReports((prev) => (prev ? [j.report, ...prev] : [j.report]))
+   171→        toast.success("Rapport généré", { description: `« ${j.report.name} » (${j.report.sizeKb} Ko) ajouté en tête des rapports récents.` })
+   172→        return downloadReportCsv(j.report)
+   173→      })
+   174→      .then(() => {
+   175→        toast.info("Téléchargement lancé", { description: "Export CSV récapitulatif : métadonnées + extrait de données du rapport." })
+   176→      })
+   177→      .catch(() => {
+   178→        toast.error("Génération impossible", { description: "Le rapport n'a pas pu être généré. Réessayez." })
+   179→      })
+   180→      .finally(() => setGenerating(false))
+   181→  }
+   182→
+   183→  const handleDownload = (r: ReportDTO) => {
+   184→    downloadReportCsv(r)
+   185→      .then(() => toast.info("Téléchargement lancé", { description: `« ${r.name} » — export CSV récapitulatif.` }))
+   186→      .catch(() => toast.error("Téléchargement impossible", { description: "L'export CSV a échoué." }))
+   187→  }
+   188→
+   189→  const handleDelete = (r: ReportDTO) => {
+   190→    setReports((prev) => (prev ? prev.filter((x) => x.id !== r.id) : prev))
+   191→    toast.success("Rapport supprimé", { description: `« ${r.name} » retiré de la liste (l'historique serveur est conservé).` })
+   192→  }
+   193→
+   194→  // Colonnes des rapports récents (DataViews : Tableau / Cartes / Arborescence par type)
+   195→  const reportColumns: DataViewColumn<ReportDTO>[] = [
+   196→    {
+   197→      key: "name", header: "Rapport",
+   198→      sortValue: (r) => r.name,
+   199→      className: "max-w-56",
+   200→      render: (r) => <span className="block truncate text-xs font-medium" title={r.name}>{r.name}</span>,
+   201→    },
+   202→    {
+   203→      key: "type", header: "Type",
+   204→      sortValue: (r) => REPORT_TYPE_LABELS[r.type] ?? r.type,
+   205→      render: (r) => (
+   206→        <Badge variant="outline" className={cn("text-[11px]", REPORT_TYPE_BADGES[r.type] ?? "")}>
+   207→          {REPORT_TYPE_LABELS[r.type] ?? r.type}
+   208→        </Badge>
+   209→      ),
+   210→    },
+   211→    {
+   212→      key: "period", header: "Période",
+   213→      sortValue: (r) => r.period,
+   214→      render: (r) => <span className="text-xs">{r.period}</span>,
+   215→    },
+   216→    {
+   217→      key: "scope", header: "Périmètre",
+   218→      sortValue: (r) => r.scope,
+   219→      render: (r) => <span className="text-xs">{r.scope}</span>,
+   220→    },
+   221→    {
+   222→      key: "format", header: "Format",
+   223→      sortValue: (r) => r.format,
+   224→      render: (r) => {
+   225→        const FormatIcon = FORMAT_ICONS[r.format] ?? FileText
+   226→        return (
+   227→          <Badge variant="outline" className="gap-1 text-[11px]">
+   228→            <FormatIcon className="h-3 w-3" />
+   229→            {r.format}
+   230→          </Badge>
+   231→        )
+   232→      },
+   233→    },
+   234→    {
+   235→      key: "sizeKb", header: "Taille", align: "right",
+   236→      sortValue: (r) => r.sizeKb,
+   237→      render: (r) => <span className="text-xs tabular-nums">{r.sizeKb} Ko</span>,
+   238→    },
+   239→    {
+   240→      key: "createdAt", header: "Date",
+   241→      sortValue: (r) => new Date(r.createdAt).getTime(),
+   242→      render: (r) => (
+   243→        <span className="whitespace-nowrap text-xs tabular-nums">
+   244→          {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+   245→        </span>
+   246→      ),
+   247→    },
+   248→    {
+   249→      key: "generatedBy", header: "Généré par",
+   250→      sortValue: (r) => r.generatedBy,
+   251→      render: (r) => <span className="text-xs text-muted-foreground">{r.generatedBy}</span>,
+   252→    },
+   253→    {
+   254→      key: "actions", header: "Actions", align: "right",
+   255→      render: (r) => (
+   256→        <div className="flex justify-end gap-1">
+   257→          <Button
+   258→            size="icon"
+   259→            variant="ghost"
+   260→            className="h-7 w-7"
+   261→            onClick={() => handleDownload(r)}
+   262→            aria-label={`Télécharger ${r.name}`}
+   263→          >
+   264→            <Download className="h-3.5 w-3.5" />
+   265→          </Button>
+   266→          <Button
+   267→            size="icon"
+   268→            variant="ghost"
+   269→            className="h-7 w-7 text-muted-foreground hover:text-red-600"
+   270→            onClick={() => handleDelete(r)}
+   271→            aria-label={`Supprimer ${r.name}`}
+   272→          >
+   273→            <Trash2 className="h-3.5 w-3.5" />
+   274→          </Button>
+   275→        </div>
+   276→      ),
+   277→    },
+   278→  ]
+   279→
+   280→  const toggleSchedule = (s: ReportScheduleDTO) => {
+   281→    const next = !s.active
+   282→    setSchedules((prev) => (prev ? prev.map((x) => (x.id === s.id ? { ...x, active: next } : x)) : prev))
+   283→    fetch("/api/reports/schedules", {
+   284→      method: "PATCH",
+   285→      headers: { "Content-Type": "application/json" },
+   286→      body: JSON.stringify({ id: s.id, active: next }),
+   287→    })
+   288→      .then((r) => {
+   289→        if (!r.ok) throw new Error("patch failed")
+   290→        return r.json() as Promise<{ schedule: ReportScheduleDTO }>
+   291→      })
+   292→      .then((j) => {
+   293→        setSchedules((prev) => (prev ? prev.map((x) => (x.id === j.schedule.id ? j.schedule : x)) : prev))
+   294→        toast.success(next ? "Programmation activée" : "Programmation désactivée", { description: j.schedule.name })
+   295→      })
+   296→      .catch(() => {
+   297→        setSchedules((prev) => (prev ? prev.map((x) => (x.id === s.id ? { ...x, active: s.active } : x)) : prev))
+   298→        toast.error("Modification impossible", { description: "L'état de la programmation n'a pas pu être modifié." })
+   299→      })
+   300→  }
+   301→
+   302→  const createSchedule = () => {
+   303→    if (!sName.trim()) return
+   304→    setCreating(true)
+   305→    fetch("/api/reports/schedules", {
+   306→      method: "POST",
+   307→      headers: { "Content-Type": "application/json" },
+   308→      body: JSON.stringify({ name: sName.trim(), type: sType, target: sTarget.trim() || "National", channel: sChannel }),
+   309→    })
+   310→      .then((r) => {
+   311→        if (!r.ok) throw new Error("create failed")
+   312→        return r.json() as Promise<{ schedule: ReportScheduleDTO }>
+   313→      })
+   314→      .then((j) => {
+   315→        setSchedules((prev) => (prev ? [j.schedule, ...prev] : [j.schedule]))
+   316→        toast.success("Programmation créée", {
+   317→          description: `« ${j.schedule.name} » — ${SCHEDULE_TYPE_LABELS[j.schedule.type] ?? j.schedule.type} via ${j.schedule.channel}.`,
+   318→        })
+   319→        setSName("")
+   320→        setSType("WEEKLY")
+   321→        setSTarget("National")
+   322→        setSChannel(CHANNELS[0])
+   323→      })
+   324→      .catch(() => {
+   325→        toast.error("Création impossible", { description: "La programmation n'a pas pu être enregistrée." })
+   326→      })
+   327→      .finally(() => setCreating(false))
+   328→  }
+   329→
+   330→  if (error) {
+   331→    return (
+   332→      <div className="p-4 md:p-6">
+   333→        <ErrorState message={error} retry={() => setReloadNonce((n) => n + 1)} />
+   334→      </div>
+   335→    )
+   336→  }
+   337→  if (!reports || !schedules) return <TabSkeleton title="Chargement des rapports…" />
+   338→
+   339→  const activeSchedules = schedules.filter((s) => s.active).length
+   340→
+   341→  return (
+   342→    <div className="space-y-4 p-4 md:p-6">
+   343→      {/* En-tête */}
+   344→      <header>
+   345→        <h1 className="flex items-center gap-2 text-lg font-bold">
+   346→          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   347→            <FileStack className="h-4.5 w-4.5" />
+   348→          </span>
+   349→          Rapports &amp; programmations
+   350→        </h1>
+   351→        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+   352→          Générez des rapports d&apos;analyse (PDF, Excel, PowerPoint), consultez les rapports récents et programmez
+   353→          des livraisons automatiques pour vos équipes.
+   354→        </p>
+   355→        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+   356→          <KpiCard label="Rapports disponibles" value={reports.length} icon={FileStack} sub="générés sur la plateforme" />
+   357→          <KpiCard
+   358→            label="Programmations actives"
+   359→            value={activeSchedules}
+   360→            icon={CalendarClock}
+   361→            tone="success"
+   362→            sub={`${schedules.length} programmations au total`}
+   363→          />
+   364→        </div>
+   365→      </header>
+   366→
+   367→      {/* A.8.1 — Générateur */}
+   368→      <Card>
+   369→        <CardHeader className="pb-3">
+   370→          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+   371→            <Sparkles className="h-4 w-4 text-primary" />
+   372→            Générateur de rapport
+   373→          </CardTitle>
+   374→          <p className="text-xs text-muted-foreground">
+   375→            Le rapport est enregistré dans la liste et un export CSV récapitulatif est téléchargé immédiatement.
+   376→          </p>
+   377→        </CardHeader>
+   378→        <CardContent className="space-y-4">
+   379→          <div role="radiogroup" aria-label="Type de rapport" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   380→            {REPORT_TYPES.map((t) => {
+   381→              const Icon = t.icon
+   382→              const selected = gType === t.value
+   383→              return (
+   384→                <button
+   385→                  key={t.value}
+   386→                  type="button"
+   387→                  role="radio"
+   388→                  aria-checked={selected}
+   389→                  onClick={() => setGType(t.value)}
+   390→                  className={cn(
+   391→                    "flex h-full flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all hover:shadow-md",
+   392→                    selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-card hover:border-primary/40"
+   393→                  )}
+   394→                >
+   395→                  <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", t.tint)}>
+   396→                    <Icon className="h-4 w-4" />
+   397→                  </span>
+   398→                  <span className="text-sm font-semibold leading-tight">{t.label}</span>
+   399→                  <span className="text-[11px] leading-tight text-muted-foreground">{t.desc}</span>
+   400→                </button>
+   401→              )
+   402→            })}
+   403→          </div>
+   404→
+   405→          <div className="grid gap-4 md:grid-cols-3">
+   406→            <div className="space-y-1.5">
+   407→              <Label className="text-xs font-medium">Période</Label>
+   408→              <Select value={gPeriod} onValueChange={setGPeriod}>
+   409→                <SelectTrigger className="w-full" aria-label="Période du rapport">
+   410→                  <SelectValue />
+   411→                </SelectTrigger>
+   412→                <SelectContent>
+   413→                  {PERIODS.map((p) => (
+   414→                    <SelectItem key={p} value={p}>
+   415→                      {p}
+   416→                    </SelectItem>
+   417→                  ))}
+   418→                </SelectContent>
+   419→              </Select>
+   420→            </div>
+   421→            <div className="space-y-1.5">
+   422→              <Label className="text-xs font-medium">Périmètre géographique</Label>
+   423→              <Select value={gScope} onValueChange={setGScope}>
+   424→                <SelectTrigger className="w-full" aria-label="Périmètre géographique">
+   425→                  <SelectValue />
+   426→                </SelectTrigger>
+   427→                <SelectContent className="max-h-72">
+   428→                  <SelectItem value="National">National</SelectItem>
+   429→                  {governorats.map((g) => (
+   430→                    <SelectItem key={g.name} value={g.name}>
+   431→                      {g.name}
+   432→                      <span className="ml-1 text-[11px] text-muted-foreground">({g.stations} stations)</span>
+   433→                    </SelectItem>
+   434→                  ))}
+   435→                </SelectContent>
+   436→              </Select>
+   437→            </div>
+   438→            <div className="space-y-1.5">
+   439→              <Label className="text-xs font-medium">Format</Label>
+   440→              <ToggleGroup
+   441→                type="single"
+   442→                value={gFormat}
+   443→                onValueChange={(v) => {
+   444→                  if (v) setGFormat(v)
+   445→                }}
+   446→                variant="outline"
+   447→                className="flex w-full gap-1"
+   448→                aria-label="Format du rapport"
+   449→              >
+   450→                {Object.entries(FORMAT_ICONS).map(([fmt, Icon]) => (
+   451→                  <ToggleGroupItem
+   452→                    key={fmt}
+   453→                    value={fmt}
+   454→                    className="h-9 flex-1 gap-1.5 text-xs data-[state=on]:text-primary"
+   455→                    aria-label={fmt}
+   456→                  >
+   457→                    <Icon className="h-3.5 w-3.5" />
+   458→                    {fmt}
+   459→                  </ToggleGroupItem>
+   460→                ))}
+   461→              </ToggleGroup>
+   462→            </div>
+   463→          </div>
+   464→
+   465→          <div className="flex flex-wrap items-center gap-3">
+   466→            <Button onClick={generate} disabled={generating} className="h-10">
+   467→              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+   468→              {generating ? "Génération en cours…" : "Générer le rapport"}
+   469→            </Button>
+   470→            <p className="text-[11px] text-muted-foreground">
+   471→              {REPORT_TYPE_LABELS[gType]} · {gPeriod} · {gScope} · {gFormat}
+   472→            </p>
+   473→          </div>
+   474→        </CardContent>
+   475→      </Card>
+   476→
+   477→      {/* A.8.2 — Rapports récents (DataViews : Tableau / Cartes / Arborescence par type) */}
+   478→      <Card>
+   479→        <CardHeader className="pb-3">
+   480→          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+   481→            <FileStack className="h-4 w-4 text-primary" />
+   482→            Rapports récents
+   483→            <Badge variant="secondary" className="font-normal">
+   484→              {reports.length}
+   485→            </Badge>
+   486→          </CardTitle>
+   487→          <CardDescription className="text-xs">
+   488→            Rapports générés sur la plateforme · 3 modes d&apos;affichage
+   489→          </CardDescription>
+   490→        </CardHeader>
+   491→        <CardContent>
+   492→          <DataViews
+   493→            viewKey="reports-list"
+   494→            columns={reportColumns}
+   495→            rows={reports}
+   496→            rowKey={(r) => r.id}
+   497→            emptyMessage="Aucun rapport. Générez votre premier rapport avec le générateur ci-dessus."
+   498→            maxHeightClassName="max-h-[26rem]"
+   499→            nested={{
+   500→              groupKey: (r) => r.type,
+   501→              groupLabel: (gk, grows) => {
+   502→                const TypeIcon = REPORT_TYPES.find((t) => t.value === gk)?.icon ?? FileText
+   503→                const latest = grows.reduce<ReportDTO | null>(
+   504→                  (acc, r) => (!acc || new Date(r.createdAt) > new Date(acc.createdAt) ? r : acc), null,
+   505→                )
+   506→                return (
+   507→                  <span className="inline-flex flex-wrap items-center gap-1.5">
+   508→                    <TypeIcon className="h-3.5 w-3.5" aria-hidden />
+   509→                    {REPORT_TYPE_LABELS[gk] ?? gk}
+   510→                    <span className="ml-1 text-[11px] font-normal text-primary/70">
+   511→                      — {grows.length} rapport{grows.length > 1 ? "s" : ""}
+   512→                      {latest ? ` · plus récent : ${new Date(latest.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+   513→                    </span>
+   514→                  </span>
+   515→                )
+   516→              },
+   517→              groupSortValue: (_gk, grows) => grows.length,
+   518→              hideColumnKeyInGroups: "type",
+   519→              defaultOpen: "first",
+   520→            }}
+   521→            renderCard={(r) => {
+   522→              const FormatIcon = FORMAT_ICONS[r.format] ?? FileText
+   523→              return (
+   524→                <Card className="overflow-hidden">
+   525→                  <CardContent className="p-4">
+   526→                    <div className="flex items-start justify-between gap-2">
+   527→                      <p className="min-w-0 text-sm font-semibold leading-snug" title={r.name}>{r.name}</p>
+   528→                      <Badge variant="outline" className={cn("shrink-0 text-[11px]", REPORT_TYPE_BADGES[r.type] ?? "")}>
+   529→                        {REPORT_TYPE_LABELS[r.type] ?? r.type}
+   530→                      </Badge>
+   531→                    </div>
+   532→                    <p className="mt-1.5 text-xs text-muted-foreground">{r.period} · {r.scope}</p>
+   533→                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t pt-3">
+   534→                      <div>
+   535→                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Format</dt>
+   536→                        <dd className="mt-0.5">
+   537→                          <Badge variant="outline" className="gap-1 text-[11px]">
+   538→                            <FormatIcon className="h-3 w-3" />
+   539→                            {r.format}
+   540→                          </Badge>
+   541→                        </dd>
+   542→                      </div>
+   543→                      <div>
+   544→                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Taille</dt>
+   545→                        <dd className="mt-0.5 text-xs tabular-nums">{r.sizeKb} Ko</dd>
+   546→                      </div>
+   547→                      <div>
+   548→                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Date</dt>
+   549→                        <dd className="mt-0.5 text-xs tabular-nums">
+   550→                          {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+   551→                        </dd>
+   552→                      </div>
+   553→                      <div>
+   554→                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Généré par</dt>
+   555→                        <dd className="mt-0.5 text-xs text-muted-foreground">{r.generatedBy}</dd>
+   556→                      </div>
+   557→                    </dl>
+   558→                    <div className="mt-3 flex justify-end gap-1 border-t pt-3">
+   559→                      <Button
+   560→                        size="sm"
+   561→                        variant="outline"
+   562→                        className="h-7 gap-1.5"
+   563→                        onClick={() => handleDownload(r)}
+   564→                        aria-label={`Télécharger ${r.name}`}
+   565→                      >
+   566→                        <Download className="h-3.5 w-3.5" />
+   567→                        Télécharger
+   568→                      </Button>
+   569→                      <Button
+   570→                        size="icon"
+   571→                        variant="ghost"
+   572→                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
+   573→                        onClick={() => handleDelete(r)}
+   574→                        aria-label={`Supprimer ${r.name}`}
+   575→                      >
+   576→                        <Trash2 className="h-3.5 w-3.5" />
+   577→                      </Button>
+   578→                    </div>
+   579→                  </CardContent>
+   580→                </Card>
+   581→              )
+   582→            }}
+   583→          />
+   584→        </CardContent>
+   585→      </Card>
+   586→
+   587→      {/* A.8.3 — Rapports programmés */}
+   588→      <section className="space-y-3" aria-label="Rapports programmés">
+   589→        <h2 className="flex items-center gap-2 text-sm font-semibold">
+   590→          <CalendarClock className="h-4 w-4 text-primary" />
+   591→          Rapports programmés
+   592→          <Badge variant="secondary" className="font-normal">
+   593→            {schedules.length}
+   594→          </Badge>
+   595→        </h2>
+   596→        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+   597→          {schedules.map((s) => {
+   598→            const TypeIcon = SCHEDULE_TYPE_ICONS[s.type] ?? CalendarDays
+   599→            return (
+   600→              <Card key={s.id} className={cn("transition-opacity", !s.active && "opacity-60")}>
+   601→                <CardContent className="p-4">
+   602→                  <div className="flex items-start justify-between gap-3">
+   603→                    <div className="min-w-0">
+   604→                      <p className="truncate text-sm font-semibold">{s.name}</p>
+   605→                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+   606→                        <Badge variant="outline" className={cn("gap-1 text-[11px]", SCHEDULE_TYPE_BADGES[s.type] ?? "")}>
+   607→                          <TypeIcon className="h-3 w-3" />
+   608→                          {SCHEDULE_TYPE_LABELS[s.type] ?? s.type}
+   609→                        </Badge>
+   610→                        <Badge variant="secondary" className="text-[11px] font-normal">
+   611→                          {s.channel}
+   612→                        </Badge>
+   613→                      </div>
+   614→                    </div>
+   615→                    <Switch
+   616→                      checked={s.active}
+   617→                      onCheckedChange={() => toggleSchedule(s)}
+   618→                      aria-label={`Activer ou désactiver la programmation ${s.name}`}
+   619→                    />
+   620→                  </div>
+   621→                  <p className="mt-3 text-xs text-muted-foreground">
+   622→                    <span className="font-medium text-foreground">Cible :</span> {s.target}
+   623→                  </p>
+   624→                </CardContent>
+   625→              </Card>
+   626→            )
+   627→          })}
+   628→
+   629→          {/* Nouvelle programmation */}
+   630→          <Card className="border-dashed">
+   631→            <CardHeader className="pb-3">
+   632→              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+   633→                <Plus className="h-4 w-4 text-primary" />
+   634→                Nouvelle programmation
+   635→              </CardTitle>
+   636→            </CardHeader>
+   637→            <CardContent className="space-y-3">
+   638→              <div className="space-y-1.5">
+   639→                <Label htmlFor="new-sched-name" className="text-xs font-medium">
+   640→                  Nom
+   641→                </Label>
+   642→                <Input
+   643→                  id="new-sched-name"
+   644→                  value={sName}
+   645→                  onChange={(e) => setSName(e.target.value)}
+   646→                  placeholder="ex : Veille enseignes concurrentes"
+   647→                  className="h-9"
+   648→                  maxLength={80}
+   649→                />
+   650→              </div>
+   651→              <div className="grid grid-cols-2 gap-2">
+   652→                <div className="space-y-1.5">
+   653→                  <Label className="text-xs font-medium">Fréquence</Label>
+   654→                  <Select value={sType} onValueChange={setSType}>
+   655→                    <SelectTrigger className="w-full" aria-label="Fréquence de la programmation">
+   656→                      <SelectValue />
+   657→                    </SelectTrigger>
+   658→                    <SelectContent>
+   659→                      <SelectItem value="WEEKLY">Hebdomadaire</SelectItem>
+   660→                      <SelectItem value="MONTHLY">Mensuelle</SelectItem>
+   661→                      <SelectItem value="REALTIME">Temps réel</SelectItem>
+   662→                    </SelectContent>
+   663→                  </Select>
+   664→                </div>
+   665→                <div className="space-y-1.5">
+   666→                  <Label className="text-xs font-medium">Canal</Label>
+   667→                  <Select value={sChannel} onValueChange={setSChannel}>
+   668→                    <SelectTrigger className="w-full" aria-label="Canal de diffusion">
+   669→                      <SelectValue />
+   670→                    </SelectTrigger>
+   671→                    <SelectContent>
+   672→                      {CHANNELS.map((c) => (
+   673→                        <SelectItem key={c} value={c}>
+   674→                          {c}
+   675→                        </SelectItem>
+   676→                      ))}
+   677→                    </SelectContent>
+   678→                  </Select>
+   679→                </div>
+   680→              </div>
+   681→              <div className="space-y-1.5">
+   682→                <Label htmlFor="new-sched-target" className="text-xs font-medium">
+   683→                  Cible
+   684→                </Label>
+   685→                <Input
+   686→                  id="new-sched-target"
+   687→                  value={sTarget}
+   688→                  onChange={(e) => setSTarget(e.target.value)}
+   689→                  placeholder="ex : Grand Tunis + axes A1/A4"
+   690→                  className="h-9"
+   691→                  maxLength={120}
+   692→                />
+   693→              </div>
+   694→              <Button onClick={createSchedule} disabled={creating || !sName.trim()} className="h-9 w-full">
+   695→                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+   696→                {creating ? "Création…" : "Programmer"}
+   697→              </Button>
+   698→            </CardContent>
+   699→          </Card>
+   700→        </div>
+   701→      </section>
+   702→    </div>
+   703→  )
+   704→}
+   705→

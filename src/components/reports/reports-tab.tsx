@@ -39,6 +39,7 @@ import { ROLE_LABELS, useAppStore } from "@/store/app-store"
 import { REPORT_TYPE_LABELS, type GovernoratRow, type ReportDTO, type ReportScheduleDTO } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { downloadReportCsv } from "./report-csv"
+import { ReportPdfButton } from "./reports-pdf"
 
 const REPORT_TYPES: { value: string; label: string; desc: string; icon: LucideIcon; tint: string }[] = [
   {
@@ -131,7 +132,7 @@ export function ReportsTab() {
   React.useEffect(() => {
     let cancelled = false
     Promise.all([
-      fetch("/api/reports").then((r) => r.json()),
+      fetch("/api/reports?scope=b2b").then((r) => r.json()),
       fetch("/api/reports/schedules").then((r) => r.json()),
       fetch("/api/governorats").then((r) => r.json()),
     ])
@@ -254,6 +255,7 @@ export function ReportsTab() {
       key: "actions", header: "Actions", align: "right",
       render: (r) => (
         <div className="flex justify-end gap-1">
+          <ReportPdfButton report={r} mode="icon" />
           <Button
             size="icon"
             variant="ghost"
@@ -556,6 +558,7 @@ export function ReportsTab() {
                       </div>
                     </dl>
                     <div className="mt-3 flex justify-end gap-1 border-t pt-3">
+                      <ReportPdfButton report={r} mode="label" />
                       <Button
                         size="sm"
                         variant="outline"

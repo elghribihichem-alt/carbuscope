@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import {
   Mail, Lock, Eye, EyeOff, LogIn, Loader2, Zap, AlertCircle,
-  LineChart, Building2, Smartphone, ShieldCheck, Fuel, MapPin, Lightbulb, Crown, ClipboardCheck,
+  LineChart, Building2, Smartphone, ShieldCheck, Fuel, MapPin, Lightbulb, Crown, ClipboardCheck, Ghost,
 } from "lucide-react"
 import { useAppStore, ROLE_LABELS } from "@/store/app-store"
 import { CarbuscopeLogo } from "@/components/shell/carbuscope-logo"
@@ -29,6 +29,7 @@ const MODE_ICON: Record<DemoAccount["mode"], React.ComponentType<{ className?: s
   mobile: Smartphone,
   agents: ClipboardCheck,
   backoffice: ShieldCheck,
+  shadow: Ghost,
   superadmin: Crown,
 }
 
@@ -38,6 +39,7 @@ const MODE_LABEL: Record<DemoAccount["mode"], string> = {
   mobile: "Mobile B2C",
   agents: "Agents terrain",
   backoffice: "Back-office",
+  shadow: "Shadow Market",
   superadmin: "Super Administration",
 }
 
@@ -134,7 +136,7 @@ export function LoginScreen() {
           <div className="mt-8 grid grid-cols-3 gap-4">
             <div className="rounded-lg border border-white/10 bg-[var(--c-hero-badge)]/60 p-3">
               <Fuel className="h-4 w-4 text-[var(--c-sidebar-gold)]" />
-              <p className="mt-2 text-lg font-bold leading-none">1 814</p>
+              <p className="mt-2 text-lg font-bold leading-none">2 985</p>
               <p className="mt-1 text-[11px] text-[var(--c-hero-muted)]">stations référencées</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-[var(--c-hero-badge)]/60 p-3">

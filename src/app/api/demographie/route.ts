@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { serializeDemographicDelegation, serializeDemographicGouvernorat } from "@/lib/saas-server"
+import { serializeDemographicCite, serializeDemographicDelegation, serializeDemographicGouvernorat } from "@/lib/saas-server"
 import type { DemographicAccessLevel } from "@/lib/saas"
 import {
   applyDelegationUpdate, applyGouvernoratUpdate,
@@ -9,12 +9,14 @@ import {
 
 export const dynamic = "force-dynamic"
 
-// /api/demographie (T37 — transversalité, volet « Paramétrage ») : données
+// /api/demographie (T37/T45 — transversalité, volet « Paramétrage ») : données
 // démographiques pour un utilisateur AUTORISÉ (accès accordé par la Super
-// Administration). GET ?email=… → { access, governorats, delegations? } — les
-// délégations ne sont servies qu'au niveau DELEGATIONS. POST (action
-// maj-delegation / maj-gouvernorat) réservé aux accès avec canEdit, dans la
-// limite du niveau accordé ; chaque écriture est auditée (kind DEMOGRAPHIE).
+// Administration). GET ?email=… → { access, governorats, delegations?, cites? }
+// — les délégations ne sont servies qu'au niveau DELEGATIONS, les cités du
+// 3ᵉ niveau qu'au niveau CITES (lecture seule : l'édition des cités reste
+// réservée à la Super Administration). POST (action maj-delegation /
+// maj-gouvernorat) réservé aux accès avec canEdit, dans la limite du niveau
+// accordé ; chaque écriture est auditée (kind DEMOGRAPHIE).
 
 async function resolveAccess(email: string): Promise<{
   userId: string
@@ -27,7 +29,7 @@ async function resolveAccess(email: string): Promise<{
   if (!access) return null
   return {
     userId: user.id,
-    level: access.level === "DELEGATIONS" ? "DELEGATIONS" : "GOUVERNORATS",
+    level: access.level === "CITES" ? "CITES" : access.level === "DELEGATIONS" ? "DELEGATIONS" : "GOUVERNORATS",
     canEdit: access.canEdit,
   }
 }
@@ -41,16 +43,20 @@ export async function GET(req: NextRequest) {
   if (!access) {
     return NextResponse.json({ access: null })
   }
-  const [governorats, delegations] = await Promise.all([
+  const [governorats, delegations, cites] = await Promise.all([
     db.governoratStat.findMany({ orderBy: { isoCode: "asc" } }),
-    access.level === "DELEGATIONS"
+    access.level === "DELEGATIONS" || access.level === "CITES"
       ? db.demographicDelegation.findMany({ orderBy: [{ isoCode: "asc" }, { delegation: "asc" }] })
+      : Promise.resolve([]),
+    access.level === "CITES"
+      ? db.demographicCite.findMany({ orderBy: [{ gouvernorat: "asc" }, { delegation: "asc" }, { cite: "asc" }] })
       : Promise.resolve([]),
   ])
   return NextResponse.json({
     access: { level: access.level, canEdit: access.canEdit },
     governorats: governorats.map(serializeDemographicGouvernorat),
     delegations: delegations.map(serializeDemographicDelegation),
+    cites: cites.map(serializeDemographicCite),
   })
 }
 

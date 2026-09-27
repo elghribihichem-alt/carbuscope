@@ -138,16 +138,17 @@ model GovernoratStat {
   updatedBy        String? // e-mail du dernier éditeur
 }
 
-// ---- Module Démographie (T37, volet « Paramétrage ») : visibilité du module
-// pour un utilisateur de la plateforme. Un enregistrement = un accès accordé.
-// level GOUVERNORATS → vue gouvernorats ; DELEGATIONS → gouvernorats +
-// délégations ; canEdit autorise l'édition en ligne (sinon lecture seule).
+// ---- Module Démographie (T37/T45, volet « Paramétrage ») : visibilité du
+// module pour un utilisateur de la plateforme. Un enregistrement = un accès
+// accordé. level GOUVERNORATS → vue gouvernorats ; DELEGATIONS → gouvernorats
+// + délégations ; CITES (T45) → + drill-down sur les cités ; canEdit autorise
+// l'édition en ligne (sinon lecture seule — l'édition des cités reste SA).
 // L'effet est visible dans l'Observatoire B2B de l'utilisateur (onglet
 // « Démographie » apparaissant après rechargement de la navigation).
 model DemographicAccess {
   id        String   @id @default(cuid())
   userId    String   @unique
-  level     String   @default("GOUVERNORATS") // GOUVERNORATS | DELEGATIONS
+  level     String   @default("GOUVERNORATS") // GOUVERNORATS | DELEGATIONS | CITES
   canEdit   Boolean  @default(false)
   updatedBy String?
   updatedAt DateTime @updatedAt
@@ -157,7 +158,7 @@ model DemographicAccess {
 // délégation (277 lignes, source INS 2024). Lignes éditables en ligne (clic)
 // par le super-administrateur : population, taux urbain/rural et parc
 // automobile par catégorie. Le niveau « cité » du découpage administratif
-// (gouvernorat → délégation → cité) est volontairement différé.
+// (gouvernorat → délégation → cité) est géré par DemographicCite (T45).
 model DemographicDelegation {
   id                  String    @id @default(cuid())
   gouvernorat         String // « Tunis » (clé vers GovernoratStat.name)
@@ -176,6 +177,29 @@ model DemographicDelegation {
 
   @@unique([gouvernorat, delegation])
   @@index([gouvernorat])
+}
+
+// ---- Module Démographie (T45) : niveau « cité » du découpage administratif
+// (gouvernorat → délégation → cité). Population et parc automobile par cité —
+// alimentés en masse via l'import de la Super Administration.
+model DemographicCite {
+  id                  String    @id @default(cuid())
+  gouvernorat         String
+  delegation          String
+  cite                String
+  population          Int?
+  urbanPct            Float?
+  vehiclesLight       Int?
+  vehiclesUtility     Int?
+  vehiclesHeavy       Int?
+  vehiclesBuses       Int?
+  vehiclesMotorcycles Int?
+  source              String    @default("INS 2024") // INS 2024 | Import SA
+  updatedAt           DateTime?
+  updatedBy           String?
+
+  @@unique([gouvernorat, delegation, cite])
+  @@index([gouvernorat, delegation])
 }
 
 model RoadAxis {
@@ -491,6 +515,135 @@ model MissionTask {
   status        String        @default("TODO") // TODO | FAITE | ANOMALIE
   order         Int           @default(0)
   reports       VisitReport[]
+}
+
+// ---- Module Shadow Market (T44) : recensement, cartographie et analyse
+// d'impact des points de vente informels de carburant (« vendeurs clandestins »
+// — bidons bord de route, kiosques, camions-citernes pirates, stations pirate,
+// garages). Ces points grignotent ~40 % du marché formel. Module accessible à
+// la Super Administration (vision nationale) et aux enseignes (leurs pertes).
+
+// Point de vente informel recensé sur le terrain.
+model ShadowPoint {
+  id            String              @id @default(cuid())
+  code          String              @unique // « SM-26-0847 »
+  typologyCode  String              // BIDONS | KIOSQUE | CAMION_CITERNE | STATION_PIRATE | GARAGE | EPICERIE
+  status        String              @default("BRUT") // BRUT | VERIFIE | VALIDE | REJETE | DOUBLON
+  gouvernorat   String
+  delegation    String
+  cite          String? // cité / quartier / lieu-dit
+  lat           Float
+  lng           Float
+  volumeLJ      Int                 @default(0) // volume estimé litres/jour
+  priceMillimes Int? // prix affiché (millimes/L, ex. 1 480 = 1,480 DT)
+  photoUrl      String?
+  notes         String              @default("")
+  source        String              @default("AGENT") // AGENT | CONTROLEUR | AUDIT | CONTRIBUTION
+  reporter      String              @default("") // nom de l'agent terrain
+  brandThreat   String? // enseigne la plus menacée à proximité (slug, calc)
+  firstSeenAt   DateTime            @default(now())
+  lastCheckAt   DateTime            @default(now())
+  active        Boolean             @default(true) // false = disparu / neutralisé
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  updates       ShadowPointUpdate[]
+}
+
+// Historique du cycle de vie d'un point : apparition, disparition,
+// réapparition, changement de volume / prix / typologie, déplacement.
+model ShadowPointUpdate {
+  id       String      @id @default(cuid())
+  pointId  String
+  point    ShadowPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  kind     String // APPARITION | DISPARITION | REAPPARITION | VOLUME | PRIX | TYPE | DEPLACEMENT | STATUT
+  oldValue String?
+  newValue String?
+  author   String      @default("")
+  date     DateTime    @default(now())
+
+  @@index([pointId, date])
+}
+
+// Catalogue extensible des typologies de points informels (modifiable depuis
+// Paramètres → Typologies). Les recensements et calculs d'impact s'y réfèrent.
+model ShadowTypology {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  label       String
+  description String  @default("")
+  icon        String  @default("circle") // nom d'icône lucide suggéré
+  color       String  @default("#E53935")
+  volumeLJ    Int     @default(200) // volume moyen indicative litres/jour
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+}
+
+// Équipe d'audit terrain dédiée au recensement du marché parallèle.
+model ShadowAuditor {
+  id         String   @id @default(cuid())
+  name       String
+  zone       String // gouvernorat sous responsabilité
+  brandSlug  String   @default("") // "" = équipe plateforme (multi-enseignes)
+  phone      String   @default("")
+  pointsDone Int      @default(0) // points recensés (crédités)
+  rechecks   Int      @default(0) // re-vérifications effectuées
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+}
+
+// Calendrier des recensements : passages planifiés / effectués par équipe.
+model ShadowCensusEvent {
+  id              String   @id @default(cuid())
+  teamLabel       String // ex. « Équipe Sud-Est »
+  zone            String // gouvernorat ou délégation
+  kind            String   @default("RECENSEMENT") // RECENSEMENT | RECHECK | VALIDATION
+  date            DateTime
+  pointsTargeted  Int      @default(0) // points prévus à couvrir
+  pointsFound     Int      @default(0) // points constatés (nouveaux + confirmés)
+  status          String   @default("PLANIFIE") // PLANIFIE | EN_COURS | TERMINE
+}
+
+// Configuration du module (rayons de cannibalisation, seuils d'alerte,
+// notifications) — une seule ligne, éditable depuis Paramètres.
+model ShadowConfig {
+  id               String   @id @default("shadow-config")
+  radiiM           String   @default("500,1000,2000") // cercles affichés (m, CSV)
+  cannibRadiusM    Int      @default(2000) // rayon de cannibalisation principal
+  redZoneThreshold Int      @default(5) // > N points dans 2 km = zone rouge
+  lossRedTnd       Int      @default(20000) // perte mensuelle critique (DT)
+  lossOrangeTnd    Int      @default(5000) // perte mensuelle modérée (DT)
+  notifyRadiusM    Int      @default(500) // alerte nouveau point < X m d'une station
+  notifyActive     Boolean  @default(true)
+  marginTndPerL    Float    @default(0.2) // marge détaillant (DT/L) des pertes
+  updatedAt        DateTime @updatedAt
+}
+
+// Série mensuelle nationale : points actifs, perte estimée — 12 mois glissants
+// (saisonnalité Ramadan / été / rentrée visible).
+model ShadowMonthlyStat {
+  id           String  @id @default(cuid())
+  month        String  @unique // « 2026-09 »
+  activePoints Int     @default(0)
+  newPoints    Int     @default(0)
+  closedPoints Int     @default(0)
+  estLossTnd   Int     @default(0)
+  note         String? // contexte saisonnier
+}
+
+// Fil d'alertes du marché parallèle (nouveau point < 500 m d'une station,
+// recrudescence d'une zone, danger incendie camion-citerne…).
+model ShadowAlert {
+  id          String   @id @default(cuid())
+  severity    String // CRITICAL | MEDIUM | INFO → rouge / orange / jaune
+  kind        String // NEW_POINTS | FIRE_RISK | SURGE | NEUTRALISE | DENSITE
+  title       String
+  detail      String
+  zone        String
+  stationCode String?
+  stationName String?
+  lossTnd     Int      @default(0) // perte mensuelle associée (DT)
+  date        DateTime @default(now())
+  read        Boolean  @default(false)
 }
 
 model VisitReport {

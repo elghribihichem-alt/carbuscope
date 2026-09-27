@@ -186,7 +186,7 @@ export function CarteInteractiveTab() {
                   <Input id="recherche-station" placeholder="Nom, ville, enseigne…" value={search}
                     onChange={e => setSearch(e.target.value)} className="h-9 text-sm" />
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    Recherche plein texte sur les 1 814 stations du réseau.
+                    Recherche plein texte sur les 2 985 stations du réseau.
                   </p>
                 </AccordionContent>
               </AccordionItem>
