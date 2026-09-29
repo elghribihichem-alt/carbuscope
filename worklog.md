@@ -1396,3 +1396,36 @@ Stage Summary:
 - Jobs planifiés / incidents / maintenance : aucune donnée réelle disponible (modèles fantômes JobPlateforme/Incident/Sauvegarde/ParametrePlateforme) — besoin signalé, aucun substitut fabriqué.
 - Recommandation R4 : sa-banniere-alertes.tsx entièrement portée (version légère vivante) → supprimable ; sa-supervision.tsx partiellement portée (carte santé ; jobs/sauvegardes/restauration/incidents/maintenance non portables sans modèles) → décision à prendre avec le dossier de validation.
 - Captures : qa-t52-r1-overview.png, qa-t52-r1-overview-mobile.png. Enregistrement détaillé : agent-ctx/T52-R1-pilotage-sa.md.
+
+---
+Task ID: T50-R (restauration d'urgence de la convergence T50) + T52-R1 intégré
+Agent: Chef d'orchestration (Z.ai Code)
+Task: Un incident a effacé le code T50 jamais commité (commit HEAD pré-T50 + réécriture worklog) : reconstruire intégralement la convergence 3 espaces, la gouvernance des comptes, préserver les travaux R1/R2, protéger par commit git.
+
+Work Log:
+- DIAGNOSTIC : HEAD = a8343ee (27/09 01:06, pré-T50) ; working tree = HEAD + changements R1/R2 seulements ; fused/brand-space-view.tsx absent, store 7 modes, demo-accounts 8 comptes historiques, grille de connexion pré-T50 ; T50 n'avait JAMAIS été commité → toute la livraison avait disparu du disque. Cause de l'instabilité serveur identifiée : tueur OOM du conteneur 4 Go (next-server ~2,5 Go RSS + processus chrome zombies des agents R1/R2 ~700 Mo chacun) — dmesg : « Out of memory: Killed process next-server ».
+- NETTOYAGE : processus agent-browser/chrome zombies tués (3488, 3778) ; discipline mémoire établie (une seule session navigateur à la fois).
+- RECONSTRUCTION T50 (fichiers orchestrateur) :
+  - store/app-store.ts : Mode = portail|mobile|superadmin, Espace type, migrateMode(), persist v1 + migrate, rôle DG (ROLE_LABELS + TAB_ACCESS complet), PLATFORM_MODULE_ROLES/SHADOW_MODULE_ROLES, NAV es places défaut "portail".
+  - lib/auth.ts : spacesForUser 3 espaces (racine: superadmin+portail+mobile ; enseignes: portail+mobile), defaultSpaceForUser (racine→superadmin sinon portail).
+  - NOUVEAU components/fused/brand-space-view.tsx : dispatcheur nav.espace → observatoire (11 onglets) | portail | shadow | backoffice | agents.
+  - app/page.tsx : 3 espaces rendus (BrandSpaceView/MobileB2CView/SuperAdminView), garde superadmin→portail.
+  - shell/app-header.tsx : MODES réduit à 3 (Portail enseigne · Mobile B2C · Super Admin racine), icônes purgeées, alertes → setMode("portail")+setNav("espace","observatoire") ; hamburger xl:hidden seulement en mode mobile.
+  - shell/app-sidebar.tsx : branches observatoire/portail/shadow/backoffice/agents SUPPRIMÉES → UNE branche portail = blueprint 8 groupes (f-pilotage, f-reseau, f-enseigne, f-terrain+Application agents terrain, f-analyse+démographie conditionnelle, f-shadow [ADMIN/COMMERCIAL/DG], f-backoffice [ADMIN/DG] avec badges 9/5, f-gestion) ; NAV_DEFAULTS.espace="observatoire" ; badges BO chargés en espace enseigne ; isPreviewMode = mobile || (portail && espace=agents) ; branches mobile + superadmin conservées ; repli défensif.
+  - hooks/use-deep-links.ts : VALID_MODES 3 espaces + paramètre espace ; modes historiques (#mode=shadow…) convertis en #mode=portail&espace=… ; hash synchro sur nav.espace.
+  - auth/user-menu.tsx + login-gate.tsx : accueil = superadmin (racine) sinon portail ; copies « 3 espaces » ; déconnexion → portail.
+  - lib/demo-accounts.ts : 8 personas gouvernés (Rania racine, Tarek DG, Sonia, Karim, Mehdi, Leila, Anis Staroil, Nadia) — amine/yassine supprimés, modes portail/superadmin.
+  - api/auth/accounts/route.ts : CURATED = 8 comptes gouvernés.
+  - auth/login-screen.tsx : MODE_ICON/MODE_LABEL 3 espaces + copie héro.
+  - scripts/t50-accounts.ts (recréé) : purge 5 comptes plateforme (amine.chebbi, hichem.jaziri, ops, finance, admin@), Star Oil ACTIF (contrat + Anis débloqué), DG Tarek Mabrouk créé, Rania racine confirmée, 9 événements audit journalisés. Exécuté avec succès.
+- VÉRIFICATIONS : bunx tsc --noEmit → 0 erreur dans le périmètre T50 ; bun run lint → 0 erreur projet entier.
+- QA E2E agent-browser (session t52v) : login « 3 espaces » + grille 8 comptes gouvernés ; Rania → Super Admin (9 modules, en-tête 3 boutons) ; bascule Portail enseigne → sidebar 8 groupes complète avec badges Modération 9/Missions 5 ; navigation module par module vérifiée (espace=shadow → Shadow Market rendu, espace=agents, espace=backoffice, espace=portail, espace=observatoire, mode=mobile) ; Leila VIEWER → Shadow/BO masqués (6 groupes) ; Tarek DG → 8 groupes complets ; Anis → enseigne Staroil (120) connectée ; deep-link historique #mode=shadow converti en #mode=portail&espace=shadow ; viewport 390×844 → scrollWidth<=clientWidth, aucune overflow ; module Vue d'ensemble enrichi de R1 opérationnel post-restauration (bannière « 1 échéance critique · 6 factures en retard (10 900,00 DT) · plus pressante : Staroil J+15 », carte Santé, dismiss) ; 0 erreur console sur TOUT le parcours.
+- PROTECTION : **commit git 0fbe505** (T50 restauré + T52-R1 + T52-R2 partiel + worklog) — le travail est désormais versionné, un futur incident n'effacera plus rien.
+- Captures : qa-t50r-superadmin.png, qa-t50r-shadow.png, qa-t50r-agents.png, qa-t50r-mobile-b2c.png, qa-t50r-leila-viewer.png, qa-t50r-tarek-dg.png, qa-t50r-anis-staroil.png, qa-t50r-mobile-390.png, qa-t50r-sa-overview-enrichi.png.
+
+Stage Summary:
+- T50 RESTAURÉ ET COMMITÉ : 3 espaces exactement (Portail enseigne fusionné · Mobile B2C · Super Admin), zéro lien haut obsolète, gouvernance des comptes conforme (racine unique Rania, purges, Star Oil ACTIF, DG tout visible).
+- Cause des « pertes » identifiée : (1) absence de commit git des livraisons précédentes + (2) tueur OOM qui稳定性 le serveur. Règles nouvelles : commit systématique après chaque round ; discipline mémoire (une session navigateur, zombies nettoyés).
+- T52-R1 (Pilotage SA) INTÉGRÉ et re-validé : routes echeances/supervision réécrites sur modèles réels, overview enrichi (bannière, échéances, santé, MRR 6 mois reconstruit).
+- T52-R2 (Cycle commercial) : changements partiels préservés sur disque (sa-contracts/sa-plans/sa-invoices modifiés, lint clean, captures qa-t52-r2-*.png existantes) mais INACHEVÉS (timeout de l'agent, pas d'API relances câblée, pas d'entrée worklog, QA non refaite) → à re-dispatcher avec un agent de complétion.
+- Règle d'or confirmée pour tous les agents : QUALITÉ ET PERFECTION AVANT TOUT, précaution, zéro casse.
