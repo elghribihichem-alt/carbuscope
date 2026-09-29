@@ -1471,3 +1471,24 @@ Stage Summary:
 - Décisions documentées : (1) « Charger plus » non ajouté au journal — pagination discrète T32 déjà testée, redondance évitée ; (2) meta SECURITE défini localement dans sa-audit (saas.ts additif-strict intouché) ; (3) sa-demographie-io.tsx est VIVANT (importé) — pas un fichier mort, jamais touché ; (4) /api/super/ai (405 GET) = route POST du module mort sa-ai.tsx, non consommée — documentée sans réparation (hors périmètre).
 - QA : mutations réelles testées puis strictement rétablies (suspension→réactivation Riadh Jelassi actif:true ; tâche IA de test supprimée ; zone carto jamais enregistrée ; les événements d'audit UTILISATEUR/SECURITE/AGENT_IA de la session restent au journal = trace honnête, 57 événements). 0 erreur console, responsive 390×844 sans overflow, lint 0, tsc périmètre 0.
 - Captures : qa-t52-r3-users.png, qa-t52-r3-audit.png, qa-t52-r3-audit-filtre.png, qa-t52-r3-carto.png, qa-t52-r3-demographie.png, qa-t52-r3-ai.png, qa-t52-r3-mobile.png. Enregistrement détaillé : agent-ctx/T52-R3-gouvernance-outils-sa.md.
+
+---
+Task ID: T52-R4 (balayage E2E final + dossier de validation espace Super Admin)
+Agent: Chef d'orchestration (Z.ai Code)
+Task: Balayage E2E complet des 9 modules Super Admin + des 3 espaces, constitution du dossier de validation groupée (arbitrage utilisateur : validation en fin d'espace), préparation du gel souple.
+
+Work Log:
+- Balayage agent-browser (session t52r4, zombies nettoyés avant) : connexion Rania → parcours des 9 modules (Vue d'ensemble, Enseignes & contrats, Plans & tarifs, Facturation, Utilisateurs, Démographie, Agent IA, Cartographie, Journal d'audit) → **0 erreur console/page sur CHACUN**.
+- Espaces : Portail enseigne (#mode=portail&espace=observatoire, groupes fusionnés rendus), Mobile B2C (#mode=mobile) — structure T50 intacte après les rounds R1/R2b/R3.
+- Responsive 390×844 : scrollWidth <= clientWidth → true (mobile B2C et portail) ; footer collé au bas du document (aucun flottement, poussé naturellement sur contenu long) ; capture qa-t52-r4-390.png + qa-t52-r4-portail-390.png + qa-t52-r4-audit-final.png.
+- `bun run lint` → 0 erreur projet entier. tsc : 0 erreur dans le périmètre T52 (stock historique ~140 erreurs globales inchangé, porté par les fichiers morts).
+- Tous les commits du cycle : 0fbe505 (T50 restauré), 403180d/947089d/df9e22d (R2b), 1ba00bf/b011723 (R3) — plus le présent commit R4.
+
+Stage Summary:
+- **DOSSIER DE VALIDATION ESPACE SUPER ADMIN (validation groupée, soumis à l'utilisateur)** :
+  ① R1 Pilotage — Vue d'ensemble enrichie : bannière alertes consolidées (échéances critiques + retards factures), 6 KPIs, carte échéances + factures en retard, graphique MRR 6 mois (données réelles reconstruites), carte Santé plateforme (base/endpoints/fraîcheur/charge), flux audit. Routes echeances/supervision RÉÉCRITES sur modèles Prisma réels (elles renvoyaient 500 avant).
+  ② R2b Cycle commercial — Facturation : relances unitaires + relance en masse avec Dialog de confirmation et compteurs, récap recouvrement (74 %, vieillissement), recherche + filtres chips, export CSV. Contrats : recherche/filtres statut+plan, Dialogs confirmation suspension/réactivation avec détail comptes impactés, export CSV fiabilisé, dialogs édition/création. Plans : synthèse MRR/ARR/répartition, badge plan populaire, dialog édition.
+  ③ R3 Gouvernance & outils — Journal d'audit : chip Sécurité (kind SECURITE débloqué côté API + meta local), recherche texte débouncée, export CSV multi-pages, badges enseigne, pagination conservée. Utilisateurs : récap 4 mini-cartes, recherche, chips rôles, export CSV, suspension avec confirmation. Cartographie : labels cardinaux francisés + pastille brouillon non enregistré. Démographie : corrections tokens dark mode + survol dates FR. Agent IA : flux réel testé (tâche exécutée par LLM en 0,4 s, puis supprimée).
+  ④ Transverse : UI 100 % FR, palette sans bleu, shadcn, dark mode, 44px cibles, listes max-h-96, 0 erreur console sur les 9 modules, responsive 390px, footer collé, lint 0, mutations de test toutes rétablies, journalisation audit systématique, commits git après chaque round.
+- **Décisions en attente de l'utilisateur (gel de l'espace)** : purge des fichiers morts ~9 700 lignes (sa-billing, sa-devis, sa-clients, sa-comptes, sa-config, sa-support, sa-analytics, sa-ai, sa-banniere-alertes) — verdicts de minage documentés (R1/R2b/R3) ; ⚠️ sa-demographie-io.tsx est VIVANT (DemographieIoBar importé) → retiré de la liste de purge ; routes /api/super fantômes (devis, clients, factures, analytics, jobs…) à arbitrer.
+- **Gel souple activé sur l'espace Super Admin** : correctifs critiques + micro-ajustements autorisés uniquement, sans casser code ni design. Prochaine étape du cycle utilisateur : espace Tenant (Portail enseigne, 7 rounds) — commencer par l'harmonisation i18n de la sidebar fusionnée.
