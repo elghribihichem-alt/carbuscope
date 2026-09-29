@@ -15,8 +15,10 @@ import { KpiCard } from "@/components/shell/kpi-card"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
 import { tooltipStyle, num } from "@/lib/chart"
 import { useChartPalette } from "@/hooks/use-chart-palette"
+import { cn } from "@/lib/utils"
 import type { AlertDTO, BrandDTO, MovementDTO, MovementsStats } from "@/lib/types"
-import { Siren, Bell, Info, Radar } from "lucide-react"
+import { Siren, Bell, Info, Radar, Building2, TrendingUp, TrendingDown } from "lucide-react"
+import { useAppStore } from "@/store/app-store"
 import { AlertsTimeline } from "./alerts-timeline"
 import { MovementsHistory } from "./movements-history"
 import { RelancesCard } from "./relances-card"
@@ -32,6 +34,7 @@ type VeilleData = {
 
 export function VeilleTab() {
   const palette = useChartPalette()
+  const myBrandSlug = useAppStore((s) => s.brandSlug)
   const [data, setData] = useState<VeilleData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,6 +79,13 @@ export function VeilleTab() {
     for (const b of data?.brands ?? []) map[b.name] = b.color
     return map
   }, [data])
+
+  // T53-T3 : nom de l'enseigne connectée (pour distinguer « votre réseau » dans les
+  // tableaux de veille) — résolu via le slug, aucune donnée inventée.
+  const myBrandName = useMemo(
+    () => data?.brands.find((b) => b.slug === myBrandSlug)?.name ?? null,
+    [data, myBrandSlug],
+  )
 
   if (error && !data) {
     return (
@@ -164,8 +174,129 @@ export function VeilleTab() {
         </CardContent>
       </Card>
 
+      {/* ---------- Mouvements par enseigne (T53-T3, stats.byBrand réelles) ---------- */}
+      <MovementsByBrand stats={data.stats} brandColors={brandColors} myBrandName={myBrandName} />
+
       {/* ---------- Historique des mouvements (A.7.3) ---------- */}
       <MovementsHistory movements={data.movements} brandColors={brandColors} />
     </motion.div>
+  )
+}
+
+// ---------- Mouvements par enseigne — 12 derniers mois (T53-T3) ----------
+
+/** Solde net (ouvertures − fermetures) : émeraude si positif, rouge si négatif. */
+function NetCell({ value }: { value: number }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 text-xs font-semibold tabular-nums",
+        value > 0
+          ? "text-emerald-700 dark:text-emerald-400"
+          : value < 0
+            ? "text-red-700 dark:text-red-400"
+            : "text-muted-foreground",
+      )}
+    >
+      {value > 0 ? <TrendingUp className="h-3 w-3" aria-hidden /> : value < 0 ? <TrendingDown className="h-3 w-3" aria-hidden /> : null}
+      {value > 0 ? "+" : ""}{num(value)}
+    </span>
+  )
+}
+
+/** Cumuls par enseigne servis par /api/stats/movements (champ byBrand, 12 mois). */
+function MovementsByBrand({
+  stats, brandColors, myBrandName,
+}: {
+  stats: MovementsStats
+  brandColors: Record<string, string>
+  myBrandName: string | null
+}) {
+  const rows = [...stats.byBrand].sort(
+    (a, b) => (b.openings + b.renovations + b.closures) - (a.openings + a.renovations + a.closures),
+  )
+  const totals = rows.reduce(
+    (acc, r) => ({
+      openings: acc.openings + r.openings,
+      renovations: acc.renovations + r.renovations,
+      closures: acc.closures + r.closures,
+    }),
+    { openings: 0, renovations: 0, closures: 0 },
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Mouvements par enseigne — 12 derniers mois
+        </CardTitle>
+        <CardDescription>
+          Ouvertures, rénovations et fermetures cumulées par enseigne · solde net = ouvertures − fermetures
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-hidden rounded-xl border">
+          {/* Défilement vertical (max-h-96) ET horizontal (mobile ≤ 420px) du tableau. */}
+          <div className="max-h-96 overflow-auto">
+            <table className="w-full min-w-[420px] text-sm">
+              <caption className="sr-only">Mouvements du marché cumulés par enseigne sur les 12 derniers mois</caption>
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr className="border-b text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th scope="col" className="px-2.5 py-2">Enseigne</th>
+                  <th scope="col" className="px-2.5 py-2 text-right">Ouvertures</th>
+                  <th scope="col" className="px-2.5 py-2 text-right">Rénovations</th>
+                  <th scope="col" className="px-2.5 py-2 text-right">Fermetures</th>
+                  <th scope="col" className="px-2.5 py-2 text-right">Solde net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const mine = myBrandName !== null && r.brand === myBrandName
+                  return (
+                    <tr
+                      key={r.brand}
+                      className={cn(
+                        "border-b transition-colors last:border-0 hover:bg-muted/40",
+                        mine && "bg-emerald-50/60 dark:bg-emerald-950/30",
+                      )}
+                    >
+                      <td className="px-2.5 py-2">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: brandColors[r.brand] ?? "#94a3b8" }}
+                            aria-hidden
+                          />
+                          <span className="font-medium">{r.brand}</span>
+                          {mine && (
+                            <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+                              Votre réseau
+                            </Badge>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-2.5 py-2 text-right text-xs font-medium tabular-nums">{num(r.openings)}</td>
+                      <td className="px-2.5 py-2 text-right text-xs tabular-nums text-muted-foreground">{num(r.renovations)}</td>
+                      <td className="px-2.5 py-2 text-right text-xs tabular-nums text-muted-foreground">{num(r.closures)}</td>
+                      <td className="px-2.5 py-2 text-right"><NetCell value={r.openings - r.closures} /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot className="border-t bg-muted/40">
+                <tr className="text-xs font-semibold">
+                  <th scope="row" className="px-2.5 py-2 text-left">Ensemble du marché</th>
+                  <td className="px-2.5 py-2 text-right tabular-nums">{num(totals.openings)}</td>
+                  <td className="px-2.5 py-2 text-right tabular-nums">{num(totals.renovations)}</td>
+                  <td className="px-2.5 py-2 text-right tabular-nums">{num(totals.closures)}</td>
+                  <td className="px-2.5 py-2 text-right"><NetCell value={totals.openings - totals.closures} /></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

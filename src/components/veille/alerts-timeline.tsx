@@ -14,7 +14,7 @@ import { SeverityBadge, ImpactBadge } from "@/components/shell/badges"
 import { ALERT_TYPE_LABELS, type AlertDTO } from "@/lib/types"
 import { MapPin, Search, RotateCcw, DoorOpen, Hammer, ArrowLeftRight, HardHat, Scale } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { relativeDate, dateFr, isFresh, SEVERITY_DOT, NEUTRAL_DOT } from "./veille-utils"
+import { relativeDate, dateFr, isFresh, SEVERITY_DOT, NEUTRAL_DOT, normalizeFr } from "./veille-utils"
 
 const SEV_ORDER: Record<string, number> = { CRITICAL: 0, MEDIUM: 1, INFO: 2 }
 const ALERT_TYPES = ["OPENING", "RENOVATION", "REBRAND", "INFRA", "REGULATORY"] as const
@@ -43,13 +43,21 @@ export function AlertsTimeline({ alerts, brandColors }: { alerts: AlertDTO[]; br
 
   const hasFilters = types.length > 0 || severity !== "all" || search.trim() !== ""
 
+  // T53-T3 : compteurs par type sur les chips (données réelles du flux chargé).
+  const typeCounts = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const a of alerts) c[a.type] = (c[a.type] ?? 0) + 1
+    return c
+  }, [alerts])
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    // T53-T3 : recherche insensible aux accents (pattern « Mes stations »).
+    const q = normalizeFr(search.trim())
     return alerts
       .filter(a =>
         (types.length === 0 || types.includes(a.type)) &&
         (severity === "all" || a.severity === severity) &&
-        (!q || `${a.title} ${a.description} ${a.brand} ${a.gouvernorat}`.toLowerCase().includes(q))
+        (!q || normalizeFr(`${a.title} ${a.description} ${a.brand} ${a.gouvernorat}`).includes(q))
       )
       .sort((a, b) => {
         const s = (SEV_ORDER[a.severity] ?? 9) - (SEV_ORDER[b.severity] ?? 9)
@@ -91,8 +99,14 @@ export function AlertsTimeline({ alerts, brandColors }: { alerts: AlertDTO[]; br
                 onClick={() => toggleType(t)}
                 aria-pressed={active}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className="h-3.5 w-3.5" aria-hidden />
                 {ALERT_TYPE_LABELS[t]}
+                <span
+                  className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground"
+                  aria-label={`${typeCounts[t] ?? 0} alerte(s) de ce type`}
+                >
+                  {typeCounts[t] ?? 0}
+                </span>
               </Button>
             )
           })}

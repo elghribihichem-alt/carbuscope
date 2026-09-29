@@ -372,7 +372,7 @@ function PriceHistoryChart({ data }: { data: FuelPricesResponse }) {
                 tickLine={false}
                 axisLine={false}
                 width={44}
-                tickFormatter={(v: number) => v.toFixed(2)}
+                tickFormatter={(v: number) => v.toFixed(2).replace(".", ",")}
                 domain={["auto", "auto"]}
               />
               <Tooltip
@@ -465,10 +465,27 @@ function MarginSimulator({ current }: { current: FuelPriceCurrent[] }) {
 
   const fmtDT = (v: number) => `${NUM.format(Math.round(v))} DT`
 
-  const savePreset = () => {
-    toast.success("Scénario marge copié", {
-      description: `Marge annuelle : ${fmtDT(marginTotal)} — ${NUM.format(Math.round(litresMainPerYear + litresSecondaryPerYear))} L/an.`,
-    })
+  // T53-T3 : copie RÉELLE du scénario au presse-papiers (le bouton « Noter » ne
+  // sauvegardait rien) — libellé honnête + repli toast si l'API Clipboard est absente.
+  const copyScenario = async () => {
+    const summary = [
+      `CarbuScope — scénario de marge carburant (${FUEL_META[mainFuel].label})`,
+      `Trafic captif : ${NUM.format(traffic)} véh/j · plein moyen : ${litresPerVeh} L · taux de plein : ${fillRate} %`,
+      `Part ${FUEL_META[mainFuel].label.split(" ")[0].toLowerCase()} : ${shareMain} %${includeSecondary ? ` · secondaire inclus (${FUEL_META[secondaryFuel].label})` : ""}`,
+      `Marge réglementaire : ${fmtMillimes(main?.marginMillimes ?? 0)}/L${includeSecondary ? ` · ${fmtMillimes(secondary?.marginMillimes ?? 0)}/L` : ""}`,
+      `Volume annuel distribué : ${NUM.format(Math.round(litresMainPerYear + litresSecondaryPerYear))} L`,
+      `Marge carburant par an : ${fmtDT(marginTotal)}`,
+    ].join("\n")
+    try {
+      await navigator.clipboard.writeText(summary)
+      toast.success("Scénario copié dans le presse-papiers", {
+        description: `Marge annuelle : ${fmtDT(marginTotal)} — collez-le où bon vous semble.`,
+      })
+    } catch {
+      toast.info("Scénario prêt", {
+        description: `Marge annuelle : ${fmtDT(marginTotal)} — la copie automatique n'est pas disponible sur ce navigateur.`,
+      })
+    }
   }
 
   return (
@@ -632,10 +649,10 @@ function MarginSimulator({ current }: { current: FuelPriceCurrent[] }) {
           variant="outline"
           size="sm"
           className="w-full gap-1.5 transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:border-emerald-800 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
-          onClick={savePreset}
+          onClick={() => void copyScenario()}
         >
           <Banknote className="h-3.5 w-3.5" aria-hidden />
-          Noter ce scénario
+          Copier le scénario
         </Button>
       </CardContent>
     </Card>

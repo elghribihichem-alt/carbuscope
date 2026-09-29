@@ -16,7 +16,7 @@ import { MOVEMENT_TYPE_LABELS, type MovementDTO } from "@/lib/types"
 import { Search, Download } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { dateFr, MOVEMENT_BADGE_CLS, NEUTRAL_DOT, exportMovementsCsv } from "./veille-utils"
+import { dateFr, MOVEMENT_BADGE_CLS, NEUTRAL_DOT, normalizeFr, exportMovementsCsv } from "./veille-utils"
 
 const MOVEMENT_TYPES = ["OPENING", "RENOVATION", "CLOSURE", "REBRAND"] as const
 
@@ -27,10 +27,11 @@ export function MovementsHistory({
   const [search, setSearch] = useState("")
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    // T53-T3 : recherche insensible aux accents (pattern « Mes stations »).
+    const q = normalizeFr(search.trim())
     return movements.filter(m =>
       (type === "all" || m.type === type) &&
-      (!q || `${m.brand} ${m.station} ${m.gouvernorat}`.toLowerCase().includes(q))
+      (!q || normalizeFr(`${m.brand} ${m.station} ${m.gouvernorat}`).includes(q))
     )
   }, [movements, type, search])
 

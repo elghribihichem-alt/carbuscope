@@ -28,7 +28,7 @@ const labelCls = cn(cellCls, "bg-muted/40 text-[10.5px] font-semibold uppercase 
 function WinnerMark() {
   return (
     <span
-      className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-emerald-700"
+      className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
       title="Meilleur score sur ce critère"
     >
       <Trophy className="h-2.5 w-2.5" aria-hidden />
@@ -182,10 +182,10 @@ export function StationCompareDialog({
                 {stations.map(s => (
                   <div key={s.id} className={cn(cellCls, "space-x-1.5")}>
                     {s.open24 ? (
-                      <Badge className="bg-emerald-100 text-[10px] text-emerald-700 hover:bg-emerald-100">24h/24</Badge>
+                      <Badge className="bg-emerald-100 text-[10px] text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-950">24h/24</Badge>
                     ) : null}
                     {s.open7j ? (
-                      <Badge className="bg-amber-100 text-[10px] text-amber-700 hover:bg-amber-100">7j/7</Badge>
+                      <Badge className="bg-amber-100 text-[10px] text-amber-700 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-400 dark:hover:bg-amber-950">7j/7</Badge>
                     ) : null}
                     {!s.open24 && !s.open7j ? <span className="text-[12px] text-muted-foreground">Horaires classiques</span> : null}
                   </div>
@@ -196,7 +196,7 @@ export function StationCompareDialog({
                 {stations.map(s => (
                   <div key={s.id} className={cellCls}>
                     <div className="flex flex-wrap items-center gap-1">
-                      <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums", s.services.length === bestServices && n > 1 ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>
+                      <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums", s.services.length === bestServices && n > 1 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
                         {s.services.length}
                       </span>
                       {s.services.length === bestServices && n > 1 && <WinnerMark />}
@@ -229,13 +229,13 @@ export function StationCompareDialog({
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold",
-                          i === championIdx ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+                          i === championIdx ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400" : "bg-muted text-muted-foreground"
                         )}
                       >
                         <Trophy className="h-3 w-3" aria-hidden />
                         {wins[i]}/{CRITERIA_COUNT}
                       </span>
-                      {i === championIdx && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Meilleur profil</span>}
+                      {i === championIdx && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Meilleur profil</span>}
                     </div>
                     <div className="mt-2 flex items-center gap-1.5">
                       <Button
@@ -303,12 +303,12 @@ export function StationCompareDialog({
 
             {/* Synthèse */}
             {champion && n > 1 && (
-              <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-3.5">
-                <p className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold text-amber-800">
+              <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-3.5 dark:border-amber-900 dark:bg-amber-950/40">
+                <p className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold text-amber-800 dark:text-amber-300">
                   <Trophy className="h-4 w-4" aria-hidden />
                   Analyse comparative — meilleur profil global : {champion.name}
                 </p>
-                <p className="mt-1 text-[12px] leading-relaxed text-amber-800/80">
+                <p className="mt-1 text-[12px] leading-relaxed text-amber-800/80 dark:text-amber-300/80">
                   {champion.name} domine {wins[championIdx] ?? 0} critère{((wins[championIdx] ?? 0) > 1) ? "s" : ""} sur {CRITERIA_COUNT}
                   {" "}({num(champion.traffic)} véh./j de trafic captif, note {champion.rating.toFixed(1).replace(".", ",")}/5,
                   {" "}{champion.services.length} services, fiche vérifiée le {formatDateFr(champion.lastVerified)}).

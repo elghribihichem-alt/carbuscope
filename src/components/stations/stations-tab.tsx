@@ -610,13 +610,13 @@ export function StationsTab() {
                     <p className="text-[11px] text-muted-foreground">Vérif. {formatDateFr(s.lastVerified)}</p>
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2">
-                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => setDetailId(s.id)}>
+                    <Button variant="outline" size="sm" className="h-11 gap-1 text-xs" onClick={() => setDetailId(s.id)}>
                       <Eye className="h-3.5 w-3.5" aria-hidden />Fiche
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => openEdit(s)}>
+                    <Button variant="outline" size="sm" className="h-11 gap-1 text-xs" onClick={() => openEdit(s)}>
                       <Pencil className="h-3.5 w-3.5" aria-hidden />Modifier
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => locate(s.code)}>
+                    <Button variant="outline" size="sm" className="h-11 gap-1 text-xs" onClick={() => locate(s.code)}>
                       <MapPin className="h-3.5 w-3.5" aria-hidden />Carte
                     </Button>
                   </div>

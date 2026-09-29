@@ -170,14 +170,16 @@ export function RelancesCard() {
             <KpiCard
               label="Fiches en retard"
               value={<span className="tabular-nums">{k.overdue}</span>}
-              sub={`sur ${k.total} stations actives`}
+              // T53-T3 : k.total est compté au NATIONAL par /api/relances (route protégée
+              // ce round) — libellé explicite en attendant la correction côté API.
+              sub={`sur ${k.total} stations actives (toutes enseignes)`}
               icon={ShieldAlert}
               tone={k.overdue > 0 ? "warning" : "success"}
             />
             <KpiCard
               label="Taux de fraîcheur"
               value={<span className="tabular-nums">{k.freshnessRate.toLocaleString("fr-FR")} %</span>}
-              sub={`au seuil J+${seuil}`}
+              sub={`au seuil J+${seuil} · base nationale`}
               icon={CalendarCheck}
               tone={k.freshnessRate >= 90 ? "success" : "warning"}
             />

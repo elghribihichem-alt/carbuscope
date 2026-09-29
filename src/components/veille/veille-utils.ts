@@ -51,6 +51,11 @@ export const MOVEMENT_BADGE_CLS: Record<string, string> = {
 /** Couleur par défaut (enseigne inconnue). */
 export const NEUTRAL_DOT = "#94a3b8"
 
+/** Recherche insensible à la casse et aux accents (T53-T3, pattern « Mes stations »). */
+export function normalizeFr(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+}
+
 /**
  * Export CSV côté client (séparateur « ; », BOM UTF-8 pour Excel FR).
  * Génère un Blob et déclenche le téléchargement.

@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react"
 import {
   ArrowRight, Clock, Fuel, GitCompareArrows, History, Loader2, MapPin, MessageSquare,
-  Pencil, ShieldCheck, Star,
+  MessageSquareReply, Pencil, ShieldCheck, Star,
 } from "lucide-react"
 import type { ReviewDTO, StationDTO, StationDetail } from "@/lib/types"
 import { useAppStore } from "@/store/app-store"
@@ -45,14 +45,37 @@ function SectionTitle({ icon: Icon, children }: { icon: React.ComponentType<{ cl
 }
 
 function ReviewRow({ review }: { review: ReviewDTO }) {
+  // T53-T3 : la réponse officielle de l'enseigne (replyText, C.2.6+) est servie par
+  // /api/stations/[id] — on la restitue ici (même pattern émeraude que « Avis & réputation »).
   return (
     <div className="rounded-lg border bg-muted/20 p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-1.5">
         <p className="text-xs font-semibold">{review.author}</p>
-        <Stars rating={review.rating} />
+        <div className="flex items-center gap-1.5">
+          {review.replyText && (
+            <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+              <MessageSquareReply className="h-3 w-3" aria-hidden /> Répondu
+            </Badge>
+          )}
+          <Stars rating={review.rating} />
+        </div>
       </div>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{review.comment}</p>
       <p className="mt-1 text-[10px] text-muted-foreground/70">{formatDateFr(review.createdAt)}</p>
+      {review.replyText && (
+        <div className="mt-2 rounded-lg border-l-2 border-emerald-500 bg-emerald-50/60 px-2.5 py-2 dark:bg-emerald-950/40">
+          <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+            <MessageSquareReply className="h-3 w-3 shrink-0" aria-hidden />
+            <span className="truncate">Réponse officielle{review.repliedBy ? ` · ${review.repliedBy}` : ""}</span>
+            {review.repliedAt && (
+              <span className="font-normal text-emerald-700/70 dark:text-emerald-400/70" title={formatDateFr(review.repliedAt)}>
+                · {formatDateFr(review.repliedAt)}
+              </span>
+            )}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed">{review.replyText}</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -204,10 +227,15 @@ export function StationDetailDialog({
               {/* Avis récents + historique */}
               <div className="grid gap-3 lg:grid-cols-2">
                 <section className="rounded-xl border p-3">
-                  <SectionTitle icon={MessageSquare}>Avis récents</SectionTitle>
+                  <SectionTitle icon={MessageSquare}>Avis récents ({detail?.reviews.length ?? 0})</SectionTitle>
                   {detail && detail.reviews.length > 0 ? (
                     <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                      {detail.reviews.slice(0, 3).map((r) => <ReviewRow key={r.id} review={r} />)}
+                      {detail.reviews.slice(0, 6).map((r) => <ReviewRow key={r.id} review={r} />)}
+                      {detail.reviews.length > 6 && (
+                        <p className="pt-1 text-[10px] text-muted-foreground">
+                          6 avis affichés sur {detail.reviews.length} — voir l&apos;onglet « Avis &amp; réputation » pour le flux complet.
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <p className="text-xs italic text-muted-foreground">Aucun avis pour cette station.</p>
