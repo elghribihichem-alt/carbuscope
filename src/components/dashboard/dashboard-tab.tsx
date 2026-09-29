@@ -243,13 +243,16 @@ export function DashboardTab() {
               </Button>
             </div>
           </CardHeader>
+          {/* T53-T2 — liste sémantique (a11y, zéro changement visuel) */}
           <CardContent className="grid gap-2">
-            {feed.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">Aucune alerte active pour le moment.</p>
-            )}
-            {feed.map(a => (
-              <AlertRow key={a.id} alert={a} onSee={() => setTab("veille")} />
-            ))}
+            <ul className="grid gap-2" aria-label="Dernières alertes actives">
+              {feed.length === 0 && (
+                <li className="py-8 text-center text-sm text-muted-foreground">Aucune alerte active pour le moment.</li>
+              )}
+              {feed.map(a => (
+                <AlertRow key={a.id} alert={a} onSee={() => setTab("veille")} />
+              ))}
+            </ul>
           </CardContent>
         </Card>
       </div>
@@ -309,7 +312,7 @@ export function DashboardTab() {
 
 function AlertRow({ alert, onSee }: { alert: AlertDTO; onSee: () => void }) {
   return (
-    <div className="rounded-lg border p-3 transition-colors hover:bg-muted/50">
+    <li className="rounded-lg border p-3 transition-colors hover:bg-muted/50">
       <div className="flex items-center gap-2">
         <SeverityBadge severity={alert.severity} />
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
@@ -333,6 +336,6 @@ function AlertRow({ alert, onSee }: { alert: AlertDTO; onSee: () => void }) {
           <Eye className="h-3 w-3" />
         </Button>
       </div>
-    </div>
+    </li>
   )
 }
