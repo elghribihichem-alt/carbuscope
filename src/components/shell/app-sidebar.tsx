@@ -24,7 +24,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { useAppStore, TAB_ACCESS, type Mode, type Tab } from "@/store/app-store"
+import { useAppStore, TAB_ACCESS, SHADOW_MODULE_ROLES, PLATFORM_MODULE_ROLES, type Mode, type Tab } from "@/store/app-store"
 import { useI18n, type DictKey } from "@/lib/i18n"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import { CALC_DEFS } from "@/components/calculators/calc-shared"
@@ -72,6 +72,8 @@ interface MenuModel {
 
 /** Défauts de sous-navigation (contrat partagé avec les vues : nav[key] ?? défaut). */
 export const NAV_DEFAULTS: Record<string, string> = {
+  /** T50 — module actif de l'espace enseigne fusionné. */
+  espace: "observatoire",
   portail: "dashboard",
   "portal-terrain": "missions",
   shadow: "overview",
@@ -129,7 +131,9 @@ function useMenu(mode: Mode): MenuModel {
   const [boPending, setBoPending] = useState<number | null>(null)
   const [boMissions, setBoMissions] = useState<number | null>(null)
   useEffect(() => {
-    if (mode !== "backoffice") return
+    // T50 : les badges back-office sont chargés dès l'espace enseigne (le
+    // groupe G7 y est rendu), plus seulement dans l'ancien mode back-office.
+    if (mode !== "portail") return
     let alive = true
     fetch("/api/contributions?status=PENDING&limit=50")
       .then(r => r.json())
@@ -174,23 +178,46 @@ function useMenu(mode: Mode): MenuModel {
       })),
     })
 
-    // -- OBSERVATOIRE B2B ------------------------------------------------------
-    if (mode === "observatoire") {
+    // -- ESPACE ENSEIGNE FUSIONNÉ (T50 — blueprint 8 groupes) -------------------
+    // Un seul espace « portail » embarque : observatoire (G1, G2, G5, G8),
+    // portail enseigne (G3), veille terrain + agents (G4), Shadow Market (G6),
+    // back-office plateforme (G7). Le module actif est porté par nav.espace.
+    if (mode === "portail") {
+      const espace = cur("espace")
       const locked = (tb: Tab) => !TAB_ACCESS[tb].includes(role)
-      const go = (tb: Tab) => () => { setTab(tb); closeMobile() }
       const allowed = (tb: Tab) => !locked(tb)
+      const go = (tb: Tab) => () => { setNav("espace", "observatoire"); setTab(tb); closeMobile() }
 
       const obsTab = (tb: Tab, icon: IconType, labelKey: DictKey): NavItem =>
-        leaf(tb, icon, t(labelKey), tab === tb, allowed(tb) ? go(tb) : () => {}, { locked: locked(tb) })
+        leaf(tb, icon, t(labelKey), espace === "observatoire" && tab === tb, allowed(tb) ? go(tb) : () => {}, { locked: locked(tb) })
 
       const obsBranch = (
         tb: Tab, icon: IconType, labelKey: DictKey, navKey: string,
         children: { id: string; icon: IconType; label: string }[],
       ): NavItem => {
         const isLocked = locked(tb)
-        const select = () => { if (!isLocked) { setTab(tb); closeMobile() } }
-        return branch(tb, icon, t(labelKey), tab === tb && !isLocked, select, navKey, children, isLocked)
+        const select = () => { if (!isLocked) { setNav("espace", "observatoire"); setTab(tb); closeMobile() } }
+        return branch(tb, icon, t(labelKey), espace === "observatoire" && tab === tb && !isLocked, select, navKey, children, isLocked)
       }
+
+      // G3 — onglets internes du Portail enseigne.
+      const pTab = (id: string, icon: IconType, label: string): NavItem =>
+        leaf(id, icon, label, espace === "portail" && cur("portail") === id, () => { setNav("espace", "portail"); setNav("portail", id); closeMobile() })
+
+      // G6 — sections Shadow Market (accordéons).
+      const sBranch = (
+        id: string, icon: IconType, label: string,
+        children: { id: string; icon: IconType; label: string }[],
+      ): NavItem =>
+        branch(
+          id, icon, label, espace === "shadow" && cur("shadow") === id,
+          () => { setNav("espace", "shadow"); setNav("shadow", id); closeMobile() },
+          `shadow-${id}`, children,
+        )
+
+      // G7 — outils du back-office plateforme.
+      const boItem = (id: string, icon: IconType, label: string, extra?: Partial<NavItem>): NavItem =>
+        leaf(id, icon, label, espace === "backoffice" && cur("backoffice") === id, () => { setNav("espace", "backoffice"); setNav("backoffice", id); closeMobile() }, extra)
 
       const analyseItems: NavItem[] = [
         obsTab("competition", Crosshair, "rm.tabs.competition"),
@@ -212,80 +239,50 @@ function useMenu(mode: Mode): MenuModel {
         analyseItems.push(obsTab("demographie", Users, "rm.tabs.demographie"))
       }
 
-      return {
-        title: t("chrome.modeObservatoire"),
-        icon: LineChart,
-        groups: [
-          {
-            id: "obs-pilotage", label: t("sb.groups.pilotage"), items: [
-              obsTab("dashboard", LayoutDashboard, "rm.tabs.dashboard"),
-              obsTab("map", Map, "rm.tabs.map"),
-            ],
-          },
-          {
-            id: "obs-reseau", label: t("sb.groups.reseau"), items: [
-              obsTab("stations", Fuel, "rm.tabs.stations"),
-              obsTab("prices", Banknote, "rm.tabs.prices"),
-              obsTab("veille", Radar, "rm.tabs.veille"),
-            ],
-          },
-          { id: "obs-analyse", label: t("sb.groups.analyse"), items: analyseItems },
-          {
-            id: "obs-gestion", label: t("sb.groups.gestion"), items: [
-              obsTab("reports", FileText, "rm.tabs.reports"),
-              obsTab("settings", Settings, "rm.tabs.settings"),
-            ],
-          },
-        ],
-      }
-    }
-
-    // -- PORTAIL ENSEIGNE -----------------------------------------------------
-    if (mode === "portail") {
-      const pTab = (id: string, icon: IconType, label: string): NavItem =>
-        leaf(id, icon, label, cur("portail") === id, () => { setNav("portail", id); closeMobile() })
-      return {
-        title: t("chrome.modePortail"),
-        icon: Building,
-        groups: [{
-          id: "portail", label: "Espace enseigne", items: [
-            pTab("dashboard", LayoutDashboard, "Tableau de bord"),
-            pTab("reviews", Star, "Avis & réputation"),
+      // Blueprint 8 groupes — G6 et G7 sont conditionnés aux rôles (T50).
+      const groups: NavGroup[] = [
+        {
+          id: "f-pilotage", label: t("sb.groups.pilotage"), items: [
+            obsTab("dashboard", LayoutDashboard, "rm.tabs.dashboard"),
+            obsTab("map", Map, "rm.tabs.map"),
+          ],
+        },
+        {
+          id: "f-reseau", label: t("sb.groups.reseau"), items: [
+            obsTab("stations", Fuel, "rm.tabs.stations"),
+            obsTab("prices", Banknote, "rm.tabs.prices"),
+            obsTab("veille", Radar, "rm.tabs.veille"),
+          ],
+        },
+        {
+          id: "f-enseigne", label: "Espace enseigne", items: [
+            pTab("dashboard", LayoutDashboard, "Tableau de bord enseigne"),
             pTab("stations", Store, "Mes stations"),
+            pTab("reviews", Star, "Avis & réputation"),
+            pTab("api", PlugZap, "API & promotions"),
+          ],
+        },
+        {
+          id: "f-terrain", label: "Veille terrain", items: [
             branch(
-              "terrain", Footprints, "Veille terrain",
-              cur("portail") === "terrain",
-              () => { setNav("portail", "terrain"); closeMobile() },
+              "terrain", Footprints, "Missions terrain",
+              espace === "portail" && cur("portail") === "terrain",
+              () => { setNav("espace", "portail"); setNav("portail", "terrain"); closeMobile() },
               "portal-terrain", [
                 { id: "missions", icon: ClipboardList, label: "Mes missions" },
                 { id: "own", icon: ShieldCheck, label: "Fiche propriétaire" },
                 { id: "competitors", icon: Eye, label: "Fiches concurrents" },
               ],
             ),
-            pTab("api", PlugZap, "API & promotions"),
+            leaf("agents", Smartphone, "Application agents terrain", espace === "agents", () => { setNav("espace", "agents"); closeMobile() }),
           ],
-        }],
-      }
-    }
+        },
+        { id: "f-analyse", label: t("sb.groups.analyse"), items: analyseItems },
+      ]
 
-    // -- SHADOW MARKET ----------------------------------------------------------
-    if (mode === "shadow") {
-      const sSection = (id: string, icon: IconType, label: string, extra?: Partial<NavItem>): NavItem =>
-        leaf(id, icon, label, cur("shadow") === id, () => { setNav("shadow", id); closeMobile() }, extra)
-      const sBranch = (
-        id: string, icon: IconType, label: string,
-        children: { id: string; icon: IconType; label: string }[],
-      ): NavItem =>
-        branch(
-          id, icon, label, cur("shadow") === id,
-          () => { setNav("shadow", id); closeMobile() },
-          `shadow-${id}`, children,
-        )
-      return {
-        title: t("chrome.modeShadow"),
-        icon: Ghost,
-        groups: [{
-          id: "shadow", label: "Shadow Market", items: [
+      if (SHADOW_MODULE_ROLES.includes(role)) {
+        groups.push({
+          id: "f-shadow", label: "Shadow Market", items: [
             sBranch("overview", BarChart3, "Vue d'Ensemble", [
               { id: "kpis", icon: BarChart3, label: "Indicateurs Clés" },
               { id: "alerts", icon: TriangleAlert, label: "Alertes" },
@@ -327,7 +324,35 @@ function useMenu(mode: Mode): MenuModel {
               { id: "notifications", icon: Bell, label: "Notifications" },
             ]),
           ],
-        }],
+        })
+      }
+
+      if (PLATFORM_MODULE_ROLES.includes(role)) {
+        groups.push({
+          id: "f-backoffice", label: "Back-office plateforme", items: [
+            boItem("moderation", ShieldAlert, "Modération", { badge: boPending, badgeTone: "danger" }),
+            boItem("sovereign", Database, "Données souveraines"),
+            boItem("freshness", TimerReset, "Fraîcheur"),
+            boItem("agents", UserCog, "Agents terrain"),
+            boItem("alerts", Radar, "Veille & alertes"),
+            boItem("stats", BarChart3, "Stats plateforme"),
+            boItem("decrees", Banknote, "Prix & décrets"),
+            boItem("missions", ClipboardList, "Missions", { badge: boMissions, badgeTone: "accent" }),
+          ],
+        })
+      }
+
+      groups.push({
+        id: "f-gestion", label: t("sb.groups.gestion"), items: [
+          obsTab("reports", FileText, "rm.tabs.reports"),
+          obsTab("settings", Settings, "rm.tabs.settings"),
+        ],
+      })
+
+      return {
+        title: t("chrome.modePortail"),
+        icon: Building,
+        groups,
       }
     }
 
@@ -354,28 +379,6 @@ function useMenu(mode: Mode): MenuModel {
       }
     }
 
-    // -- BACK-OFFICE ------------------------------------------------------------
-    if (mode === "backoffice") {
-      const boItem = (id: string, icon: IconType, label: string, extra?: Partial<NavItem>): NavItem =>
-        leaf(id, icon, label, cur("backoffice") === id, () => { setNav("backoffice", id); closeMobile() }, extra)
-      return {
-        title: t("chrome.modeBackoffice"),
-        icon: ClipboardCheck,
-        groups: [{
-          id: "backoffice", label: "Back-office plateforme", items: [
-            boItem("moderation", ShieldAlert, "Modération", { badge: boPending, badgeTone: "danger" }),
-            boItem("sovereign", Database, "Données souveraines"),
-            boItem("freshness", TimerReset, "Fraîcheur"),
-            boItem("agents", UserCog, "Agents terrain"),
-            boItem("alerts", Radar, "Veille & alertes"),
-            boItem("stats", BarChart3, "Stats plateforme"),
-            boItem("decrees", Banknote, "Prix & décrets"),
-            boItem("missions", ClipboardList, "Missions", { badge: boMissions, badgeTone: "accent" }),
-          ],
-        }],
-      }
-    }
-
     // -- MOBILE B2C (aperçu téléphone) ------------------------------------------
     if (mode === "mobile") {
       const mItem = (id: string, icon: IconType, label: string): NavItem =>
@@ -397,19 +400,9 @@ function useMenu(mode: Mode): MenuModel {
       }
     }
 
-    // -- AGENTS TERRAIN ----------------------------------------------------------
-    const aItem = (id: string, icon: IconType, label: string): NavItem =>
-      leaf(id, icon, label, cur("agents") === id, () => { setNav("agents", id); closeMobile() })
-    return {
-      title: t("chrome.modeAgents"),
-      icon: ClipboardCheck,
-      groups: [{
-        id: "agents", label: t("sb.agents.title"), items: [
-          aItem("agent-login", LogIn, "Connexion agent"),
-          aItem("agent-home", Home, "Accueil agent"),
-        ],
-      }],
-    }
+    // Repli défensif (union exhaustive : portail | mobile | superadmin) —
+    // rend un menu vide plutôt qu'un crash si un mode inconnu apparaissait.
+    return { title: t("chrome.modePortail"), icon: Building, groups: [] }
   }, [mode, tab, role, nav, hasDemographie, email, boPending, boMissions, t, setTab, setNav, closeMobile, cur])
 }
 
@@ -599,8 +592,10 @@ export function AppSidebar({ mode }: { mode: Mode }) {
   }, [collapsed, setSidebarCollapsed])
 
   // Les aperçus mobiles (maquette téléphone + colonnes marketing) gardent de
-  // la place : leur sidebar n'apparaît qu'à partir de xl.
-  const isPreviewMode = mode === "mobile" || mode === "agents"
+  // la place : leur sidebar n'apparaît qu'à partir de xl. T50 : l'aperçu
+  // agents terrain vit dans l'espace enseigne (nav.espace === "agents").
+  const espaceAgents = useAppStore(s => (s.nav.espace ?? NAV_DEFAULTS.espace) === "agents")
+  const isPreviewMode = mode === "mobile" || (mode === "portail" && espaceAgents)
   const desktopVisibility = isPreviewMode ? "xl:flex" : "md:flex"
 
   const ModeIcon = menu.icon

@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Bell, Building2, LineChart, Smartphone, ShieldCheck, Crown, ClipboardCheck, Ghost, Menu } from "lucide-react"
+import { Bell, Building2, Smartphone, Crown, Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/app/theme-toggle"
 import { LangToggle } from "@/components/app/lang-toggle"
@@ -15,18 +15,17 @@ import { useAppStore, type Mode } from "@/store/app-store"
 import type { BrandDTO, AlertDTO } from "@/lib/types"
 import { CarbuscopeLogo } from "./carbuscope-logo"
 
-const MODES: { value: Mode; labelKey: "chrome.modeObservatoire" | "chrome.modePortail" | "chrome.modeMobile" | "chrome.modeAgents" | "chrome.modeBackoffice" | "chrome.modeSuperadmin" | "chrome.modeShadow"; icon: React.ComponentType<{ className?: string }>; superOnly?: boolean }[] = [
-  { value: "observatoire", labelKey: "chrome.modeObservatoire", icon: LineChart },
+// T50 — 3 espaces produit uniquement. Les modules historiques (Observatoire,
+// Shadow Market, Back-office, Agents terrain) vivent dans la sidebar de
+// l'espace enseigne : plus aucun lien de mode en haut de page.
+const MODES: { value: Mode; labelKey: "chrome.modePortail" | "chrome.modeMobile" | "chrome.modeSuperadmin"; icon: React.ComponentType<{ className?: string }>; superOnly?: boolean }[] = [
   { value: "portail", labelKey: "chrome.modePortail", icon: Building2 },
   { value: "mobile", labelKey: "chrome.modeMobile", icon: Smartphone },
-  { value: "agents", labelKey: "chrome.modeAgents", icon: ClipboardCheck },
-  { value: "backoffice", labelKey: "chrome.modeBackoffice", icon: ShieldCheck },
-  { value: "shadow", labelKey: "chrome.modeShadow", icon: Ghost },
   { value: "superadmin", labelKey: "chrome.modeSuperadmin", icon: Crown, superOnly: true },
 ]
 
 export function AppHeader() {
-  const { mode, setMode, brandSlug, setBrandSlug, setTab, session, setMobileNavOpen } = useAppStore()
+  const { mode, setMode, brandSlug, setBrandSlug, setTab, setNav, session, setMobileNavOpen } = useAppStore()
   const { t } = useI18n()
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [alerts, setAlerts] = useState<AlertDTO[]>([])
@@ -72,7 +71,7 @@ export function AppHeader() {
           size="icon"
           className={cn(
             "h-9 w-9 shrink-0 text-[var(--c-ink-muted)] hover:bg-[var(--c-tint)]",
-            mode === "mobile" || mode === "agents" ? "xl:hidden" : "md:hidden",
+            mode === "mobile" ? "xl:hidden" : "md:hidden",
           )}
           onClick={() => setMobileNavOpen(true)}
           aria-label={t("sb.openMobile")}
@@ -156,7 +155,7 @@ export function AppHeader() {
                 {alerts.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">{t('chrome.alertsEmpty')}</p>}
                 {alerts.slice(0, 5).map(a => (
                   <button key={a.id} className="block w-full border-b border-[var(--c-line-faint)] px-3 py-2 text-left hover:bg-[var(--c-tint)]"
-                    onClick={() => { setMode("observatoire"); setTab("veille") }}>
+                    onClick={() => { setMode("portail"); setNav("espace", "observatoire"); setTab("veille") }}>
                     <p className="flex items-center gap-2 text-xs font-medium text-[var(--c-ink)]">
                       <span className={`h-1.5 w-1.5 rounded-full ${a.severity === "CRITICAL" ? "bg-[var(--c-terra)]" : a.severity === "MEDIUM" ? "bg-[var(--c-amber)]" : "bg-[var(--c-green)]"}`} />
                       {a.title}
@@ -166,7 +165,7 @@ export function AppHeader() {
                 ))}
               </div>
               <button className="w-full px-3 py-2 text-center text-xs font-medium text-[var(--c-brown)] hover:bg-[var(--c-tint)]"
-                onClick={() => { setMode("observatoire"); setTab("veille") }}>
+                onClick={() => { setMode("portail"); setNav("espace", "observatoire"); setTab("veille") }}>
                 {t('chrome.alertsAll')}
               </button>
             </PopoverContent>

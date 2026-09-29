@@ -1,11 +1,19 @@
 // CarbuScope — État global (zustand)
+// T50 : convergence 7 → 3 espaces produit. L'ancienne famille de modes
+// (observatoire · portail · mobile · agents · backoffice · superadmin · shadow)
+// devient : Portail enseigne ("portail" — fusion Observatoire + Portail +
+// Back-office + Shadow + Agents, naviguée par nav.espace) · Mobile B2C
+// ("mobile") · Super Administration ("superadmin", réservée au compte racine).
 
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import type { SessionUser } from "@/lib/types"
 
-export type Mode = "observatoire" | "portail" | "mobile" | "agents" | "backoffice" | "superadmin" | "shadow"
+export type Mode = "portail" | "mobile" | "superadmin"
+
+/** Module actif de l'espace enseigne fusionné (T50 — blueprint 8 groupes). */
+export type Espace = "observatoire" | "portail" | "shadow" | "backoffice" | "agents"
 
 export type Tab =
   | "dashboard"
@@ -20,7 +28,7 @@ export type Tab =
   | "demographie"
   | "settings"
 
-export type Role = "ADMIN" | "NETWORK" | "COMMERCIAL" | "EXPANSION" | "VIEWER"
+export type Role = "ADMIN" | "NETWORK" | "COMMERCIAL" | "EXPANSION" | "VIEWER" | "DG"
 
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: "Administrateur",
@@ -28,23 +36,39 @@ export const ROLE_LABELS: Record<Role, string> = {
   COMMERCIAL: "Direction Commerciale",
   EXPANSION: "Direction Expansion",
   VIEWER: "Observateur",
+  DG: "Directeur Général",
 }
 
-/** Onglets accessibles par rôle (cahier des charges A.1) */
+/** Onglets accessibles par rôle (cahier des charges A.1).
+ * T50 : le rôle DG (directeur général) voit tous les modules par défaut. */
 export const TAB_ACCESS: Record<Tab, Role[]> = {
-  dashboard: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
-  map: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
-  stations: ["ADMIN", "NETWORK"],
-  competition: ["ADMIN", "COMMERCIAL"],
-  calculators: ["ADMIN", "EXPANSION"],
-  implantation: ["ADMIN", "EXPANSION", "COMMERCIAL"],
-  prices: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
-  veille: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
-  reports: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
+  dashboard: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER", "DG"],
+  map: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER", "DG"],
+  stations: ["ADMIN", "NETWORK", "DG"],
+  competition: ["ADMIN", "COMMERCIAL", "DG"],
+  calculators: ["ADMIN", "EXPANSION", "DG"],
+  implantation: ["ADMIN", "EXPANSION", "COMMERCIAL", "DG"],
+  prices: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER", "DG"],
+  veille: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER", "DG"],
+  reports: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER", "DG"],
   // Onglet conditionnel (T37) : visible si l'utilisateur connecté dispose d'un
   // accès démographie (volet Paramétrage de la Super Administration).
-  demographie: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER"],
-  settings: ["ADMIN"],
+  demographie: ["ADMIN", "NETWORK", "COMMERCIAL", "EXPANSION", "VIEWER", "DG"],
+  settings: ["ADMIN", "DG"],
+}
+
+/** T50 — rôles autorisés sur le groupe « Back-office plateforme » (G7). */
+export const PLATFORM_MODULE_ROLES: Role[] = ["ADMIN", "DG"]
+
+/** T50 — rôles autorisés sur le groupe « Shadow Market » (G6). */
+export const SHADOW_MODULE_ROLES: Role[] = ["ADMIN", "COMMERCIAL", "DG"]
+
+/** T50 — convertit un mode historique (localStorage / deep-link) vers les
+ * 3 espaces produit. Observatoire, portail, shadow, back-office et agents
+ * fusionnent dans l'espace enseigne ; mobile et superadmin subsistent. */
+export function migrateMode(legacy: string): Mode {
+  if (legacy === "mobile" || legacy === "superadmin") return legacy
+  return "portail"
 }
 
 interface AppState {
@@ -86,7 +110,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      mode: "observatoire",
+      mode: "portail",
       tab: "dashboard",
       brandSlug: "agil",
       role: "ADMIN",
@@ -133,6 +157,15 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "carbuscope-store",
+      version: 1,
+      // T50 : un état persisté par une version antérieure (mode historique)
+      // est ramené vers les 3 espaces produit.
+      migrate: (persisted) => {
+        const p = (persisted ?? {}) as Partial<{ mode: unknown; role: unknown }>
+        const next: Record<string, unknown> = { ...p }
+        if (typeof p.mode === "string") next.mode = migrateMode(p.mode)
+        return next as object
+      },
       partialize: (s) => ({ brandSlug: s.brandSlug, role: s.role, userId: s.userId, sidebarCollapsed: s.sidebarCollapsed }),
     }
   )

@@ -1,0 +1,1003 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→// Super Administration — Enseignes & contrats : plans, statuts, sièges, quotas,
+     4→     4→// renouvellements et facturation par enseigne cliente. Actions : suspension /
+     5→     5→// réactivation (les comptes utilisateurs suivent le contrat), édition du contrat
+     6→     6→// via dialog (T30) et export CSV de l'onglet (T30).
+     7→     7→
+     8→     8→import { useCallback, useEffect, useMemo, useState } from "react"
+     9→     9→import { toast } from "sonner"
+    10→    10→import { Ban, CheckCircle2, Download, Loader2, Pencil, Plus, RefreshCw, Save, TriangleAlert } from "lucide-react"
+    11→    11→import { Card, CardContent } from "@/components/ui/card"
+    12→    12→import { Badge } from "@/components/ui/badge"
+    13→    13→import { Button } from "@/components/ui/button"
+    14→    14→import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
+    15→    15→import {
+    16→    16→  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+    17→    17→} from "@/components/ui/dialog"
+    18→    18→import { Input } from "@/components/ui/input"
+    19→    19→import { Label } from "@/components/ui/label"
+    20→    20→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+    21→    21→import { useAppStore } from "@/store/app-store"
+    22→    22→import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
+    23→    23→import { fmtDT, PLAN_LABELS, CONTRACT_STATUS_META, type SaasContractDTO, type SaasPlanDTO, type SaasUserDTO } from "@/lib/saas"
+    24→    24→import { fmtDate, daysUntil } from "./sa-shared"
+    25→    25→
+    26→    26→type Row = SaasContractDTO & { activeUsers: number }
+    27→    27→
+    28→    28→interface BrandOption {
+    29→    29→  slug: string
+    30→    30→  name: string
+    31→    31→  color: string
+    32→    32→  isIndependents: boolean
+    33→    33→  stationCount: number
+    34→    34→}
+    35→    35→
+    36→    36→const PLAN_OPTIONS = ["ESSENTIEL", "PRO", "ENTERPRISE"] as const
+    37→    37→
+    38→    38→// ---------- Export CSV (pattern report-csv.ts : BOM UTF-8 + séparateur « ; ») ----------
+    39→    39→
+    40→    40→function csvEscape(v: string | number): string {
+    41→    41→  const s = String(v ?? "")
+    42→    42→  return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    43→    43→}
+    44→    44→
+    45→    45→function csvRow(cells: (string | number)[]): string {
+    46→    46→  return cells.map(csvEscape).join(";")
+    47→    47→}
+    48→    48→
+    49→    49→function downloadCsv(filename: string, content: string): void {
+    50→    50→  const blob = new Blob([`\ufeff${content}`], { type: "text/csv;charset=utf-8;" })
+    51→    51→  const url = URL.createObjectURL(blob)
+    52→    52→  const a = document.createElement("a")
+    53→    53→  a.href = url
+    54→    54→  a.download = filename
+    55→    55→  document.body.appendChild(a)
+    56→    56→  a.click()
+    57→    57→  document.body.removeChild(a)
+    58→    58→  URL.revokeObjectURL(url)
+    59→    59→}
+    60→    60→
+    61→    61→function todayStamp(): string {
+    62→    62→  return new Date().toISOString().slice(0, 10)
+    63→    63→}
+    64→    64→
+    65→    65→const fmtCsvAmount = (v: number) =>
+    66→    66→  new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
+    67→    67→
+    68→    68→function exportContractsCsv(rows: Row[]): void {
+    69→    69→  const lines: string[] = [
+    70→    70→    csvRow([
+    71→    71→      "Enseigne", "Plan", "Statut", "Tarif mensuel (DT)", "Sièges actifs",
+    72→    72→      "Quota sièges", "Stations", "Contact", "Renouvellement", "Impayé (DT)",
+    73→    73→    ]),
+    74→    74→  ]
+    75→    75→  for (const c of rows) {
+    76→    76→    lines.push(csvRow([
+    77→    77→      c.brandName,
+    78→    78→      PLAN_LABELS[c.plan] ?? c.plan,
+    79→    79→      CONTRACT_STATUS_META[c.status]?.label ?? c.status,
+    80→    80→      fmtCsvAmount(c.monthlyFee),
+    81→    81→      c.activeUsers,
+    82→    82→      c.seats,
+    83→    83→      `${c.stationCount} / ${c.stationQuota}`,
+    84→    84→      `${c.contactName} (${c.contactEmail})`,
+    85→    85→      new Date(c.renewsAt).toLocaleDateString("fr-FR"),
+    86→    86→      fmtCsvAmount(c.unpaidTotal),
+    87→    87→    ]))
+    88→    88→  }
+    89→    89→  downloadCsv(`carbuscope-contrats-${todayStamp()}.csv`, lines.join("\r\n"))
+    90→    90→}
+    91→    91→
+    92→    92→// ---------- Dialog d'édition (T30) ----------
+    93→    93→
+    94→    94→/** ISO → valeur d'un input type=date (YYYY-MM-DD), fuseau local. */
+    95→    95→function isoToLocalDateInput(iso: string): string {
+    96→    96→  const d = new Date(iso)
+    97→    97→  const p = (n: number) => String(n).padStart(2, "0")
+    98→    98→  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    99→    99→}
+   100→   100→
+   101→   101→/** Décimal français accepté : « 890 » ou « 890,5 ». null si vide/invalide. */
+   102→   102→function parseDecimal(raw: string): number | null {
+   103→   103→  const t = raw.trim().replace(",", ".")
+   104→   104→  if (t === "") return null
+   105→   105→  const v = Number(t)
+   106→   106→  return Number.isFinite(v) ? v : null
+   107→   107→}
+   108→   108→
+   109→   109→function ContractEditForm({
+   110→   110→  contract, actor, onClose, onSaved,
+   111→   111→}: {
+   112→   112→  contract: Row
+   113→   113→  actor: string
+   114→   114→  onClose: () => void
+   115→   115→  onSaved: (contract: Row, plan: string, fee: number) => Promise<void>
+   116→   116→}) {
+   117→   117→  const [plan, setPlan] = useState<string>(contract.plan)
+   118→   118→  const [fee, setFee] = useState(contract.monthlyFee > 0 ? String(contract.monthlyFee) : "")
+   119→   119→  const [seats, setSeats] = useState(String(contract.seats))
+   120→   120→  const [quota, setQuota] = useState(String(contract.stationQuota))
+   121→   121→  const [renews, setRenews] = useState(isoToLocalDateInput(contract.renewsAt))
+   122→   122→  const [saving, setSaving] = useState(false)
+   123→   123→  const [error, setError] = useState<string | null>(null)
+   124→   124→
+   125→   125→  async function submit(e: React.FormEvent<HTMLFormElement>) {
+   126→   126→    e.preventDefault()
+   127→   127→    if (saving) return
+   128→   128→    setError(null)
+   129→   129→
+   130→   130→    const feeNum = parseDecimal(fee)
+   131→   131→    if (feeNum === null || feeNum < 1 || feeNum > 100000) {
+   132→   132→      setError("Tarif mensuel invalide — saisissez un montant entre 1 et 100 000 DT.")
+   133→   133→      return
+   134→   134→    }
+   135→   135→    if (!/^\d+$/.test(seats.trim()) || Number(seats.trim()) < 1 || Number(seats.trim()) > 500) {
+   136→   136→      setError("Nombre de sièges invalide — entier entre 1 et 500.")
+   137→   137→      return
+   138→   138→    }
+   139→   139→    if (!/^\d+$/.test(quota.trim()) || Number(quota.trim()) < 1 || Number(quota.trim()) > 5000) {
+   140→   140→      setError("Quota de stations invalide — entier entre 1 et 5 000.")
+   141→   141→      return
+   142→   142→    }
+   143→   143→    if (!renews || Number.isNaN(Date.parse(renews))) {
+   144→   144→      setError("Date de renouvellement invalide.")
+   145→   145→      return
+   146→   146→    }
+   147→   147→    const seatsNum = Number(seats.trim())
+   148→   148→    const quotaNum = Number(quota.trim())
+   149→   149→
+   150→   150→    // N'envoyer que les champs réellement modifiés (pattern station-form-dialog).
+   151→   151→    const data: Record<string, unknown> = {}
+   152→   152→    if (plan !== contract.plan) data.plan = plan
+   153→   153→    if (feeNum !== contract.monthlyFee) data.monthlyFee = feeNum
+   154→   154→    if (seatsNum !== contract.seats) data.seats = seatsNum
+   155→   155→    if (quotaNum !== contract.stationQuota) data.stationQuota = quotaNum
+   156→   156→    if (renews !== isoToLocalDateInput(contract.renewsAt)) data.renewsAt = renews
+   157→   157→
+   158→   158→    if (Object.keys(data).length === 0) {
+   159→   159→      toast.info("Aucune modification à enregistrer.")
+   160→   160→      onClose()
+   161→   161→      return
+   162→   162→    }
+   163→   163→
+   164→   164→    setSaving(true)
+   165→   165→    try {
+   166→   166→      const r = await fetch(`/api/super/contracts/${contract.id}`, {
+   167→   167→        method: "PATCH",
+   168→   168→        headers: { "Content-Type": "application/json" },
+   169→   169→        body: JSON.stringify({ ...data, actor }),
+   170→   170→      })
+   171→   171→      if (!r.ok) {
+   172→   172→        const j = await r.json().catch(() => null)
+   173→   173→        throw new Error(j?.error ?? `Erreur ${r.status}`)
+   174→   174→      }
+   175→   175→      await onSaved(contract, plan, feeNum)
+   176→   176→      onClose()
+   177→   177→    } catch (e) {
+   178→   178→      setError(e instanceof Error ? e.message : "Échec de la modification du contrat.")
+   179→   179→    } finally {
+   180→   180→      setSaving(false)
+   181→   181→    }
+   182→   182→  }
+   183→   183→
+   184→   184→  return (
+   185→   185→    // noValidate : la validation française (role="alert") gère tous les cas,
+   186→   186→    // y compris les valeurs vides/négatives, sans tooltip natif du navigateur.
+   187→   187→    <form onSubmit={submit} noValidate className="space-y-4">
+   188→   188→      <div className="grid gap-3 sm:grid-cols-2">
+   189→   189→        <div className="space-y-1.5">
+   190→   190→          <Label htmlFor="sa-plan">Plan</Label>
+   191→   191→          <Select value={plan} onValueChange={setPlan}>
+   192→   192→            <SelectTrigger id="sa-plan" className="w-full">
+   193→   193→              <SelectValue placeholder="Sélectionner un plan" />
+   194→   194→            </SelectTrigger>
+   195→   195→            <SelectContent>
+   196→   196→              {PLAN_OPTIONS.map(p => (
+   197→   197→                <SelectItem key={p} value={p}>{PLAN_LABELS[p] ?? p}</SelectItem>
+   198→   198→              ))}
+   199→   199→            </SelectContent>
+   200→   200→          </Select>
+   201→   201→        </div>
+   202→   202→        <div className="space-y-1.5">
+   203→   203→          <Label htmlFor="sa-fee">Tarif mensuel</Label>
+   204→   204→          <div className="relative">
+   205→   205→            <Input
+   206→   206→              id="sa-fee"
+   207→   207→              type="number"
+   208→   208→              min={1}
+   209→   209→              max={100000}
+   210→   210→              step={0.001}
+   211→   211→              inputMode="decimal"
+   212→   212→              value={fee}
+   213→   213→              onChange={e => setFee(e.target.value)}
+   214→   214→              placeholder="Ex. 890"
+   215→   215→              className="pr-10 tabular-nums"
+   216→   216→              aria-describedby="sa-fee-hint"
+   217→   217→            />
+   218→   218→            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>DT</span>
+   219→   219→          </div>
+   220→   220→          <p id="sa-fee-hint" className="text-[11px] text-muted-foreground">DT par mois, jusqu&apos;à 3 décimales.</p>
+   221→   221→        </div>
+   222→   222→        <div className="space-y-1.5">
+   223→   223→          <Label htmlFor="sa-seats">Sièges (utilisateurs inclus)</Label>
+   224→   224→          <Input
+   225→   225→            id="sa-seats"
+   226→   226→            type="number"
+   227→   227→            min={1}
+   228→   228→            max={500}
+   229→   229→            step={1}
+   230→   230→            inputMode="numeric"
+   231→   231→            value={seats}
+   232→   232→            onChange={e => setSeats(e.target.value)}
+   233→   233→            className="tabular-nums"
+   234→   234→          />
+   235→   235→        </div>
+   236→   236→        <div className="space-y-1.5">
+   237→   237→          <Label htmlFor="sa-quota">Quota stations</Label>
+   238→   238→          <Input
+   239→   239→            id="sa-quota"
+   240→   240→            type="number"
+   241→   241→            min={1}
+   242→   242→            max={5000}
+   243→   243→            step={1}
+   244→   244→            inputMode="numeric"
+   245→   245→            value={quota}
+   246→   246→            onChange={e => setQuota(e.target.value)}
+   247→   247→            className="tabular-nums"
+   248→   248→          />
+   249→   249→        </div>
+   250→   250→        <div className="space-y-1.5 sm:col-span-2">
+   251→   251→          <Label htmlFor="sa-renews">Renouvellement</Label>
+   252→   252→          <Input
+   253→   253→            id="sa-renews"
+   254→   254→            type="date"
+   255→   255→            value={renews}
+   256→   256→            onChange={e => setRenews(e.target.value)}
+   257→   257→          />
+   258→   258→          <p className="text-[11px] text-muted-foreground">
+   259→   259→            Prochaine échéance annuelle du contrat — actuellement le {fmtDate(contract.renewsAt)}.
+   260→   260→          </p>
+   261→   261→        </div>
+   262→   262→      </div>
+   263→   263→
+   264→   264→      {error && (
+   265→   265→        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+   266→   266→          {error}
+   267→   267→        </p>
+   268→   268→      )}
+   269→   269→
+   270→   270→      <DialogFooter className="gap-2">
+   271→   271→        <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onClose}>
+   272→   272→          Annuler
+   273→   273→        </Button>
+   274→   274→        <Button type="submit" size="sm" className="gap-1.5" disabled={saving}>
+   275→   275→          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+   276→   276→          Enregistrer les modifications
+   277→   277→        </Button>
+   278→   278→      </DialogFooter>
+   279→   279→    </form>
+   280→   280→  )
+   281→   281→}
+   282→   282→
+   283→   283→function ContractEditDialog({
+   284→   284→  contract, actor, onClose, onSaved,
+   285→   285→}: {
+   286→   286→  contract: Row | null
+   287→   287→  actor: string
+   288→   288→  onClose: () => void
+   289→   289→  onSaved: (contract: Row, plan: string, fee: number) => Promise<void>
+   290→   290→}) {
+   291→   291→  return (
+   292→   292→    <Dialog open={contract !== null} onOpenChange={o => { if (!o) onClose() }}>
+   293→   293→      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+   294→   294→        <DialogHeader>
+   295→   295→          <DialogTitle>Modifier le contrat</DialogTitle>
+   296→   296→          <DialogDescription>
+   297→   297→            {contract
+   298→   298→              ? `${contract.brandName} · ${PLAN_LABELS[contract.plan] ?? contract.plan} — les modifications sont journalisées dans l'audit.`
+   299→   299→              : ""}
+   300→   300→          </DialogDescription>
+   301→   301→        </DialogHeader>
+   302→   302→        {contract && (
+   303→   303→          <ContractEditForm
+   304→   304→            key={contract.id}
+   305→   305→            contract={contract}
+   306→   306→            actor={actor}
+   307→   307→            onClose={onClose}
+   308→   308→            onSaved={onSaved}
+   309→   309→          />
+   310→   310→        )}
+   311→   311→      </DialogContent>
+   312→   312→    </Dialog>
+   313→   313→  )
+   314→   314→}
+   315→   315→
+   316→   316→// ---------- Dialog de création (T32 — patron du dialog d'édition T30) ----------
+   317→   317→
+   318→   318→/** Valeur d'un input type=date pour aujourd'hui + n jours, fuseau local. */
+   319→   319→function localDateInDays(n: number): string {
+   320→   320→  const d = new Date(Date.now() + n * 86_400_000)
+   321→   321→  const p = (x: number) => String(x).padStart(2, "0")
+   322→   322→  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+   323→   323→}
+   324→   324→
+   325→   325→function ContractCreateForm({
+   326→   326→  brands, plans, takenSlugs, actor, onClose, onCreated,
+   327→   327→}: {
+   328→   328→  brands: BrandOption[]
+   329→   329→  plans: SaasPlanDTO[]
+   330→   330→  takenSlugs: Set<string>
+   331→   331→  actor: string
+   332→   332→  onClose: () => void
+   333→   333→  onCreated: () => Promise<void>
+   334→   334→}) {
+   335→   335→  const [brandSlug, setBrandSlug] = useState<string>("")
+   336→   336→  const [plan, setPlan] = useState<string>("")
+   337→   337→  const [fee, setFee] = useState("")
+   338→   338→  const [seats, setSeats] = useState("")
+   339→   339→  const [quota, setQuota] = useState("")
+   340→   340→  const [renews, setRenews] = useState(localDateInDays(30)) // essai : J+30 par défaut
+   341→   341→  const [contactName, setContactName] = useState("")
+   342→   342→  const [contactEmail, setContactEmail] = useState("")
+   343→   343→  const [saving, setSaving] = useState(false)
+   344→   344→  const [error, setError] = useState<string | null>(null)
+   345→   345→
+   346→   346→  const freeBrands = brands.filter(b => !takenSlugs.has(b.slug))
+   347→   347→
+   348→   348→  function pickPlan(code: string) {
+   349→   349→    setPlan(code)
+   350→   350→    // La sélection du plan pré-remplit tarif/sièges/quota (restants éditables).
+   351→   351→    const p = plans.find(pl => pl.code === code)
+   352→   352→    if (p) {
+   353→   353→      setFee(String(p.monthlyFee))
+   354→   354→      setSeats(String(p.seatsIncluded))
+   355→   355→      setQuota(String(p.stationQuota))
+   356→   356→    }
+   357→   357→  }
+   358→   358→
+   359→   359→  async function submit(e: React.FormEvent<HTMLFormElement>) {
+   360→   360→    e.preventDefault()
+   361→   361→    if (saving) return
+   362→   362→    setError(null)
+   363→   363→
+   364→   364→    if (!brandSlug) {
+   365→   365→      setError("Sélectionnez une enseigne cliente.")
+   366→   366→      return
+   367→   367→    }
+   368→   368→    if (takenSlugs.has(brandSlug)) {
+   369→   369→      setError("Un contrat existe déjà pour cette enseigne.")
+   370→   370→      return
+   371→   371→    }
+   372→   372→    if (!plan) {
+   373→   373→      setError("Sélectionnez un plan du catalogue.")
+   374→   374→      return
+   375→   375→    }
+   376→   376→    const feeNum = parseDecimal(fee)
+   377→   377→    if (feeNum === null || feeNum < 1 || feeNum > 100000) {
+   378→   378→      setError("Tarif mensuel invalide — saisissez un montant entre 1 et 100 000 DT.")
+   379→   379→      return
+   380→   380→    }
+   381→   381→    if (!/^\d+$/.test(seats.trim()) || Number(seats.trim()) < 1 || Number(seats.trim()) > 500) {
+   382→   382→      setError("Nombre de sièges invalide — entier entre 1 et 500.")
+   383→   383→      return
+   384→   384→    }
+   385→   385→    if (!/^\d+$/.test(quota.trim()) || Number(quota.trim()) < 1 || Number(quota.trim()) > 5000) {
+   386→   386→      setError("Quota de stations invalide — entier entre 1 et 5 000.")
+   387→   387→      return
+   388→   388→    }
+   389→   389→    if (!renews || Number.isNaN(Date.parse(renews))) {
+   390→   390→      setError("Date de renouvellement invalide.")
+   391→   391→      return
+   392→   392→    }
+   393→   393→    if (contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
+   394→   394→      setError("Adresse e-mail de contact invalide.")
+   395→   395→      return
+   396→   396→    }
+   397→   397→    const seatsNum = Number(seats.trim())
+   398→   398→    const quotaNum = Number(quota.trim())
+   399→   399→
+   400→   400→    setSaving(true)
+   401→   401→    try {
+   402→   402→      const r = await fetch("/api/super/contracts", {
+   403→   403→        method: "POST",
+   404→   404→        headers: { "Content-Type": "application/json" },
+   405→   405→        body: JSON.stringify({
+   406→   406→          brandSlug, plan, monthlyFee: feeNum, seats: seatsNum, stationQuota: quotaNum,
+   407→   407→          renewsAt: renews, contactName: contactName.trim(), contactEmail: contactEmail.trim(), actor,
+   408→   408→        }),
+   409→   409→      })
+   410→   410→      if (!r.ok) {
+   411→   411→        const j = await r.json().catch(() => null)
+   412→   412→        throw new Error(j?.error ?? `Erreur ${r.status}`)
+   413→   413→      }
+   414→   414→      const j = await r.json()
+   415→   415→      const brand = brands.find(b => b.slug === brandSlug)
+   416→   416→      toast.success(`Contrat créé — ${brand?.name ?? j.contract.brandName} · essai 30 jours`, {
+   417→   417→        description: `Plan ${plan} · ${fmtDT(feeNum)}/mois, essai jusqu'au ${fmtDate(j.contract.renewsAt)}.`,
+   418→   418→      })
+   419→   419→      await onCreated()
+   420→   420→      onClose()
+   421→   421→    } catch (e) {
+   422→   422→      setError(e instanceof Error ? e.message : "Échec de la création du contrat.")
+   423→   423→    } finally {
+   424→   424→      setSaving(false)
+   425→   425→    }
+   426→   426→  }
+   427→   427→
+   428→   428→  return (
+   429→   429→    <form onSubmit={submit} noValidate className="space-y-4">
+   430→   430→      <div className="grid gap-3 sm:grid-cols-2">
+   431→   431→        <div className="space-y-1.5 sm:col-span-2">
+   432→   432→          <Label htmlFor="nc-brand">Enseigne cliente</Label>
+   433→   433→          <Select value={brandSlug} onValueChange={setBrandSlug}>
+   434→   434→            <SelectTrigger id="nc-brand" className="w-full">
+   435→   435→              <SelectValue placeholder="Sélectionner une enseigne" />
+   436→   436→            </SelectTrigger>
+   437→   437→            <SelectContent>
+   438→   438→              {brands.map(b => {
+   439→   439→                const taken = takenSlugs.has(b.slug)
+   440→   440→                return (
+   441→   441→                  <SelectItem key={b.slug} value={b.slug} disabled={taken}>
+   442→   442→                    {b.name}{taken ? " · contrat existant" : ` · ${b.stationCount} stations`}
+   443→   443→                  </SelectItem>
+   444→   444→                )
+   445→   445→              })}
+   446→   446→            </SelectContent>
+   447→   447→          </Select>
+   448→   448→          <p className="text-[11px] text-muted-foreground">
+   449→   449→            Seules les enseignes sans contrat sont sélectionnables — {freeBrands.length} libre(s) sur {brands.length}.
+   450→   450→          </p>
+   451→   451→        </div>
+   452→   452→        <div className="space-y-1.5">
+   453→   453→          <Label htmlFor="nc-plan">Plan</Label>
+   454→   454→          <Select value={plan} onValueChange={pickPlan}>
+   455→   455→            <SelectTrigger id="nc-plan" className="w-full">
+   456→   456→              <SelectValue placeholder="Sélectionner un plan" />
+   457→   457→            </SelectTrigger>
+   458→   458→            <SelectContent>
+   459→   459→              {plans.map(p => (
+   460→   460→                <SelectItem key={p.code} value={p.code} disabled={!p.active}>
+   461→   461→                  {p.label} · {p.monthlyFee.toLocaleString("fr-FR")} DT
+   462→   462→                </SelectItem>
+   463→   463→              ))}
+   464→   464→            </SelectContent>
+   465→   465→          </Select>
+   466→   466→          <p className="text-[11px] text-muted-foreground">La sélection pré-remplit le tarif, les sièges et le quota.</p>
+   467→   467→        </div>
+   468→   468→        <div className="space-y-1.5">
+   469→   469→          <Label htmlFor="nc-fee">Tarif mensuel</Label>
+   470→   470→          <div className="relative">
+   471→   471→            <Input
+   472→   472→              id="nc-fee"
+   473→   473→              type="number"
+   474→   474→              min={1}
+   475→   475→              max={100000}
+   476→   476→              step={0.001}
+   477→   477→              inputMode="decimal"
+   478→   478→              value={fee}
+   479→   479→              onChange={e => setFee(e.target.value)}
+   480→   480→              placeholder="Ex. 890"
+   481→   481→              className="pr-10 tabular-nums"
+   482→   482→              aria-describedby="nc-fee-hint"
+   483→   483→            />
+   484→   484→            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>DT</span>
+   485→   485→          </div>
+   486→   486→          <p id="nc-fee-hint" className="text-[11px] text-muted-foreground">DT par mois, jusqu&apos;à 3 décimales.</p>
+   487→   487→        </div>
+   488→   488→        <div className="space-y-1.5">
+   489→   489→          <Label htmlFor="nc-seats">Sièges (utilisateurs inclus)</Label>
+   490→   490→          <Input
+   491→   491→            id="nc-seats"
+   492→   492→            type="number"
+   493→   493→            min={1}
+   494→   494→            max={500}
+   495→   495→            step={1}
+   496→   496→            inputMode="numeric"
+   497→   497→            value={seats}
+   498→   498→            onChange={e => setSeats(e.target.value)}
+   499→   499→            className="tabular-nums"
+   500→   500→          />
+   501→   501→        </div>
+   502→   502→        <div className="space-y-1.5">
+   503→   503→          <Label htmlFor="nc-quota">Quota stations</Label>
+   504→   504→          <Input
+   505→   505→            id="nc-quota"
+   506→   506→            type="number"
+   507→   507→            min={1}
+   508→   508→            max={5000}
+   509→   509→            step={1}
+   510→   510→            inputMode="numeric"
+   511→   511→            value={quota}
+   512→   512→            onChange={e => setQuota(e.target.value)}
+   513→   513→            className="tabular-nums"
+   514→   514→          />
+   515→   515→        </div>
+   516→   516→        <div className="space-y-1.5">
+   517→   517→          <Label htmlFor="nc-renews">Renouvellement</Label>
+   518→   518→          <Input
+   519→   519→            id="nc-renews"
+   520→   520→            type="date"
+   521→   521→            value={renews}
+   522→   522→            onChange={e => setRenews(e.target.value)}
+   523→   523→          />
+   524→   524→          <p className="text-[11px] text-muted-foreground">Fin d&apos;essai — par défaut aujourd&apos;hui + 30 jours.</p>
+   525→   525→        </div>
+   526→   526→        <div className="space-y-1.5">
+   527→   527→          <Label htmlFor="nc-contact-name">Contact — nom</Label>
+   528→   528→          <Input
+   529→   529→            id="nc-contact-name"
+   530→   530→            type="text"
+   531→   531→            value={contactName}
+   532→   532→            onChange={e => setContactName(e.target.value)}
+   533→   533→            placeholder="Ex. Sonia Beji"
+   534→   534→          />
+   535→   535→        </div>
+   536→   536→        <div className="space-y-1.5 sm:col-span-2">
+   537→   537→          <Label htmlFor="nc-contact-email">Contact — e-mail</Label>
+   538→   538→          <Input
+   539→   539→            id="nc-contact-email"
+   540→   540→            type="email"
+   541→   541→            value={contactEmail}
+   542→   542→            onChange={e => setContactEmail(e.target.value)}
+   543→   543→            placeholder="Ex. sonia.beji@agil.tn"
+   544→   544→          />
+   545→   545→          <p className="text-[11px] text-muted-foreground">Optionnels — l&apos;enseigne servira de contact par défaut.</p>
+   546→   546→        </div>
+   547→   547→      </div>
+   548→   548→
+   549→   549→      {error && (
+   550→   550→        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+   551→   551→          {error}
+   552→   552→        </p>
+   553→   553→      )}
+   554→   554→
+   555→   555→      <DialogFooter className="gap-2">
+   556→   556→        <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onClose}>
+   557→   557→          Annuler
+   558→   558→        </Button>
+   559→   559→        <Button type="submit" size="sm" className="gap-1.5" disabled={saving || !brandSlug || !plan}>
+   560→   560→          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+   561→   561→          Créer le contrat
+   562→   562→        </Button>
+   563→   563→      </DialogFooter>
+   564→   564→    </form>
+   565→   565→  )
+   566→   566→}
+   567→   567→
+   568→   568→function NewContractDialog({
+   569→   569→  open, takenSlugs, actor, onClose, onCreated,
+   570→   570→}: {
+   571→   571→  open: boolean
+   572→   572→  takenSlugs: Set<string>
+   573→   573→  actor: string
+   574→   574→  onClose: () => void
+   575→   575→  onCreated: () => Promise<void>
+   576→   576→}) {
+   577→   577→  const [brands, setBrands] = useState<BrandOption[] | null>(null)
+   578→   578→  const [plans, setPlans] = useState<SaasPlanDTO[] | null>(null)
+   579→   579→  const [loading, setLoading] = useState(false)
+   580→   580→  const [loadError, setLoadError] = useState<string | null>(null)
+   581→   581→
+   582→   582→  // Chargement à l'ouverture (pattern reload : états gérés dans la fonction).
+   583→   583→  const loadOptions = useCallback(async (open: boolean) => {
+   584→   584→    if (!open) return
+   585→   585→    setLoading(true)
+   586→   586→    setBrands(null)
+   587→   587→    setPlans(null)
+   588→   588→    setLoadError(null)
+   589→   589→    try {
+   590→   590→      const [rb, rp] = await Promise.all([
+   591→   591→        fetch("/api/brands").then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+   592→   592→        fetch("/api/super/plans").then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+   593→   593→      ]) as [{ brands: BrandOption[] }, { plans: SaasPlanDTO[] }]
+   594→   594→      setBrands(rb.brands)
+   595→   595→      setPlans(rp.plans)
+   596→   596→    } catch {
+   597→   597→      setLoadError("Impossible de charger les enseignes et les plans.")
+   598→   598→    } finally {
+   599→   599→      setLoading(false)
+   600→   600→    }
+   601→   601→  }, [])
+   602→   602→
+   603→   603→  useEffect(() => {
+   604→   604→    loadOptions(open)
+   605→   605→  }, [open, loadOptions])
+   606→   606→
+   607→   607→  const freeCount = brands ? brands.filter(b => !takenSlugs.has(b.slug)).length : 0
+   608→   608→
+   609→   609→  return (
+   610→   610→    <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
+   611→   611→      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+   612→   612→        <DialogHeader>
+   613→   613→          <DialogTitle>Nouveau contrat</DialogTitle>
+   614→   614→          <DialogDescription>
+   615→   615→            Ouvre un essai de 30 jours pour une enseigne encore sans contrat — création journalisée dans l&apos;audit.
+   616→   616→          </DialogDescription>
+   617→   617→        </DialogHeader>
+   618→   618→        {loadError && (
+   619→   619→          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+   620→   620→            {loadError}
+   621→   621→          </p>
+   622→   622→        )}
+   623→   623→        {!brands || !plans || loading ? (
+   624→   624→          <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+   625→   625→            <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Chargement des enseignes et des plans…
+   626→   626→          </p>
+   627→   627→        ) : freeCount === 0 ? (
+   628→   628→          <p className="py-4 text-sm text-muted-foreground">
+   629→   629→            Toutes les enseignes du répertoire ont déjà un contrat — aucun nouveau client disponible.
+   630→   630→          </p>
+   631→   631→        ) : (
+   632→   632→          <ContractCreateForm
+   633→   633→            key={brands.map(b => b.slug).join(",")}
+   634→   634→            brands={brands}
+   635→   635→            plans={plans}
+   636→   636→            takenSlugs={takenSlugs}
+   637→   637→            actor={actor}
+   638→   638→            onClose={onClose}
+   639→   639→            onCreated={onCreated}
+   640→   640→          />
+   641→   641→        )}
+   642→   642→      </DialogContent>
+   643→   643→    </Dialog>
+   644→   644→  )
+   645→   645→}
+   646→   646→
+   647→   647→// ---------- Onglet principal ----------
+   648→   648→
+   649→   649→export function SaContracts() {
+   650→   650→  const userId = useAppStore(s => s.userId)
+   651→   651→  const actor = userId ? DEMO_ACCOUNTS_MAP[userId]?.email ?? "system" : "system"
+   652→   652→  const [contracts, setContracts] = useState<SaasContractDTO[] | null>(null)
+   653→   653→  const [users, setUsers] = useState<SaasUserDTO[] | null>(null)
+   654→   654→  const [busyId, setBusyId] = useState<string | null>(null)
+   655→   655→  const [refreshing, setRefreshing] = useState(false)
+   656→   656→  const [error, setError] = useState<string | null>(null)
+   657→   657→  const [editing, setEditing] = useState<Row | null>(null)
+   658→   658→  const [creating, setCreating] = useState(false)
+   659→   659→
+   660→   660→  const reload = useCallback(async () => {
+   661→   661→    setRefreshing(true)
+   662→   662→    try {
+   663→   663→      const [rc, ru] = await Promise.all([
+   664→   664→        fetch("/api/super/contracts").then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
+   665→   665→        fetch("/api/super/users").then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
+   666→   666→      ])
+   667→   667→      setContracts(rc.contracts)
+   668→   668→      setUsers(ru.users)
+   669→   669→      setError(null)
+   670→   670→    } catch {
+   671→   671→      setError("Impossible de charger les contrats.")
+   672→   672→    } finally {
+   673→   673→      setRefreshing(false)
+   674→   674→    }
+   675→   675→  }, [])
+   676→   676→
+   677→   677→  useEffect(() => { reload() }, [reload])
+   678→   678→
+   679→   679→  const rows = useMemo<Row[]>(() => {
+   680→   680→    if (!contracts || !users) return []
+   681→   681→    return contracts.map(c => ({
+   682→   682→      ...c,
+   683→   683→      activeUsers: users.filter(u => u.brandSlug === c.brandSlug && u.active).length,
+   684→   684→    }))
+   685→   685→  }, [contracts, users])
+   686→   686→
+   687→   687→  // Enseignes déjà sous contrat (options désactivées du dialog de création).
+   688→   688→  const takenSlugs = useMemo(() => new Set((contracts ?? []).map(c => c.brandSlug)), [contracts])
+   689→   689→
+   690→   690→  async function changeStatus(c: Row, status: string) {
+   691→   691→    setBusyId(c.id)
+   692→   692→    try {
+   693→   693→      const r = await fetch(`/api/super/contracts/${c.id}`, {
+   694→   694→        method: "PATCH",
+   695→   695→        headers: { "Content-Type": "application/json" },
+   696→   696→        body: JSON.stringify({ status, actor }),
+   697→   697→      })
+   698→   698→      if (!r.ok) throw new Error(await r.text())
+   699→   699→      const labels: Record<string, string> = { ACTIF: "réactivé", SUSPENDU: "suspendu", RESILIE: "résilié", ESSAI: "passé en essai" }
+   700→   700→      toast.success(`Contrat ${c.brandName} ${labels[status] ?? status}`, {
+   701→   701→        description: status === "SUSPENDU"
+   702→   702→          ? "Les comptes utilisateurs de l'enseigne ont été suspendus."
+   703→   703→          : "Les comptes utilisateurs ont été mis à jour.",
+   704→   704→      })
+   705→   705→      await reload()
+   706→   706→    } catch {
+   707→   707→      toast.error("Échec de la mise à jour du contrat.")
+   708→   708→    } finally {
+   709→   709→      setBusyId(null)
+   710→   710→    }
+   711→   711→  }
+   712→   712→
+   713→   713→  async function handleEditSaved(c: Row, plan: string, fee: number) {
+   714→   714→    toast.success("Contrat modifié", {
+   715→   715→      description: `${c.brandName} · ${PLAN_LABELS[plan] ?? plan} — ${fmtDT(fee)}/mois.`,
+   716→   716→    })
+   717→   717→    await reload()
+   718→   718→  }
+   719→   719→
+   720→   720→  async function handleCreated() {
+   721→   721→    await reload()
+   722→   722→  }
+   723→   723→
+   724→   724→  function handleExport() {
+   725→   725→    exportContractsCsv(rows)
+   726→   726→    toast.success(`Export CSV téléchargé (${rows.length} contrat(s))`, {
+   727→   727→      description: `carbuscope-contrats-${todayStamp()}.csv`,
+   728→   728→    })
+   729→   729→  }
+   730→   730→
+   731→   731→  const columns = useMemo<DataViewColumn<Row>[]>(() => [
+   732→   732→    {
+   733→   733→      key: "brand",
+   734→   734→      header: "Enseigne",
+   735→   735→      render: c => (
+   736→   736→        <div className="flex items-center gap-2">
+   737→   737→          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} aria-hidden />
+   738→   738→          <span className="font-semibold">{c.brandName}</span>
+   739→   739→          <Badge variant="outline" className="text-[10px]">{PLAN_LABELS[c.plan] ?? c.plan}</Badge>
+   740→   740→        </div>
+   741→   741→      ),
+   742→   742→      sortValue: c => c.brandName,
+   743→   743→    },
+   744→   744→    {
+   745→   745→      key: "status",
+   746→   746→      header: "Statut",
+   747→   747→      render: c => {
+   748→   748→        const meta = CONTRACT_STATUS_META[c.status]
+   749→   749→        return (
+   750→   750→          <Badge variant="outline" className={`text-[10px] ${meta?.className ?? ""}`}>
+   751→   751→            {meta?.label ?? c.status}
+   752→   752→          </Badge>
+   753→   753→        )
+   754→   754→      },
+   755→   755→      sortValue: c => c.status,
+   756→   756→    },
+   757→   757→    {
+   758→   758→      key: "contact",
+   759→   759→      header: "Contact",
+   760→   760→      render: c => (
+   761→   761→        <div className="min-w-0">
+   762→   762→          <p className="truncate text-sm font-medium leading-tight">{c.contactName}</p>
+   763→   763→          <p className="truncate text-xs text-muted-foreground">{c.contactEmail}</p>
+   764→   764→        </div>
+   765→   765→      ),
+   766→   766→      sortValue: c => c.contactName,
+   767→   767→      hideInCards: true,
+   768→   768→    },
+   769→   769→    {
+   770→   770→      key: "fee",
+   771→   771→      header: "Tarif",
+   772→   772→      align: "right",
+   773→   773→      render: c => (
+   774→   774→        c.monthlyFee > 0 ? (
+   775→   775→          <span className="tabular-nums font-semibold">
+   776→   776→            {fmtDT(c.monthlyFee)}<span className="text-muted-foreground">/mois</span>
+   777→   777→          </span>
+   778→   778→        ) : <span className="text-muted-foreground">—</span>
+   779→   779→      ),
+   780→   780→      sortValue: c => c.monthlyFee,
+   781→   781→    },
+   782→   782→    {
+   783→   783→      key: "seats",
+   784→   784→      header: "Sièges",
+   785→   785→      align: "center",
+   786→   786→      render: c => (
+   787→   787→        <span className="tabular-nums text-sm">
+   788→   788→          <span className={c.activeUsers > c.seats ? "font-bold text-red-600" : "font-semibold"}>{c.activeUsers}</span>
+   789→   789→          <span className="text-muted-foreground"> / {c.seats}</span>
+   790→   790→        </span>
+   791→   791→      ),
+   792→   792→      sortValue: c => c.activeUsers / Math.max(1, c.seats),
+   793→   793→      cardLabel: "Sièges actifs",
+   794→   794→    },
+   795→   795→    {
+   796→   796→      key: "quota",
+   797→   797→      header: "Stations",
+   798→   798→      align: "center",
+   799→   799→      render: c => (
+   800→   800→        <span className="tabular-nums text-sm">
+   801→   801→          <span className={c.stationCount > c.stationQuota ? "font-bold text-red-600" : "font-semibold"}>{c.stationCount}</span>
+   802→   802→          <span className="text-muted-foreground"> / {c.stationQuota}</span>
+   803→   803→        </span>
+   804→   804→      ),
+   805→   805→      sortValue: c => c.stationCount / Math.max(1, c.stationQuota),
+   806→   806→      cardLabel: "Quota stations",
+   807→   807→      hideInCards: true,
+   808→   808→    },
+   809→   809→    {
+   810→   810→      key: "renews",
+   811→   811→      header: "Renouvellement",
+   812→   812→      render: c => {
+   813→   813→        const d = daysUntil(c.renewsAt)
+   814→   814→        return (
+   815→   815→          <div className="text-sm">
+   816→   816→            <p>{fmtDate(c.renewsAt)}</p>
+   817→   817→            {c.status !== "RESILIE" && (
+   818→   818→              <p className={`text-[11px] ${d < 0 ? "font-medium text-red-600" : d <= 30 ? "text-amber-600" : "text-muted-foreground"}`}>
+   819→   819→                {d < 0 ? `dépassé de ${Math.abs(d)} j` : `dans ${d} j`}
+   820→   820→              </p>
+   821→   821→            )}
+   822→   822→          </div>
+   823→   823→        )
+   824→   824→      },
+   825→   825→      sortValue: c => new Date(c.renewsAt).getTime(),
+   826→   826→    },
+   827→   827→    {
+   828→   828→      key: "billing",
+   829→   829→      header: "Facturation",
+   830→   830→      align: "right",
+   831→   831→      render: c => (
+   832→   832→        <div className="text-sm">
+   833→   833→          <p className="tabular-nums font-semibold">{fmtDT(c.totalBilled)}</p>
+   834→   834→          {c.unpaidCount > 0 && (
+   835→   835→            <p className="text-[11px] font-medium text-red-600">{c.unpaidCount} impayée(s) · {fmtDT(c.unpaidTotal)}</p>
+   836→   836→          )}
+   837→   837→        </div>
+   838→   838→      ),
+   839→   839→      sortValue: c => c.unpaidTotal,
+   840→   840→      hideInCards: true,
+   841→   841→    },
+   842→   842→    {
+   843→   843→      key: "actions",
+   844→   844→      header: "Actions",
+   845→   845→      align: "center",
+   846→   846→      sortDisabled: true,
+   847→   847→      render: c => {
+   848→   848→        if (busyId === c.id) {
+   849→   849→          return <Loader2 className="mx-auto h-4 w-4 animate-spin text-muted-foreground" aria-label="Mise à jour…" />
+   850→   850→        }
+   851→   851→        return (
+   852→   852→          <div className="flex items-center justify-center gap-1.5">
+   853→   853→            <Button
+   854→   854→              variant="outline"
+   855→   855→              size="sm"
+   856→   856→              className="h-7 w-7 p-0"
+   857→   857→              onClick={() => setEditing(c)}
+   858→   858→              aria-label={`Modifier le contrat ${c.brandName}`}
+   859→   859→              title="Modifier le contrat"
+   860→   860→            >
+   861→   861→              <Pencil className="h-3.5 w-3.5" aria-hidden />
+   862→   862→            </Button>
+   863→   863→            {c.status === "SUSPENDU" ? (
+   864→   864→              <Button variant="outline" size="sm" className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
+   865→   865→                onClick={() => changeStatus(c, "ACTIF")} aria-label={`Réactiver le contrat ${c.brandName}`}>
+   866→   866→                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Réactiver
+   867→   867→              </Button>
+   868→   868→            ) : c.status !== "RESILIE" ? (
+   869→   869→              <Button variant="outline" size="sm" className="h-7 gap-1 border-amber-300 px-2 text-xs text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
+   870→   870→                onClick={() => changeStatus(c, "SUSPENDU")} aria-label={`Suspendre le contrat ${c.brandName}`}>
+   871→   871→                <Ban className="h-3.5 w-3.5" aria-hidden /> Suspendre
+   872→   872→              </Button>
+   873→   873→            ) : null}
+   874→   874→          </div>
+   875→   875→        )
+   876→   876→      },
+   877→   877→    },
+   878→   878→  ], [busyId, changeStatus])
+   879→   879→
+   880→   880→  if (error) {
+   881→   881→    return <Card><CardContent className="p-6 text-sm text-destructive">{error}</CardContent></Card>
+   882→   882→  }
+   883→   883→  if (!contracts || !users) {
+   884→   884→    return <Card><CardContent className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Chargement des contrats…</CardContent></Card>
+   885→   885→  }
+   886→   886→
+   887→   887→  return (
+   888→   888→    <div className="space-y-3">
+   889→   889→      {rows.some(r => r.unpaidCount > 0 && r.status !== "SUSPENDU") && (
+   890→   890→        <Card className="border-amber-300 dark:border-amber-800">
+   891→   891→          <CardContent className="flex items-center gap-2.5 p-3.5 text-sm">
+   892→   892→            <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+   893→   893→            <p>
+   894→   894→              <span className="font-semibold">Encaissements en attente :</span>{" "}
+   895→   895→              {rows.filter(r => r.unpaidCount > 0 && r.status !== "SUSPENDU").map(r => `${r.brandName} (${r.unpaidCount})`).join(" · ")}.
+   896→   896→              Encaissez depuis l&apos;onglet Facturation ou suspendez le contrat.
+   897→   897→            </p>
+   898→   898→          </CardContent>
+   899→   899→        </Card>
+   900→   900→      )}
+   901→   901→
+   902→   902→      <DataViews<Row>
+   903→   903→        viewKey="sa-contracts"
+   904→   904→        rows={rows}
+   905→   905→        rowKey={r => r.id}
+   906→   906→        columns={columns}
+   907→   907→        nested={{
+   908→   908→          groupKey: r => r.status,
+   909→   909→          groupLabel: (key, rs) => {
+   910→   910→            const meta = CONTRACT_STATUS_META[key]
+   911→   911→            return (
+   912→   912→              <span className="flex items-center gap-2">
+   913→   913→                <Badge variant="outline" className={`text-[10px] ${meta?.className ?? ""}`}>{meta?.label ?? key}</Badge>
+   914→   914→                <span className="text-xs text-muted-foreground">{rs.length} contrat(s)</span>
+   915→   915→              </span>
+   916→   916→            )
+   917→   917→          },
+   918→   918→          groupSortValue: key => ["ACTIF", "ESSAI", "SUSPENDU", "RESILIE"].indexOf(key),
+   919→   919→          hideColumnKeyInGroups: "status",
+   920→   920→          defaultOpen: "all",
+   921→   921→        }}
+   922→   922→        renderCard={c => (
+   923→   923→          <div className="space-y-3 rounded-lg border p-4">
+   924→   924→            <div className="flex items-center justify-between gap-2">
+   925→   925→              <div className="flex min-w-0 items-center gap-2">
+   926→   926→                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} aria-hidden />
+   927→   927→                <p className="truncate font-semibold">{c.brandName}</p>
+   928→   928→              </div>
+   929→   929→              {(() => { const meta = CONTRACT_STATUS_META[c.status]; return (
+   930→   930→                <Badge variant="outline" className={`shrink-0 text-[10px] ${meta?.className ?? ""}`}>{meta?.label ?? c.status}</Badge>
+   931→   931→              ) })()}
+   932→   932→            </div>
+   933→   933→            <div className="flex items-center justify-between text-sm">
+   934→   934→              <span className="text-muted-foreground">{PLAN_LABELS[c.plan] ?? c.plan}</span>
+   935→   935→              <span className="font-bold tabular-nums">{c.monthlyFee > 0 ? `${fmtDT(c.monthlyFee)}/mois` : "—"}</span>
+   936→   936→            </div>
+   937→   937→            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+   938→   938→              <p>Sièges : <span className="font-semibold text-foreground">{c.activeUsers}/{c.seats}</span></p>
+   939→   939→              <p>Renouv. : <span className="font-semibold text-foreground">{fmtDate(c.renewsAt)}</span></p>
+   940→   940→              <p>Contact : <span className="font-semibold text-foreground">{c.contactName}</span></p>
+   941→   941→              <p>Impayé : <span className={c.unpaidCount > 0 ? "font-semibold text-red-600" : "font-semibold text-foreground"}>{c.unpaidCount > 0 ? fmtDT(c.unpaidTotal) : "—"}</span></p>
+   942→   942→            </div>
+   943→   943→            <Button
+   944→   944→              variant="outline"
+   945→   945→              size="sm"
+   946→   946→              className="h-7 w-full gap-1 text-xs"
+   947→   947→              onClick={() => setEditing(c)}
+   948→   948→              aria-label={`Modifier le contrat ${c.brandName}`}
+   949→   949→            >
+   950→   950→              <Pencil className="h-3.5 w-3.5" aria-hidden /> Modifier
+   951→   951→            </Button>
+   952→   952→          </div>
+   953→   953→        )}
+   954→   954→        cardColumns={2}
+   955→   955→        maxHeightClassName="max-h-[30rem]"
+   956→   956→        emptyMessage="Aucun contrat."
+   957→   957→        toolbarExtra={
+   958→   958→          <div className="flex flex-wrap items-center gap-1.5">
+   959→   959→            <Button
+   960→   960→              variant="outline"
+   961→   961→              size="sm"
+   962→   962→              className="h-7 gap-1.5 px-2 text-xs"
+   963→   963→              onClick={() => setCreating(true)}
+   964→   964→              aria-label="Créer un nouveau contrat"
+   965→   965→              title="Créer un contrat (essai 30 jours) pour une enseigne sans contrat"
+   966→   966→            >
+   967→   967→              <Plus className="h-3.5 w-3.5" aria-hidden /> Nouveau contrat
+   968→   968→            </Button>
+   969→   969→            <Button
+   970→   970→              variant="outline"
+   971→   971→              size="sm"
+   972→   972→              className="h-7 gap-1.5 px-2 text-xs"
+   973→   973→              onClick={handleExport}
+   974→   974→              disabled={rows.length === 0}
+   975→   975→              title={rows.length === 0 ? "Aucun contrat à exporter" : "Exporter les contrats affichés au format CSV"}
+   976→   976→            >
+   977→   977→              <Download className="h-3.5 w-3.5" aria-hidden /> Exporter CSV
+   978→   978→            </Button>
+   979→   979→            <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" onClick={reload} disabled={refreshing}>
+   980→   980→              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden /> Actualiser
+   981→   981→            </Button>
+   982→   982→          </div>
+   983→   983→        }
+   984→   984→      />
+   985→   985→
+   986→   986→      <ContractEditDialog
+   987→   987→        contract={editing}
+   988→   988→        actor={actor}
+   989→   989→        onClose={() => setEditing(null)}
+   990→   990→        onSaved={handleEditSaved}
+   991→   991→      />
+   992→   992→
+   993→   993→      <NewContractDialog
+   994→   994→        open={creating}
+   995→   995→        takenSlugs={takenSlugs}
+   996→   996→        actor={actor}
+   997→   997→        onClose={() => setCreating(false)}
+   998→   998→        onCreated={handleCreated}
+   999→   999→      />
+  1000→  1000→    </div>
+  1001→  1001→  )
+  1002→  1002→}
+  1003→  1003→

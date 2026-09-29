@@ -2,12 +2,14 @@
 
 // Super Administration — Enseignes & contrats : plans, statuts, sièges, quotas,
 // renouvellements et facturation par enseigne cliente. Actions : suspension /
-// réactivation (les comptes utilisateurs suivent le contrat), édition du contrat
-// via dialog (T30) et export CSV de l'onglet (T30).
+// réactivation (les comptes utilisateurs suivent le contrat — confirmation
+// obligatoire T52-R2), édition du contrat via dialog (T30), création (T32) et
+// export CSV du filtre actif (T30 — fiabilisé T52-R2 : périmètre + totaux).
+// Recherche et filtres statut/plan ajoutés en T52-R2.
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Ban, CheckCircle2, Download, Loader2, Pencil, Plus, RefreshCw, Save, TriangleAlert } from "lucide-react"
+import { Ban, CheckCircle2, Download, Loader2, Pencil, Plus, RefreshCw, Save, Search, TriangleAlert } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,6 +24,7 @@ import { useAppStore } from "@/store/app-store"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import { fmtDT, PLAN_LABELS, CONTRACT_STATUS_META, type SaasContractDTO, type SaasPlanDTO, type SaasUserDTO } from "@/lib/saas"
 import { fmtDate, daysUntil } from "./sa-shared"
+import { SaConfirmDialog } from "./sa-confirm-dialog"
 
 type Row = SaasContractDTO & { activeUsers: number }
 
@@ -34,6 +37,21 @@ interface BrandOption {
 }
 
 const PLAN_OPTIONS = ["ESSENTIEL", "PRO", "ENTERPRISE"] as const
+
+const STATUS_FILTERS = [
+  { value: "TOUTES", label: "Toutes" },
+  { value: "ACTIF", label: "Actifs" },
+  { value: "ESSAI", label: "Essais" },
+  { value: "SUSPENDU", label: "Suspendus" },
+  { value: "RESILIE", label: "Résiliés" },
+] as const
+
+const STATUS_SLUGS: Record<string, string> = {
+  TOUTES: "toutes", ACTIF: "actifs", ESSAI: "essais", SUSPENDU: "suspendus", RESILIE: "resilies",
+}
+
+/** Recherche insensible à la casse et aux accents. */
+const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 
 // ---------- Export CSV (pattern report-csv.ts : BOM UTF-8 + séparateur « ; ») ----------
 
@@ -65,7 +83,7 @@ function todayStamp(): string {
 const fmtCsvAmount = (v: number) =>
   new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
 
-function exportContractsCsv(rows: Row[]): void {
+function exportContractsCsv(rows: Row[], statusFilter: string, planFilter: string): string {
   const lines: string[] = [
     csvRow([
       "Enseigne", "Plan", "Statut", "Tarif mensuel (DT)", "Sièges actifs",
@@ -86,7 +104,18 @@ function exportContractsCsv(rows: Row[]): void {
       fmtCsvAmount(c.unpaidTotal),
     ]))
   }
-  downloadCsv(`carbuscope-contrats-${todayStamp()}.csv`, lines.join("\r\n"))
+  // Ligne de totaux (T52-R2) — sommes des colonnes numériques du périmètre exporté.
+  lines.push(csvRow([
+    `Total — ${rows.length} contrat(s)`, "", "", "",
+    rows.reduce((s, c) => s + c.activeUsers, 0),
+    rows.reduce((s, c) => s + c.seats, 0),
+    "", "", "",
+    fmtCsvAmount(rows.reduce((s, c) => s + c.unpaidTotal, 0)),
+  ]))
+  const scope = `${STATUS_SLUGS[statusFilter] ?? "toutes"}${planFilter !== "TOUTES" ? `-${planFilter.toLowerCase()}` : ""}`
+  const filename = `carbuscope-contrats-${scope}-${todayStamp()}.csv`
+  downloadCsv(filename, lines.join("\r\n"))
+  return filename
 }
 
 // ---------- Dialog d'édition (T30) ----------
@@ -648,7 +677,10 @@ function NewContractDialog({
 
 export function SaContracts() {
   const userId = useAppStore(s => s.userId)
-  const actor = userId ? DEMO_ACCOUNTS_MAP[userId]?.email ?? "system" : "system"
+  // T52-R2 : acteur d'audit = e-mail de la session V7 (repli ancien flux démo
+  //  userId, puis « system ») — cohérent avec la journalisation sa-users.
+  const session = useAppStore(s => s.session)
+  const actor = session?.email ?? (userId ? DEMO_ACCOUNTS_MAP[userId]?.email ?? "system" : "system")
   const [contracts, setContracts] = useState<SaasContractDTO[] | null>(null)
   const [users, setUsers] = useState<SaasUserDTO[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -656,6 +688,12 @@ export function SaContracts() {
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Row | null>(null)
   const [creating, setCreating] = useState(false)
+  // Filtres & recherche (T52-R2)
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("TOUTES")
+  const [planFilter, setPlanFilter] = useState<string>("TOUTES")
+  // Changement de statut en attente de confirmation (T52-R2)
+  const [statusAction, setStatusAction] = useState<{ row: Row; status: string } | null>(null)
 
   const reload = useCallback(async () => {
     setRefreshing(true)
@@ -687,6 +725,26 @@ export function SaContracts() {
   // Enseignes déjà sous contrat (options désactivées du dialog de création).
   const takenSlugs = useMemo(() => new Set((contracts ?? []).map(c => c.brandSlug)), [contracts])
 
+  // Périmètre affiché : statut + plan + recherche (enseigne, contact, e-mail).
+  const needle = norm(search.trim())
+  const filtered = useMemo(
+    () => rows.filter(c =>
+      (statusFilter === "TOUTES" || c.status === statusFilter) &&
+      (planFilter === "TOUTES" || c.plan === planFilter) &&
+      (needle === "" ||
+        norm(c.brandName).includes(needle) ||
+        norm(c.contactName).includes(needle) ||
+        norm(c.contactEmail).includes(needle))
+    ),
+    [rows, statusFilter, planFilter, needle]
+  )
+
+  const statusCounts = useMemo(() => {
+    const c: Record<string, number> = { TOUTES: rows.length, ACTIF: 0, ESSAI: 0, SUSPENDU: 0, RESILIE: 0 }
+    rows.forEach(r => { c[r.status] = (c[r.status] ?? 0) + 1 })
+    return c
+  }, [rows])
+
   async function changeStatus(c: Row, status: string) {
     setBusyId(c.id)
     try {
@@ -710,6 +768,14 @@ export function SaContracts() {
     }
   }
 
+  /** Exécuté depuis le dialogue de confirmation (T52-R2) : les changements de
+   *  statut suspendent/réactivent aussi les comptes utilisateurs de l'enseigne. */
+  async function confirmStatusAction() {
+    if (!statusAction) return
+    await changeStatus(statusAction.row, statusAction.status)
+    setStatusAction(null)
+  }
+
   async function handleEditSaved(c: Row, plan: string, fee: number) {
     toast.success("Contrat modifié", {
       description: `${c.brandName} · ${PLAN_LABELS[plan] ?? plan} — ${fmtDT(fee)}/mois.`,
@@ -722,9 +788,14 @@ export function SaContracts() {
   }
 
   function handleExport() {
-    exportContractsCsv(rows)
-    toast.success(`Export CSV téléchargé (${rows.length} contrat(s))`, {
-      description: `carbuscope-contrats-${todayStamp()}.csv`,
+    const filename = exportContractsCsv(filtered, statusFilter, planFilter)
+    const scope = [
+      STATUS_FILTERS.find(f => f.value === statusFilter)?.label.toLowerCase() ?? "toutes",
+      planFilter !== "TOUTES" ? `plan ${PLAN_LABELS[planFilter] ?? planFilter}` : null,
+      needle !== "" ? `recherche « ${search.trim()} »` : null,
+    ].filter(Boolean).join(" · ")
+    toast.success(`Export CSV téléchargé (${filtered.length} contrat(s))`, {
+      description: `${filename} — ${scope}.`,
     })
   }
 
@@ -862,12 +933,12 @@ export function SaContracts() {
             </Button>
             {c.status === "SUSPENDU" ? (
               <Button variant="outline" size="sm" className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
-                onClick={() => changeStatus(c, "ACTIF")} aria-label={`Réactiver le contrat ${c.brandName}`}>
+                onClick={() => setStatusAction({ row: c, status: "ACTIF" })} aria-label={`Réactiver le contrat ${c.brandName}`}>
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Réactiver
               </Button>
             ) : c.status !== "RESILIE" ? (
               <Button variant="outline" size="sm" className="h-7 gap-1 border-amber-300 px-2 text-xs text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
-                onClick={() => changeStatus(c, "SUSPENDU")} aria-label={`Suspendre le contrat ${c.brandName}`}>
+                onClick={() => setStatusAction({ row: c, status: "SUSPENDU" })} aria-label={`Suspendre le contrat ${c.brandName}`}>
                 <Ban className="h-3.5 w-3.5" aria-hidden /> Suspendre
               </Button>
             ) : null}
@@ -899,9 +970,57 @@ export function SaContracts() {
         </Card>
       )}
 
+      {/* Recherche + filtres statut/plan (T52-R2) */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <div className="relative min-w-0 flex-1 basis-48">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher une enseigne ou un contact…"
+            className="h-8 pl-8 text-sm"
+            aria-label="Rechercher un contrat par enseigne, contact ou e-mail"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par statut">
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                statusFilter === f.value
+                  ? "border-teal-600 bg-teal-600 text-white"
+                  : "border-border bg-background text-muted-foreground hover:border-teal-400 hover:text-foreground"
+              }`}
+              aria-pressed={statusFilter === f.value}
+            >
+              {f.label} <span className="opacity-70">({statusCounts[f.value] ?? 0})</span>
+            </button>
+          ))}
+        </div>
+        <Select value={planFilter} onValueChange={v => setPlanFilter(v)}>
+          <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filtrer par plan">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TOUTES">Tous les plans</SelectItem>
+            {PLAN_OPTIONS.map(p => (
+              <SelectItem key={p} value={p}>{PLAN_LABELS[p] ?? p}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+          {filtered.length} contrat(s){" "}
+          {(() => {
+            const mrr = filtered.reduce((s, c) => s + (c.status === "ACTIF" ? c.monthlyFee : 0), 0)
+            return mrr > 0 ? `· MRR actif ${fmtDT(mrr)}` : ""
+          })()}
+        </span>
+      </div>
+
       <DataViews<Row>
         viewKey="sa-contracts"
-        rows={rows}
+        rows={filtered}
         rowKey={r => r.id}
         columns={columns}
         nested={{
@@ -953,7 +1072,11 @@ export function SaContracts() {
         )}
         cardColumns={2}
         maxHeightClassName="max-h-[30rem]"
-        emptyMessage="Aucun contrat."
+        emptyMessage={
+          rows.length > 0
+            ? "Aucun contrat ne correspond à la recherche ou aux filtres actifs."
+            : "Aucun contrat."
+        }
         toolbarExtra={
           <div className="flex flex-wrap items-center gap-1.5">
             <Button
@@ -997,6 +1120,53 @@ export function SaContracts() {
         onClose={() => setCreating(false)}
         onCreated={handleCreated}
       />
+
+      {/* Confirmation suspension / réactivation (T52-R2) */}
+      <SaConfirmDialog
+        open={statusAction !== null}
+        onOpenChange={o => { if (!o) setStatusAction(null) }}
+        onConfirm={confirmStatusAction}
+        busy={statusAction !== null && busyId === statusAction.row.id}
+        tone={statusAction?.status === "SUSPENDU" ? "amber" : "emerald"}
+        icon={statusAction?.status === "SUSPENDU" ? Ban : CheckCircle2}
+        title={
+          statusAction?.status === "SUSPENDU"
+            ? `Suspendre le contrat ${statusAction.row.brandName} ?`
+            : `Réactiver le contrat ${statusAction?.row.brandName ?? ""} ?`
+        }
+        description={
+          statusAction?.status === "SUSPENDU"
+            ? "Le contrat passe au statut « Suspendu » jusqu'à sa réactivation — l'action est journalisée dans l'audit (type Contrat)."
+            : "Le contrat reprend le statut « Actif » — l'action est journalisée dans l'audit (type Contrat)."
+        }
+        confirmLabel={statusAction?.status === "SUSPENDU" ? "Suspendre le contrat" : "Réactiver le contrat"}
+      >
+        {statusAction && (
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-muted-foreground">Plan · tarif</span>
+              <span className="font-semibold tabular-nums">
+                {PLAN_LABELS[statusAction.row.plan] ?? statusAction.row.plan} · {fmtDT(statusAction.row.monthlyFee)}/mois
+              </span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between gap-2">
+              <span className="text-muted-foreground">Renouvellement</span>
+              <span className="font-semibold tabular-nums">{fmtDate(statusAction.row.renewsAt)}</span>
+            </div>
+            {statusAction.status === "SUSPENDU" ? (
+              <ul className="mt-2 space-y-1 border-t pt-2 text-xs text-muted-foreground">
+                <li>• Les {statusAction.row.activeUsers} compte(s) utilisateur(s) actif(s) de l&apos;enseigne seront suspendus — accès à la plateforme refusé.</li>
+                <li>• Les factures émises sont conservées ; l&apos;encours impayé reste exigible ({fmtDT(statusAction.row.unpaidTotal)}).</li>
+              </ul>
+            ) : (
+              <ul className="mt-2 space-y-1 border-t pt-2 text-xs text-muted-foreground">
+                <li>• Les comptes utilisateurs de l&apos;enseigne seront réactivés (accès restauré).</li>
+                <li>• La facturation mensuelle reprend au tarif contractuel.</li>
+              </ul>
+            )}
+          </div>
+        )}
+      </SaConfirmDialog>
     </div>
   )
 }

@@ -1,32 +1,37 @@
-// Super Administration — ① Échéances & renouvellements automatiques du
-// portefeuille SaaS (Task C-2). Lecture seule : aucune écriture, pas d'audit —
-// les alertes sont RECALCULÉES à chaque consultation depuis les contrats
-// (Contrat) et les abonnements annuels (AbonnementStation) en base.
+// Super Administration — échéances SaaS consolidées (T52-R1, réécriture).
+// Lecture seule : aucune écriture, pas d'audit — les alertes sont RECALCULÉES
+// à chaque consultation depuis les contrats SaaS (SaasContract) et les
+// factures (SaasInvoice) réellement présents en base.
 //
-// Trois familles d'échéances, fenêtre de surveillance −30 → +90 jours :
-//   • RENOUVELLEMENT_CONTRAT   — date de fin contractuelle si définie, SINON
-//     prochain anniversaire de dateDebut (reconduction tacite, multiple de
-//     12 mois suivant, année de signature ignorée) ;
-//   • PREAVIS_RESILIATION      — contrats tacites (dateFin null) dont le
-//     renouvellement est à ≤ 60 j : échéance = renouvellement − 60 j
-//     (fenêtre limite de résiliation) ;
-//   • RENOUVELLEMENT_ABONNEMENT — abonnements ANNUELS actifs GROUPÉS par
-//     (enseigne, mois + année de l'échéance) : une seule entrée par groupe,
-//     avec le montant annuel cumulé (somme prixMillimes → DT/an).
+// ⚠️ Historique : la version d'origine (T44) sondatait les modèles Prisma
+// « Contrat », « AbonnementStation », « Facture » du stock historique — ces
+// modèles n'existent plus dans le schéma, la route répondait donc HTTP 500
+// systématiquement (Cannot read properties of undefined). Cette version
+// s'appuie exclusivement sur les modèles vivants.
+//
+// Deux familles d'échéances, fenêtre de surveillance −30 → +90 jours :
+//   • RENOUVELLEMENT_CONTRAT — date de renouvellement (renewsAt) des contrats
+//     ACTIF/ESSAI : reconduction ou dossier de renouvellement à préparer ;
+//   • FACTURE_RETARD         — factures impayées dont l'échéance (dueAt) est
+//     dépassée (statut effectif RETARD), avec jours de retard et montant.
 //
 // Gravité : DEPASSE (jours < 0) · CRITIQUE (≤ 7 j) · WARNING (≤ 30 j) ·
 // INFO (≤ 90 j) — tri final par joursRestants croissants.
+// La réponse alimente la bannière d'alertes de la Vue d'ensemble
+// (sa-overview-alertes.tsx) : champs id/type/clientNom/libelle/
+// dateEcheance/joursRestants/gravite conservés pour compatibilité.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { effectiveStatusInDb } from "@/lib/saas-server"
 
 export const dynamic = "force-dynamic"
 
 const DAY_MS = 86_400_000
-const FENETRE_MIN = -30 // échéances récemment dépassées conservées
+const FENETRE_MIN = -30 // échéances contractuelles récemment dépassées conservées
+const FENETRE_MIN_RETARD = -90 // factures en retard : alerte active tant qu'impayée (jusqu'à 90 j de retard)
 const FENETRE_MAX = 90 // horizon de surveillance
-const PREAVIS_JOURS = 60 // préavis contractuel (reconduction tacite)
 
-type EcheanceType = "RENOUVELLEMENT_CONTRAT" | "PREAVIS_RESILIATION" | "RENOUVELLEMENT_ABONNEMENT"
+type EcheanceType = "RENOUVELLEMENT_CONTRAT" | "FACTURE_RETARD"
 type Gravite = "DEPASSE" | "CRITIQUE" | "WARNING" | "INFO"
 
 interface Echeance {
@@ -40,26 +45,10 @@ interface Echeance {
   joursRestants: number
   gravite: Gravite
   detail: string
-}
-
-const nfEntier = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 })
-
-/** 8 000 000 millimes → « 8 000 DT » (montants annuels cumulés, DT entiers). */
-function dt(millimes: number): string {
-  return `${nfEntier.format(Math.round(millimes / 1000))} DT`
-}
-
-const fDateLongue = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" })
-const fMois = new Intl.DateTimeFormat("fr-FR", { month: "long" })
-
-function dateFr(d: Date): string {
-  const s = fDateLongue.format(d)
-  return d.getDate() === 1 ? s.replace(/^1\s/, "1er ") : s
-}
-
-/** Écart entier en jours (même convention que serializeContrat). */
-function joursEntre(cible: Date, now: Date): number {
-  return Math.round((cible.getTime() - now.getTime()) / DAY_MS)
+  /** Montant mensuel du contrat (renouvellements) — null pour les factures. */
+  montantMensuelDt: number | null
+  /** Montant TTC de la facture (retards) — null pour les renouvellements. */
+  montantDt: number | null
 }
 
 function graviteDe(jours: number): Gravite {
@@ -73,135 +62,84 @@ function dansFenetre(jours: number): boolean {
   return jours >= FENETRE_MIN && jours <= FENETRE_MAX
 }
 
-/** Prochain anniversaire annuel de la date de référence (multiple de 12 mois
- * suivant, année de signature ignorée — reconduction tacite). L'anniversaire
- * du jour même est conservé (J-0 → CRITIQUE). */
-function prochainAnniversaire(debut: Date, now: Date): Date {
-  const a = (y: number) => new Date(
-    y, debut.getMonth(), debut.getDate(),
-    debut.getHours(), debut.getMinutes(), debut.getSeconds(), debut.getMilliseconds(),
-  )
-  const debutDuJour = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-  let cible = a(now.getFullYear())
-  if (debutDuJour(cible) < debutDuJour(now)) cible = a(now.getFullYear() + 1)
-  return cible
+/** Fenêtre élargie pour les retards de factures (alerte tant que la facture
+ *  est impayée, jusqu'à 90 j de retard — aligne bannière et KPI « en attente »). */
+function dansFenetreRetard(jours: number): boolean {
+  return jours >= FENETRE_MIN_RETARD && jours <= FENETRE_MAX
+}
+
+/** Écart entier en jours (même convention que serializeContrat). */
+function joursEntre(cible: Date, now: Date): number {
+  return Math.round((cible.getTime() - now.getTime()) / DAY_MS)
 }
 
 export async function GET() {
   try {
     const now = new Date()
-    const contrats = await db.contrat.findMany({ orderBy: { createdAt: "asc" } })
-    const abonnements = await db.abonnementStation.findMany({
-      where: { periodicite: "ANNUEL", statut: "ACTIF" },
-      select: { brandSlug: true, dateDebut: true, dateFin: true, prixMillimes: true },
-    })
-    // Raison sociale par enseigne (contrats actifs/essais d'abord, repli sur
-    // n'importe quel contrat de l'enseigne).
-    const nomsClients = new Map<string, string>()
-    for (const c of contrats) {
-      if (c.brandSlug) nomsClients.set(c.brandSlug, c.nomClient)
-    }
+    const [contrats, factures] = await Promise.all([
+      db.saasContract.findMany({ orderBy: { renewsAt: "asc" } }),
+      db.saasInvoice.findMany({ include: { contract: true }, orderBy: { dueAt: "asc" } }),
+    ])
 
     const echeances: Echeance[] = []
 
-    // ------------------------------- renouvellements de contrats + préavis
-    for (const c of contrats.filter((x) => x.statut === "ACTIF" || x.statut === "ESSAI")) {
-      const slug = c.brandSlug ?? c.numero
-      let cible: Date | null = null
-      let tacite = false
-      if (c.dateFin) {
-        cible = c.dateFin // échéance contractuelle fixe
-      } else if (c.dateDebut) {
-        cible = prochainAnniversaire(c.dateDebut, now) // reconduction tacite
-        tacite = true
-      }
-      if (!cible) continue // prospect sans dates → rien à surveiller
-
-      const j = joursEntre(cible, now)
+    // ------------------------------- renouvellements de contrats SaaS
+    for (const c of contrats.filter(x => x.status === "ACTIF" || x.status === "ESSAI")) {
+      const j = joursEntre(c.renewsAt, now)
       if (!dansFenetre(j)) continue
-
+      const essai = c.status === "ESSAI"
       echeances.push({
-        id: `RENOU-${c.numero}`,
+        id: `RENOU-${c.id}`,
         type: "RENOUVELLEMENT_CONTRAT",
-        clientSlug: slug,
-        clientNom: c.nomClient,
-        reference: c.numero,
-        libelle: tacite
-          ? "Reconduction tacite annuelle du contrat"
-          : "Fin de contrat à échéance fixe",
-        dateEcheance: cible.toISOString(),
+        clientSlug: c.brandSlug,
+        clientNom: c.brandName,
+        reference: c.plan,
+        libelle: essai
+          ? "Fin d'essai — conversion à décider"
+          : "Renouvellement de l'abonnement SaaS",
+        dateEcheance: c.renewsAt.toISOString(),
         joursRestants: j,
         gravite: graviteDe(j),
-        detail: tacite
-          ? `Contrat sans date de fin : reconduction automatique le ${dateFr(cible)} (anniversaire du ${dateFr(c.dateDebut!)}) — préavis de résiliation 60 jours.`
-          : `Signé le ${c.dateSignature ? dateFr(c.dateSignature) : "—"} · échéance contractuelle le ${dateFr(cible)} — préparer le dossier de renouvellement ou la clôture.`,
+        detail: essai
+          ? `Essai ${c.brandName} se terminant le ${c.renewsAt.toLocaleDateString("fr-FR")} — arbitrer la conversion en contrat payant (${c.monthlyFee} DT/mois).`
+          : `Contrat ${c.brandName} (plan ${c.plan}) à renouveler le ${c.renewsAt.toLocaleDateString("fr-FR")} — préparer le dossier de reconduction ou de clôture.`,
+        montantMensuelDt: c.monthlyFee,
+        montantDt: null,
       })
-
-      // Préavis de résiliation : tacite ET renouvellement à ≤ 60 jours.
-      if (tacite && j <= PREAVIS_JOURS) {
-        const dateLimite = new Date(cible.getTime() - PREAVIS_JOURS * DAY_MS)
-        const jp = joursEntre(dateLimite, now)
-        if (dansFenetre(jp)) {
-          echeances.push({
-            id: `PREAVIS-${c.numero}`,
-            type: "PREAVIS_RESILIATION",
-            clientSlug: slug,
-            clientNom: c.nomClient,
-            reference: c.numero,
-            libelle: "Fenêtre préavis 60 j — dernière date pour ne pas reconduire tacitement",
-            dateEcheance: dateLimite.toISOString(),
-            joursRestants: jp,
-            gravite: graviteDe(jp),
-            detail: `Notifier la résiliation au plus tard le ${dateFr(dateLimite)} (60 jours avant la reconduction du ${dateFr(cible)}) — sinon le contrat est reconduit automatiquement.`,
-          })
-        }
-      }
     }
 
-    // ---------------- renouvellements d'abonnements annuels (groupés)
-    type Groupe = { cible: Date; nb: number; totalMillimes: number }
-    const groupes = new Map<string, Groupe>()
-    for (const ab of abonnements) {
-      // dateFin si définie, sinon anniversaire de souscription (tacite).
-      const cible = ab.dateFin ?? prochainAnniversaire(ab.dateDebut, now)
-      const j = joursEntre(cible, now)
-      if (!dansFenetre(j)) continue
-      const cle = `${ab.brandSlug}#${cible.getFullYear()}-${String(cible.getMonth() + 1).padStart(2, "0")}`
-      const g = groupes.get(cle)
-      if (g) {
-        g.nb += 1
-        g.totalMillimes += ab.prixMillimes
-      } else {
-        groupes.set(cle, { cible, nb: 1, totalMillimes: ab.prixMillimes })
-      }
-    }
-    for (const [cle, g] of groupes) {
-      const [brandSlug, ym] = cle.split("#")
-      const [annee, moisNum] = ym.split("-").map(Number)
-      const nomMois = fMois.format(new Date(annee, moisNum - 1, 1))
-      const nomClient = nomsClients.get(brandSlug) ?? brandSlug
+    // ---------------- factures en retard (statut effectif, échéance dépassée)
+    for (const f of factures) {
+      if (effectiveStatusInDb(f.status, f.dueAt) !== "RETARD") continue
+      const j = joursEntre(f.dueAt, now) // toujours négatif ici
+      if (!dansFenetreRetard(j)) continue
       echeances.push({
-        id: `ABOS-${brandSlug}-${ym}`,
-        type: "RENOUVELLEMENT_ABONNEMENT",
-        clientSlug: brandSlug,
-        clientNom: nomClient,
-        reference: `GRPE-${brandSlug.toUpperCase()}-${ym}`,
-        libelle: `${g.nb} abonnements annuels à renouveler (≈ ${dt(g.totalMillimes)}/an)`,
-        dateEcheance: g.cible.toISOString(),
-        joursRestants: joursEntre(g.cible, now),
-        gravite: graviteDe(joursEntre(g.cible, now)),
-        detail: `${g.nb} stations ${nomClient} en formule annuelle, reconduites tacitement à leur anniversaire (${nomMois} ${annee}) — ≈ ${dt(Math.round(g.totalMillimes / g.nb))}/an par station.`,
+        id: `FACT-${f.id}`,
+        type: "FACTURE_RETARD",
+        clientSlug: f.contract.brandSlug,
+        clientNom: f.contract.brandName,
+        reference: f.number,
+        libelle: "Facture en retard de paiement",
+        dateEcheance: f.dueAt.toISOString(),
+        joursRestants: j,
+        gravite: graviteDe(j),
+        detail: `Facture ${f.number} (${f.amount} DT) de ${f.contract.brandName} échue le ${f.dueAt.toLocaleDateString("fr-FR")} — en retard de ${Math.abs(j)} jour(s)${f.reminderCount > 0 ? ` · ${f.reminderCount} relance(s) envoyée(s)` : " · aucune relance envoyée"}.`,
+        montantMensuelDt: null,
+        montantDt: f.amount,
       })
     }
 
     // ------------------------------------------------- tri + statistiques
     echeances.sort((a, b) => a.joursRestants - b.joursRestants)
+    const retards = echeances.filter(e => e.type === "FACTURE_RETARD")
     const stats = {
       total: echeances.length,
-      depasse: echeances.filter((e) => e.gravite === "DEPASSE").length,
-      critique: echeances.filter((e) => e.gravite === "CRITIQUE").length,
-      warning: echeances.filter((e) => e.gravite === "WARNING").length,
-      info: echeances.filter((e) => e.gravite === "INFO").length,
+      depasse: echeances.filter(e => e.gravite === "DEPASSE").length,
+      critique: echeances.filter(e => e.gravite === "CRITIQUE").length,
+      warning: echeances.filter(e => e.gravite === "WARNING").length,
+      info: echeances.filter(e => e.gravite === "INFO").length,
+      facturesRetard: retards.length,
+      montantRetardDt: Math.round(retards.reduce((s, r) => s + (r.montantDt ?? 0), 0)),
     }
     return NextResponse.json({ echeances, stats })
   } catch (e) {

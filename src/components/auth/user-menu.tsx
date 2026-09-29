@@ -28,16 +28,16 @@ export function applySession(user: SessionUser, keepMode = true) {
   const s = useAppStore.getState()
   s.setSession(user)
   s.setAuthStatus("auth")
-  // Rôle « métier » pour les onglets de l'observatoire : la racine Super Admin
-  // navigue comme un administrateur complet (convention démo TAB_ACCESS).
+  // Rôle « métier » pour les modules de l'espace enseigne : la racine Super
+  // Admin navigue comme un administrateur complet (convention démo TAB_ACCESS).
   s.setRole(user.role === "SUPER_ADMIN" ? "ADMIN" : (user.role as Role))
   if (user.brandSlug) s.setBrandSlug(user.brandSlug)
   if (!keepMode || !user.spaces.includes(s.mode)) {
+    // T50 — 3 espaces : racine → Super Admin, toutes les enseignes (DG inclus)
+    // → Portail enseigne.
     const accueil: Mode =
       user.role === "SUPER_ADMIN" && user.spaces.includes("superadmin") ? "superadmin"
-        : user.brandSlug && user.spaces.includes("portail") ? "portail"
-          : !user.brandSlug && user.role !== "SUPER_ADMIN" && user.spaces.includes("backoffice") ? "backoffice"
-            : "observatoire"
+        : "portail"
     s.setMode(accueil)
   }
 }
@@ -260,7 +260,7 @@ export function UserMenu() {
     stopImpersonating()
     setRole("ADMIN")
     setBrandSlug("agil")
-    setMode("observatoire")
+    setMode("portail")
     setTab("dashboard")
     setOpen(false)
     toast.info("Vous êtes déconnecté", { description: "À bientôt sur CarbuScope." })

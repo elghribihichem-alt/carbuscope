@@ -23,23 +23,17 @@ import { LangToggle } from "@/components/app/lang-toggle"
 import { useI18n } from "@/lib/i18n"
 import { DEMO_ACCOUNTS, findAccountByEmail, type DemoAccount } from "@/lib/demo-accounts"
 
+// T50 — 3 espaces produit (l'espace enseigne fusionné remplace les modes
+// historiques).
 const MODE_ICON: Record<DemoAccount["mode"], React.ComponentType<{ className?: string }>> = {
-  observatoire: LineChart,
   portail: Building2,
   mobile: Smartphone,
-  agents: ClipboardCheck,
-  backoffice: ShieldCheck,
-  shadow: Ghost,
   superadmin: Crown,
 }
 
 const MODE_LABEL: Record<DemoAccount["mode"], string> = {
-  observatoire: "Observatoire B2B",
   portail: "Portail enseigne",
   mobile: "Mobile B2C",
-  agents: "Agents terrain",
-  backoffice: "Back-office",
-  shadow: "Shadow Market",
   superadmin: "Super Administration",
 }
 
@@ -130,8 +124,9 @@ export function LoginScreen() {
             Le Waze du carburant, <span className="text-[var(--c-sidebar-gold)]">au service des réseaux.</span>
           </h1>
           <p className="mt-4 text-sm leading-relaxed text-[var(--c-hero-muted)]">
-            Observatoire B2B, application mobile B2C et portail enseigne réunis sur une même
-            infrastructure de données : prix, services, concurrence et terrain, en temps réel.
+            Portail enseigne, application mobile B2C et Super Administration :
+            3 espaces réunis sur une même infrastructure de données — prix, services,
+            concurrence et terrain, en temps réel.
           </p>
           <div className="mt-8 grid grid-cols-3 gap-4">
             <div className="rounded-lg border border-white/10 bg-[var(--c-hero-badge)]/60 p-3">

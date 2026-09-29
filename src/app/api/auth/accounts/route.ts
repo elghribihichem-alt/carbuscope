@@ -7,20 +7,18 @@ import type { DemoAccount } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
-// Sélection pédagogique alignée sur les personas de démonstration : la racine
-// Super Admin, l'équipe éditeur, un admin par enseigne cliente + profils variés.
+// T50 — sélection alignée sur la gouvernance : la racine Super Admin, le DG
+// Agil, un admin par enseigne cliente (Star Oil incluse) + profils variés.
+// Les comptes du personnel plateforme hors enseigne ont été purgés.
 const CURATED = [
   "rania.feki@carbuscope.tn",
-  "amine.chebbi@carbuscope.tn",
-  "hichem.jaziri@carbuscope.tn",
-  "ops@carbuscope.tn",
-  "finance@carbuscope.tn",
+  "tarek.mabrouk@agil.tn",
   "sonia.beji@agil.tn",
   "nadia.haddad@agil.tn",
-  "observateur@agil.tn",
   "karim.trabelsi@shell.tn",
   "mehdi.gharbi@ola.tn",
   "leila.mansour@totalenergies.tn",
+  "anis.ferjani@staroil.tn",
 ]
 
 export async function GET() {

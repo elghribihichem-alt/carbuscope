@@ -4,11 +4,13 @@
 // (Essentiel / Pro / Enterprise) avec stats dérivées des contrats (nb actifs,
 // MRR par plan) et édition journalisée en audit SYSTEME. 100 % additif :
 // le 6e onglet de la Super Administration, les 5 existants sont inchangés.
+// T52-R2 : bandeau de synthèse des souscriptions + répartition des contrats
+// par statut et par plan (données /api/super/contracts).
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Check, Loader2, Pencil, RefreshCw, Save, Sparkles } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Check, FileSpreadsheet, Loader2, Pencil, RefreshCw, Save, Sparkles } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,7 +21,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useAppStore } from "@/store/app-store"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
-import { fmtDT, type SaasPlanDTO } from "@/lib/saas"
+import { fmtDT, CONTRACT_STATUS_META, type SaasPlanDTO, type SaasContractDTO } from "@/lib/saas"
 
 // Couleurs de cartes par plan (mêmes teintes que les badges de l'espace :
 // graphite pour l'offre de base, émeraude pour l'offre phare, teal racine).
@@ -250,8 +252,12 @@ function PlanEditDialog({
 
 export function SaPlans() {
   const userId = useAppStore(s => s.userId)
-  const actor = userId ? DEMO_ACCOUNTS_MAP[userId]?.email ?? "system" : "system"
+  // T52-R2 : acteur d'audit = e-mail de la session V7 (repli ancien flux démo
+  //  userId, puis « system ») — cohérent avec la journalisation sa-users.
+  const session = useAppStore(s => s.session)
+  const actor = session?.email ?? (userId ? DEMO_ACCOUNTS_MAP[userId]?.email ?? "system" : "system")
   const [plans, setPlans] = useState<SaasPlanDTO[] | null>(null)
+  const [contracts, setContracts] = useState<SaasContractDTO[] | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<SaasPlanDTO | null>(null)
@@ -259,10 +265,14 @@ export function SaPlans() {
   const reload = useCallback(async () => {
     setRefreshing(true)
     try {
-      const r = await fetch("/api/super/plans")
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const j = await r.json()
-      setPlans(j.plans)
+      // Les contrats alimentent la répartition par plan/statut (T52-R2) — un
+      // échec partiel ne bloque pas l'affichage du catalogue.
+      const [rp, rc] = await Promise.all([
+        fetch("/api/super/plans").then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
+        fetch("/api/super/contracts").then(r => r.ok ? r.json() : Promise.resolve(null)),
+      ]) as [{ plans: SaasPlanDTO[] }, { contracts: SaasContractDTO[] } | null]
+      setPlans(rp.plans)
+      setContracts(rc?.contracts ?? null)
       setError(null)
     } catch {
       setError("Impossible de charger le catalogue des plans.")
@@ -272,6 +282,34 @@ export function SaPlans() {
   }, [])
 
   useEffect(() => { reload() }, [reload])
+
+  // Répartition des contrats par plan et par statut (T52-R2).
+  const contractsByPlan = useMemo(() => {
+    const per = new Map<string, { total: number; byStatus: Record<string, number> }>()
+    for (const c of contracts ?? []) {
+      const e = per.get(c.plan) ?? { total: 0, byStatus: {} }
+      e.total += 1
+      e.byStatus[c.status] = (e.byStatus[c.status] ?? 0) + 1
+      per.set(c.plan, e)
+    }
+    return per
+  }, [contracts])
+
+  // Synthèse globale des souscriptions (T52-R2).
+  const summary = useMemo(() => {
+    const list = contracts ?? []
+    const active = list.filter(c => c.status === "ACTIF")
+    const mrr = active.reduce((s, c) => s + c.monthlyFee, 0)
+    return {
+      total: list.length,
+      active: active.length,
+      essai: list.filter(c => c.status === "ESSAI").length,
+      suspendu: list.filter(c => c.status === "SUSPENDU").length,
+      resilie: list.filter(c => c.status === "RESILIE").length,
+      mrr,
+      arr: mrr * 12,
+    }
+  }, [contracts])
 
   if (error) {
     return <Card><CardContent className="p-6 text-sm text-destructive">{error}</CardContent></Card>
@@ -286,19 +324,50 @@ export function SaPlans() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          Catalogue des offres vendues aux enseignes — les modifications sont journalisées dans l&apos;audit.
-        </p>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" onClick={reload} disabled={refreshing}>
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden /> Actualiser
-        </Button>
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Souscriptions du catalogue</CardTitle>
+          <CardDescription>
+            Catalogue des offres vendues aux enseignes — les modifications sont journalisées dans l&apos;audit (type Système).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          {contracts === null ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Chargement des souscriptions…
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <p className="flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+                <span className="font-semibold tabular-nums">{summary.total}</span>
+                <span className="text-muted-foreground">contrat(s) souscrit(s)</span>
+              </p>
+              <p className="text-muted-foreground">
+                <span className="font-semibold tabular-nums text-foreground">{summary.active}</span> actif(s) ·{" "}
+                <span className="font-semibold tabular-nums text-foreground">{summary.essai}</span> essai(s) ·{" "}
+                <span className="font-semibold tabular-nums text-foreground">{summary.suspendu}</span> suspendu(s)
+                {summary.resilie > 0 ? (
+                  <> · <span className="font-semibold tabular-nums text-foreground">{summary.resilie}</span> résilié(s)</>
+                ) : null}
+              </p>
+              <p className="text-muted-foreground">
+                MRR actif <span className="font-bold tabular-nums text-foreground">{fmtDT(summary.mrr)}</span>/mois · ARR{" "}
+                <span className="font-bold tabular-nums text-foreground">{fmtDT(summary.arr)}</span>
+              </p>
+            </div>
+          )}
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" onClick={reload} disabled={refreshing}>
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden /> Actualiser
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {plans.map(plan => {
           const meta = PLAN_CARD_META[plan.code] ?? PLAN_CARD_META.ESSENTIEL
           const isEnterprise = plan.code === "ENTERPRISE"
+          const repartition = contractsByPlan.get(plan.code)
           return (
             <Card
               key={plan.id}
@@ -345,13 +414,31 @@ export function SaPlans() {
                   ))}
                 </ul>
 
-                <div className="flex items-center justify-between gap-2 border-t pt-3">
+                {/* Contrats par plan : comptage + répartition par statut (T52-R2) */}
+                <div className="space-y-2 border-t pt-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline" className={`text-[10px] ${meta.chip}`}>
+                      {plan.contractsCount} contrat(s)
+                    </Badge>
+                    {repartition && Object.entries(repartition.byStatus)
+                      .sort(([a], [b]) => ["ACTIF", "ESSAI", "SUSPENDU", "RESILIE"].indexOf(a) - ["ACTIF", "ESSAI", "SUSPENDU", "RESILIE"].indexOf(b))
+                      .map(([status, count]) => {
+                        const sm = CONTRACT_STATUS_META[status]
+                        return (
+                          <Badge key={status} variant="outline" className={`text-[10px] ${sm?.className ?? ""}`}>
+                            {sm?.label ?? status} ×{count}
+                          </Badge>
+                        )
+                      })}
+                    {repartition && repartition.total !== plan.contractsCount && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400" title="Comptage dérivé du registre des contrats">
+                        {repartition.total} au registre
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground tabular-nums">
-                    {plan.contractsActive} contrat(s) actif(s) · MRR {fmtDT(plan.mrr)}
+                    {plan.contractsActive} contrat(s) actif(s) · MRR {fmtDT(plan.mrr)}/mois
                   </p>
-                  <Badge variant="outline" className={`text-[10px] ${meta.chip}`}>
-                    {plan.contractsCount} contrat(s)
-                  </Badge>
                 </div>
 
                 <Button

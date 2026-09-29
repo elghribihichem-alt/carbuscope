@@ -1323,3 +1323,76 @@ Stage Summary:
 - Risques mineurs : `nav` non persisté (retour aux défauts au rechargement — voulu) ; les Tabs internes de 3ᵉ niveau (sa-demographie, sa-support, sa-config) restent des onglets de contenu ; `tab-nav.tsx` conservé mais inutilisé (poubelle douce — à supprimer dans une prochaine phase).
 - Priorités suivantes recommandées : badges live sur la sidebar observatoire (alertes critiques), recherche/filtre dans la sidebar (⌘K), sous-menus pour « stations » et « prices » si besoin, suppression du fichier mort tab-nav.tsx, i18n AR/EN des libellés sidebar (repli FR actuel).
 
+
+---
+Task ID: T50 (convergence 7 → 3 espaces) — [entrée restaurée le 29/09 après réécriture accidentelle du worklog par un run cron QA]
+Agent: Chef d'orchestration (Z.ai Code)
+Task: Livrer la convergence validée : 3 espaces produit (Portail Enseigne · Mobile B2C · Super Admin) en fusionnant Observatoire B2B + Portail + Back-office + Shadow + Agents terrain dans un unique espace de marque (blueprint 8 groupes) ; gouvernance des comptes (racine unique Rania Feki, purge des comptes hors-enseigne, activation Star Oil, DG voyant tout).
+
+Work Log:
+- Phase B (fusion structurelle) : Mode = "portail" | "mobile" | "superadmin" + migrateMode() + persist v1 ; rôle DG ajouté ; PLATFORM_MODULE_ROLES / SHADOW_MODULE_ROLES ; nav.espace = module actif ; nouveau src/components/fused/brand-space-view.tsx ; app-header à 3 boutons (liens haut Observatoire/Shadow/Back-office/Agents SUPPRIMÉS) ; app-sidebar blueprint 8 groupes ; login-gate/user-menu alignés ; deep-links convertis.
+- Phase C (gouvernance) : scripts/t50-accounts.ts — 6 comptes hors-enseigne purgés, Rania unique racine, Star Oil ACTIVÉE (Anis Ferjani), DG Tarek Mabrouk créé ; demo-accounts 8 personas ; rôles DG propagés.
+- QA E2E agent-browser complète (desktop + 390px) : rôles ADMIN/COMMERCIAL/VIEWER/DG, Star Oil 120 stations, deep-links, hydratation, 0 erreur console, lint 0.
+
+Stage Summary:
+- T50 LIVRÉ : exactement 3 espaces — Portail Enseigne (blueprint 8 groupes), Mobile B2C, Super Administration. Plus aucun lien haut obsolète.
+- Gouvernance appliquée : racine unique Rania Feki ; 6 purges ; Star Oil active ; DG voit tout.
+- Contrats : Mode 3 valeurs + migrateMode() ; nav.espace ; SHADOW_MODULE_ROLES / PLATFORM_MODULE_ROLES.
+- Risques mineurs : tab-nav.tsx mort ; login-screen.tsx inutilisé ; i18n groupes fusionnés en dur FR.
+
+---
+Task ID: T51 (procédure « un espace à la fois » — proposition + audit express) — [entrée restaurée idem]
+Agent: Chef d'orchestration (Z.ai Code)
+Task: Établir la procédure de perfectionnement espace par espace et la proposer à l'utilisateur.
+
+Work Log:
+- Audit express Super Admin (Rania) : 9 modules rendent tous, 0 erreur console ; CRUD contrats complet ; KPIs MRR 7 920 DT / ARR 95 040 DT / 41 contrats actifs.
+- Audit express Tenant : 8 groupes présents, badges (Modération 9, Missions 5), 0 erreur.
+- Constat i18n : sidebar tenant mélange libellés traduits (groupes 1–5) et codés dur FR (groupes fusionnés) pour navigateur non-FR.
+- Captures : qa-t51-sa-users.png, qa-t51-sa-facturation.png, qa-t51-tenant-sidebar.png.
+
+Stage Summary:
+- Procédure proposée : cycle 5 temps (Audit → Perfectionnement → Test E2E agent-browser → Validation DoD → Gel & bascule).
+- Recommandation : Super Admin d'abord (4 rounds), puis Tenant (7 rounds), Mobile B2C léger en clôture.
+
+---
+Task ID: T51-bis (arbitrages verrouillés — cycle T52 lancé)
+Agent: Chef d'orchestration (Z.ai Code)
+Task: Verrouiller les arbitrages utilisateur et lancer le cycle Super Admin (T52).
+
+Work Log:
+- Arbitrages utilisateur VERROUILLÉS : ① Ordre = Super Admin EN PREMIER. ② Gel = SOUPLE (correctifs + micro-ajustements autorisés, SANS casser code ni design). ③ Validation = GROUPÉE à la fin de chaque espace. ④ Enrichissement = OUI avec précaution, sans casser code ni design. ⑤ Principe directeur : LA QUALITÉ ET LA PERFECTION AVANT TOUT.
+- Cartographie Super Admin (24 fichiers, 17 077 lignes) : 9 modules actifs (overview/contracts/plans/invoices/users/demo/ai/carto/audit) ; ~10 000 lignes de code MORT non importé : sa-billing (1733), sa-comptes (1635), sa-support (1425), sa-clients (1412), sa-config (1218), sa-supervision (1209), sa-analytics (986), sa-devis (934), sa-ai (499), sa-banniere-alertes (356), sa-demographie-io (313) — porteurs probables des erreurs tsc « stock historique ». Décision : les agents MINENT les fonctionnalités valorisables ; suppression du reste arbitrée en R4 avec le dossier de validation.
+- INCIDENT worklog : un run cron QA (webDevReview) a réécrit le worklog et perdu T50/T51 → restaurés à la main ; cron recréé avec consigne APPEND-ONLY stricte.
+- Dispatch : R1 (Pilotage) + R2 (Cycle commercial) en parallèle, périmètres de fichiers disjoints ; sa-shared.tsx et superadmin-view.tsx interdits aux agents (retour à l'orchestrateur) ; src/lib/saas.ts modifiable en additif par R2 uniquement.
+
+Stage Summary:
+- T52 en cours : R1 + R2 parallèles → R3 (gouvernance & outils) → R4 (balayage E2E + dossier de validation + gel) par l'orchestrateur.
+- Règle d'or dictée par l'utilisateur : précaution, zéro casse code/design, qualité avant tout.
+- ⚠️ CONSIGNE CRITIQUE POUR TOUS LES AGENTS (cron inclus) : le worklog est APPEND-ONLY — ne JAMAIS réécrire/compacter/tronquer ce fichier, uniquement ajouter des sections à la fin.
+
+
+---
+Task ID: T52-R1
+Agent: full-stack-developer (R1 Pilotage SA)
+Task: Perfectionnement du module « Vue d'ensemble » (nav.superadmin = "overview") de l'espace Super Admin — bannière d'alertes, échéances enrichies, santé plateforme, tendance MRR — sans rien casser (gel souple, qualité avant tout).
+
+Work Log:
+- Audit : sa-overview.tsx (191 l., 6 KPIs + 3 cartes, consomme /api/super/overview — seule route SA vivante), sa-banniere-alertes.tsx (356 l. mortes : bannière proactive /api/super/echeances + /api/super/factures, gravité DEPASSE/CRITIQUE/WARNING/INFO, chips navigantes, dismiss, refresh live "carbuscope:mutation-sa" debounced), sa-supervision.tsx (1209 l. mortes : 6 KPIs santé, comptages table par table, sonde API, jobs, sauvegardes, incidents, maintenance). Constat clé : echeances/supervision/analytics/jobs/factures répondaient TOUS HTTP 500 (modèles Prisma fantômes Contrat/AbonnementStation/Facture/JobPlateforme/Incident/Sauvegarde/ParametrePlateforme inexistants — dette tsc connue). /api/super/analytics (lecture seule) = 500 → aucun historique MRR exploitable sans réparation interdite.
+- RÉPARATION /api/super/echeances (réécriture complète, modèles réels) : RENOUVELLEMENT_CONTRAT (SaasContract ACTIF/ESSAI, renewsAt, fenêtre −30/+90 j, essai = « conversion à décider ») + FACTURE_RETARD (SaasInvoice statut effectif RETARD via effectiveStatusInDb, jours de retard, relances, fenêtre élargie −90/+90 j) ; gravité DEPASSE/CRITIQUE/WARNING/INFO, tri joursRestants croissant, stats { total, depasse, critique, warning, info, facturesRetard, montantRetardDt } ; champs compatibles avec la bannière d'origine (id/type/clientNom/reference/libelle/dateEcheance/joursRestants/gravite/detail) + montantMensuelDt/montantDt.
+- RÉPARATION /api/super/supervision (réécriture, modèles réels) : comptages parallèles 16 tables vivantes (12 353 lignes, latence agrégée ~15-20 ms) + taille db/custom.db, sonde 5 routes API vivantes (statut OK/LENT/ERREUR + latence), fraîcheur métier (dernier prix carburant, contribution, avis, audit, connexion), charge (missions en cours, signalements PENDING, alertes CRITICAL non lues). Jobs/incidents/maintenance ABSENTS (modèles fantômes) — aucun substitut fabriqué, besoin signalé.
+- ENRICHISSEMENT /api/super/overview (additif strict, champs existants inchangés) : overdueInvoices (SaasInvoiceDTO[], RETARD triées dueAt asc, take 6) + mrrHistory (6 mois reconstruits depuis les contrats ACTIF + startedAt ; résiliés exclus faute de date de sortie, aucune donnée inventée). Type client étendu localement dans sa-overview.tsx (SaasOverviewExt) — lib/saas.ts intouché.
+- NOUVEAU sa-overview-alertes.tsx (bannière, minée de sa-banniere-alertes) : fetch /api/super/echeances au montage + écoute "carbuscope:mutation-sa" (debounce 400 ms, future-proof), résumé « N factures en retard (X DT) · retard le plus ancien : … J+X », chips Facturation/Contrats → onNavigate("invoices"/"contracts"), rouge si échéance critique ou retard ≥ 30 j sinon ambre, bouton masquer (session), zéro alerte/erreur réseau → rien rendu, role=status + aria-live, cibles tactiles min-h-11.
+- NOUVEAU sa-overview-sante.tsx (carte compacte, minée de sa-supervision) : fetch /api/super/supervision, badge global Saine/À surveiller/Dégradée, 4 sections (Base de données — volumétrie/latence/tables ; Endpoints API — sonde + pire latence ; Fraîcheur des données — prix/contribution/audit avec seuils pédagogiques ; Charge & modération — missions/signalements/alertes critiques), bouton Actualiser (abortable), skeleton 6 lignes, échec → carte grise + Réessayer (jamais rouge), grille sm:2 colonnes, dark: partout.
+- NOUVEAU sa-overview-mrr.tsx : AreaChart Recharts 6 mois, stroke #0d9488 + gradient teal 0.30→0.08 (aucun bleu), axes/grille/tooltip via lib/chart.ts (tokens CSS thémés), valeur courante + badge variation/stable, état vide < 2 points, note méthodo « reconstruction fidèle », aria-label FR, isAnimationActive=false.
+- sa-overview.tsx intégré : bannière en tête → 6 KPIs INCHANGÉS → carte « Échéances & renouvellements » (ex « Prochains renouvellements ») enrichie du bloc « Factures en retard » (jours de retard + pastilles rouge ≥ 30 j / ambre, badge compteur, état vide émeraude, liste max-h-96 overflow-y-auto) → carte Dernières factures inchangée → rangée MRR + Santé (grid-cols-1 lg:grid-cols-2) → carte audit inchangée. Boutons Contrats/Facturation/Journal complet + chips de bannière branchés sur onNavigate. Import Loader2 mort supprimé.
+- Fix lint react-hooks/set-state-in-effect (sa-overview-sante : setEnCours initial true, rechargé dans le handler, plus dans le corps d'effet). Fix bug date : mrrHistory labellisé sur le mois ÉVALUÉ (pas la fin de mois) et comparaison new Date(startedAt) (string ISO du DTO).
+- QA agent-browser session isolée t52r1 : login Rania Feki (grille démo) → Vue d'ensemble (bannière « 6 factures en retard (10 900,00 DT) · retard le plus ancien : TotalEnergies J+33 », 6 KPIs MRR 6 630,00 DT / 3 contrats / 10 900,00 DT en attente / 6 retards / 20 utilisateurs / 1 560 stations, MRR stable 6 630 badge « stable », Santé « À surveiller »), clics Contrats → Enseignes & contrats, Facturation → Encours & recouvrement (20 factures), Journal complet → Journal d'audit (38 événements) tous OK ; viewport 390 844 → scrollWidth 390 = clientWidth 390 (0 overflow), cartes empilées, KPIs 2 colonnes ; thème Espresso (dark) vérifié (contrastes lisibles, gradient MRR renforcé 0.30/0.08 au passage) puis restauré corporate ; captures qa-t52-r1-overview.png (1440 full-page) + qa-t52-r1-overview-mobile.png (390 full-page) ; console : 0 erreur de code (2 ChunkLoadError turbopack artefacts d'un reload pendant recompilation serveur, hors périmètre, aucune nouvelle erreur ensuite).
+- Vérifications finales : bun run lint → 0 erreur projet entier ; bunx tsc --noEmit → 0 erreur sur le périmètre (140 erreurs globales préexistantes en baisse vs ~159, mes 3 routes réécrites en ont supprimé) ; smoke 200 sur / + /api/super/{overview,echeances,supervision} ; dev.log propre.
+
+Stage Summary:
+- Vue d'ensemble enrichie SANS casse : bannière d'alertes proactives (échéances + retards, chips navigantes, dismissible), carte échéances étendue aux factures en retard (jours + pastilles), courbe MRR 6 mois (données réelles reconstruites, teal), carte Santé de la plateforme (relevé réel : base, API, fraîcheur, charge) — 6 KPIs, carte factures, carte audit et navigation interne intacts.
+- 2 routes mortes RÉANIMÉES sur les modèles Prisma vivants (echeances, supervision) + 1 enrichie en additif (overview) ; tsc global 159→140. /api/super/analytics et /api/super/jobs restent 500 (hors périmètre, modèles fantômes) — signalés à l'orchestrateur.
+- Jobs planifiés / incidents / maintenance : aucune donnée réelle disponible (modèles fantômes JobPlateforme/Incident/Sauvegarde/ParametrePlateforme) — besoin signalé, aucun substitut fabriqué.
+- Recommandation R4 : sa-banniere-alertes.tsx entièrement portée (version légère vivante) → supprimable ; sa-supervision.tsx partiellement portée (carte santé ; jobs/sauvegardes/restauration/incidents/maintenance non portables sans modèles) → décision à prendre avec le dossier de validation.
+- Captures : qa-t52-r1-overview.png, qa-t52-r1-overview-mobile.png. Enregistrement détaillé : agent-ctx/T52-R1-pilotage-sa.md.

@@ -64,9 +64,7 @@ export function LoginGate() {
     setTab("dashboard")
     const accueil: Mode =
       user.role === "SUPER_ADMIN" && user.spaces.includes("superadmin") ? "superadmin"
-        : user.brandSlug && user.spaces.includes("portail") ? "portail"
-          : !user.brandSlug && user.role !== "SUPER_ADMIN" && user.spaces.includes("backoffice") ? "backoffice"
-            : "observatoire"
+        : "portail"
     setMode(accueil)
     toast.success(`Bienvenue, ${user.name.split(" ")[0]} !`, {
       description: `${roleLabel(user.role)}${user.brandName ? ` · ${user.brandName}` : ""} — session sécurisée de 12 h.`,
@@ -141,7 +139,7 @@ export function LoginGate() {
           <h1 className="mt-8 text-2xl font-bold leading-snug tracking-tight xl:text-[28px]">
             La plateforme SaaS du carburant tunisien,
             <br />
-            <span className="text-emerald-700 dark:text-emerald-400">une seule session pour vos 5 espaces.</span>
+            <span className="text-emerald-700 dark:text-emerald-400">une seule session pour vos 3 espaces.</span>
           </h1>
           <ul className="mt-7 space-y-3.5">
             {ATOUTS.map(a => {
@@ -323,7 +321,7 @@ export function LoginGate() {
       <footer className="border-t bg-background/70 py-3">
         <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
           <Fuel className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
-          CarbuScope © 2026 — « Le Waze du carburant » · 5 espaces, une seule plateforme
+          CarbuScope © 2026 — « Le Waze du carburant » · 3 espaces, une seule plateforme
         </p>
       </footer>
     </div>
