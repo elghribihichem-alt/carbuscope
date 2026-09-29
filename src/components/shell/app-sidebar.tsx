@@ -255,26 +255,26 @@ function useMenu(mode: Mode): MenuModel {
           ],
         },
         {
-          id: "f-enseigne", label: "Espace enseigne", items: [
-            pTab("dashboard", LayoutDashboard, "Tableau de bord enseigne"),
-            pTab("stations", Store, "Mes stations"),
-            pTab("reviews", Star, "Avis & réputation"),
-            pTab("api", PlugZap, "API & promotions"),
+          id: "f-enseigne", label: t("sb.groups.enseigne"), items: [
+            pTab("dashboard", LayoutDashboard, t("sb.espace.dashboard")),
+            pTab("stations", Store, t("sb.espace.stations")),
+            pTab("reviews", Star, t("sb.espace.reviews")),
+            pTab("api", PlugZap, t("sb.espace.api")),
           ],
         },
         {
-          id: "f-terrain", label: "Veille terrain", items: [
+          id: "f-terrain", label: t("sb.groups.terrain"), items: [
             branch(
-              "terrain", Footprints, "Missions terrain",
+              "terrain", Footprints, t("sb.terrain.missions"),
               espace === "portail" && cur("portail") === "terrain",
               () => { setNav("espace", "portail"); setNav("portail", "terrain"); closeMobile() },
               "portal-terrain", [
-                { id: "missions", icon: ClipboardList, label: "Mes missions" },
-                { id: "own", icon: ShieldCheck, label: "Fiche propriétaire" },
-                { id: "competitors", icon: Eye, label: "Fiches concurrents" },
+                { id: "missions", icon: ClipboardList, label: t("sb.terrain.mesMissions") },
+                { id: "own", icon: ShieldCheck, label: t("sb.terrain.proprietaire") },
+                { id: "competitors", icon: Eye, label: t("sb.terrain.concurrents") },
               ],
             ),
-            leaf("agents", Smartphone, "Application agents terrain", espace === "agents", () => { setNav("espace", "agents"); closeMobile() }),
+            leaf("agents", Smartphone, t("sb.terrain.app"), espace === "agents", () => { setNav("espace", "agents"); closeMobile() }),
           ],
         },
         { id: "f-analyse", label: t("sb.groups.analyse"), items: analyseItems },
@@ -282,46 +282,46 @@ function useMenu(mode: Mode): MenuModel {
 
       if (SHADOW_MODULE_ROLES.includes(role)) {
         groups.push({
-          id: "f-shadow", label: "Shadow Market", items: [
-            sBranch("overview", BarChart3, "Vue d'Ensemble", [
-              { id: "kpis", icon: BarChart3, label: "Indicateurs Clés" },
-              { id: "alerts", icon: TriangleAlert, label: "Alertes" },
-              { id: "top", icon: Trophy, label: "Top 10 Menaces" },
-              { id: "calendar", icon: CalendarDays, label: "Calendrier" },
+          id: "f-shadow", label: t("sb.groups.shadow"), items: [
+            sBranch("overview", BarChart3, t("sb.shadow.overview"), [
+              { id: "kpis", icon: BarChart3, label: t("sb.shadow.overview.kpis") },
+              { id: "alerts", icon: TriangleAlert, label: t("sb.shadow.overview.alerts") },
+              { id: "top", icon: Trophy, label: t("sb.shadow.overview.top") },
+              { id: "calendar", icon: CalendarDays, label: t("sb.shadow.overview.calendar") },
             ]),
-            sBranch("cartography", Map, "Cartographie", [
-              { id: "national", icon: Globe, label: "Carte Nationale" },
-              { id: "district", icon: Target, label: "Par District" },
-              { id: "station", icon: MapPin, label: "Par Station" },
-              { id: "road", icon: Route, label: "Par Axe Routier" },
-              { id: "redzones", icon: TriangleAlert, label: "Zones Rouges" },
+            sBranch("cartography", Map, t("sb.shadow.carto"), [
+              { id: "national", icon: Globe, label: t("sb.shadow.carto.national") },
+              { id: "district", icon: Target, label: t("sb.shadow.carto.district") },
+              { id: "station", icon: MapPin, label: t("sb.shadow.carto.station") },
+              { id: "road", icon: Route, label: t("sb.shadow.carto.road") },
+              { id: "redzones", icon: TriangleAlert, label: t("sb.shadow.carto.redzones") },
             ]),
-            sBranch("recensement", ClipboardList, "Recensement", [
-              { id: "nouveau", icon: Plus, label: "Nouveau Point" },
-              { id: "liste", icon: List, label: "Liste des Points" },
-              { id: "maj", icon: RefreshCw, label: "Mises à Jour" },
-              { id: "audit", icon: Users, label: "Équipe d'Audit" },
-              { id: "validation", icon: CircleCheck, label: "Validation" },
-              { id: "galerie", icon: Camera, label: "Galerie Photos" },
+            sBranch("recensement", ClipboardList, t("sb.shadow.recensement"), [
+              { id: "nouveau", icon: Plus, label: t("sb.shadow.rec.nouveau") },
+              { id: "liste", icon: List, label: t("sb.shadow.rec.liste") },
+              { id: "maj", icon: RefreshCw, label: t("sb.shadow.rec.maj") },
+              { id: "audit", icon: Users, label: t("sb.shadow.rec.audit") },
+              { id: "validation", icon: CircleCheck, label: t("sb.shadow.rec.validation") },
+              { id: "galerie", icon: Camera, label: t("sb.shadow.rec.galerie") },
             ]),
-            sBranch("impact", TrendingDown, "Analyse d'Impact", [
-              { id: "station", icon: Landmark, label: "Perte par Station" },
-              { id: "region", icon: Map, label: "Perte par Région" },
-              { id: "cannibalisation", icon: Scale, label: "Cannibalisation" },
-              { id: "tendance", icon: TrendingUp, label: "Tendance" },
-              { id: "simulation", icon: SlidersHorizontal, label: "Simulation" },
+            sBranch("impact", TrendingDown, t("sb.shadow.impact"), [
+              { id: "station", icon: Landmark, label: t("sb.shadow.impact.station") },
+              { id: "region", icon: Map, label: t("sb.shadow.impact.region") },
+              { id: "cannibalisation", icon: Scale, label: t("sb.shadow.impact.cannibalisation") },
+              { id: "tendance", icon: TrendingUp, label: t("sb.shadow.impact.tendance") },
+              { id: "simulation", icon: SlidersHorizontal, label: t("sb.shadow.impact.simulation") },
             ]),
-            sBranch("reports", FileText, "Rapports", [
-              { id: "monthly", icon: CalendarDays, label: "Rapport Mensuel" },
-              { id: "brand", icon: Building2, label: "Rapport par Enseigne" },
-              { id: "custom", icon: CalendarRange, label: "Rapport Personnalisé" },
-              { id: "export", icon: Share2, label: "Export / Partage" },
+            sBranch("reports", FileText, t("sb.shadow.reports"), [
+              { id: "monthly", icon: CalendarDays, label: t("sb.shadow.reports.monthly") },
+              { id: "brand", icon: Building2, label: t("sb.shadow.reports.brand") },
+              { id: "custom", icon: CalendarRange, label: t("sb.shadow.reports.custom") },
+              { id: "export", icon: Share2, label: t("sb.shadow.reports.export") },
             ]),
-            sBranch("settings", Settings, "Paramètres", [
-              { id: "access", icon: KeyRound, label: "Accès & Droits" },
-              { id: "radii", icon: Ruler, label: "Rayons & Seuils" },
-              { id: "typologies", icon: Tags, label: "Typologies" },
-              { id: "notifications", icon: Bell, label: "Notifications" },
+            sBranch("settings", Settings, t("sb.shadow.settings"), [
+              { id: "access", icon: KeyRound, label: t("sb.shadow.settings.access") },
+              { id: "radii", icon: Ruler, label: t("sb.shadow.settings.radii") },
+              { id: "typologies", icon: Tags, label: t("sb.shadow.settings.typologies") },
+              { id: "notifications", icon: Bell, label: t("sb.shadow.settings.notifications") },
             ]),
           ],
         })
@@ -329,15 +329,15 @@ function useMenu(mode: Mode): MenuModel {
 
       if (PLATFORM_MODULE_ROLES.includes(role)) {
         groups.push({
-          id: "f-backoffice", label: "Back-office plateforme", items: [
-            boItem("moderation", ShieldAlert, "Modération", { badge: boPending, badgeTone: "danger" }),
-            boItem("sovereign", Database, "Données souveraines"),
-            boItem("freshness", TimerReset, "Fraîcheur"),
-            boItem("agents", UserCog, "Agents terrain"),
-            boItem("alerts", Radar, "Veille & alertes"),
-            boItem("stats", BarChart3, "Stats plateforme"),
-            boItem("decrees", Banknote, "Prix & décrets"),
-            boItem("missions", ClipboardList, "Missions", { badge: boMissions, badgeTone: "accent" }),
+          id: "f-backoffice", label: t("sb.groups.backoffice"), items: [
+            boItem("moderation", ShieldAlert, t("sb.bo.moderation"), { badge: boPending, badgeTone: "danger" }),
+            boItem("sovereign", Database, t("sb.bo.sovereign")),
+            boItem("freshness", TimerReset, t("sb.bo.freshness")),
+            boItem("agents", UserCog, t("sb.bo.agents")),
+            boItem("alerts", Radar, t("sb.bo.alerts")),
+            boItem("stats", BarChart3, t("sb.bo.stats")),
+            boItem("decrees", Banknote, t("sb.bo.decrees")),
+            boItem("missions", ClipboardList, t("sb.bo.missions"), { badge: boMissions, badgeTone: "accent" }),
           ],
         })
       }
@@ -364,16 +364,16 @@ function useMenu(mode: Mode): MenuModel {
         title: t("chrome.modeSuperadmin"),
         icon: Crown,
         groups: [{
-          id: "superadmin", label: "Super Administration", items: [
-            saItem("overview", LayoutDashboard, "Vue d'ensemble"),
-            saItem("contracts", FileSignature, "Enseignes & contrats"),
-            saItem("plans", Layers, "Plans & tarifs"),
-            saItem("invoices", Receipt, "Facturation"),
-            saItem("users", UsersRound, "Utilisateurs"),
-            saItem("demo", BarChart3, "Démographie"),
-            saItem("ai", Bot, "Agent IA"),
-            saItem("carto", MapPinned, "Cartographie"),
-            saItem("audit", ScrollText, "Journal d'audit"),
+          id: "superadmin", label: t("sb.groups.superadmin"), items: [
+            saItem("overview", LayoutDashboard, t("sb.sa.overview")),
+            saItem("contracts", FileSignature, t("sb.sa.contracts")),
+            saItem("plans", Layers, t("sb.sa.plans")),
+            saItem("invoices", Receipt, t("sb.sa.invoices")),
+            saItem("users", UsersRound, t("sb.sa.users")),
+            saItem("demo", BarChart3, t("sb.sa.demo")),
+            saItem("ai", Bot, t("sb.sa.ai")),
+            saItem("carto", MapPinned, t("sb.sa.carto")),
+            saItem("audit", ScrollText, t("sb.sa.audit")),
           ],
         }],
       }
@@ -388,13 +388,13 @@ function useMenu(mode: Mode): MenuModel {
         icon: Smartphone,
         groups: [{
           id: "mobile", label: t("sb.mobile.title"), items: [
-            mItem("map", Map, "Carte"),
-            mItem("search", Search, "Recherche"),
-            mItem("promos", Tag, "Promotions"),
-            mItem("fidelite", Gift, "Fidélité"),
-            mItem("alertes", Bell, "Alertes"),
-            mItem("comparateur", GitCompare, "Comparer"),
-            mItem("profil", UserRound, "Profil"),
+            mItem("map", Map, t("sb.mobile.map")),
+            mItem("search", Search, t("sb.mobile.search")),
+            mItem("promos", Tag, t("sb.mobile.promos")),
+            mItem("fidelite", Gift, t("sb.mobile.fidelite")),
+            mItem("alertes", Bell, t("sb.mobile.alertes")),
+            mItem("comparateur", GitCompare, t("sb.mobile.comparateur")),
+            mItem("profil", UserRound, t("sb.mobile.profil")),
           ],
         }],
       }

@@ -470,6 +470,96 @@ export const fr = {
   "sb.sub.calculators.veille": "Veille concurrentielle",
   "sb.lockedHint": "Onglet réservé — rôle insuffisant",
   "sb.lockedChange": "Changez de rôle dans l'en-tête (démo)",
+
+  // ---------- T53 — harmonisation i18n des groupes fusionnés (blueprint 8
+  // groupes du portail + Super Admin + aperçu mobile). Valeurs verbatim des
+  // libellés historiques : rendu strictement identique, mais clés typées
+  // DictKey (source unique, traductibles à terme sans retoucher le composant).
+  "sb.groups.enseigne": "Espace enseigne",
+  "sb.groups.terrain": "Veille terrain",
+  "sb.groups.shadow": "Shadow Market",
+  "sb.groups.backoffice": "Back-office plateforme",
+  "sb.groups.superadmin": "Super Administration",
+
+  // G3 — onglets internes du Portail enseigne.
+  "sb.espace.dashboard": "Tableau de bord enseigne",
+  "sb.espace.stations": "Mes stations",
+  "sb.espace.reviews": "Avis & réputation",
+  "sb.espace.api": "API & promotions",
+
+  // G4 — veille terrain + application agents.
+  "sb.terrain.missions": "Missions terrain",
+  "sb.terrain.mesMissions": "Mes missions",
+  "sb.terrain.proprietaire": "Fiche propriétaire",
+  "sb.terrain.concurrents": "Fiches concurrents",
+  "sb.terrain.app": "Application agents terrain",
+
+  // G6 — sections Shadow Market (accordéons).
+  "sb.shadow.overview": "Vue d'Ensemble",
+  "sb.shadow.overview.kpis": "Indicateurs Clés",
+  "sb.shadow.overview.alerts": "Alertes",
+  "sb.shadow.overview.top": "Top 10 Menaces",
+  "sb.shadow.overview.calendar": "Calendrier",
+  "sb.shadow.carto": "Cartographie",
+  "sb.shadow.carto.national": "Carte Nationale",
+  "sb.shadow.carto.district": "Par District",
+  "sb.shadow.carto.station": "Par Station",
+  "sb.shadow.carto.road": "Par Axe Routier",
+  "sb.shadow.carto.redzones": "Zones Rouges",
+  "sb.shadow.recensement": "Recensement",
+  "sb.shadow.rec.nouveau": "Nouveau Point",
+  "sb.shadow.rec.liste": "Liste des Points",
+  "sb.shadow.rec.maj": "Mises à Jour",
+  "sb.shadow.rec.audit": "Équipe d'Audit",
+  "sb.shadow.rec.validation": "Validation",
+  "sb.shadow.rec.galerie": "Galerie Photos",
+  "sb.shadow.impact": "Analyse d'Impact",
+  "sb.shadow.impact.station": "Perte par Station",
+  "sb.shadow.impact.region": "Perte par Région",
+  "sb.shadow.impact.cannibalisation": "Cannibalisation",
+  "sb.shadow.impact.tendance": "Tendance",
+  "sb.shadow.impact.simulation": "Simulation",
+  "sb.shadow.reports": "Rapports",
+  "sb.shadow.reports.monthly": "Rapport Mensuel",
+  "sb.shadow.reports.brand": "Rapport par Enseigne",
+  "sb.shadow.reports.custom": "Rapport Personnalisé",
+  "sb.shadow.reports.export": "Export / Partage",
+  "sb.shadow.settings": "Paramètres",
+  "sb.shadow.settings.access": "Accès & Droits",
+  "sb.shadow.settings.radii": "Rayons & Seuils",
+  "sb.shadow.settings.typologies": "Typologies",
+  "sb.shadow.settings.notifications": "Notifications",
+
+  // G7 — outils du back-office plateforme.
+  "sb.bo.moderation": "Modération",
+  "sb.bo.sovereign": "Données souveraines",
+  "sb.bo.freshness": "Fraîcheur",
+  "sb.bo.agents": "Agents terrain",
+  "sb.bo.alerts": "Veille & alertes",
+  "sb.bo.stats": "Stats plateforme",
+  "sb.bo.decrees": "Prix & décrets",
+  "sb.bo.missions": "Missions",
+
+  // Super Admin — modules de la racine plateforme.
+  "sb.sa.overview": "Vue d'ensemble",
+  "sb.sa.contracts": "Enseignes & contrats",
+  "sb.sa.plans": "Plans & tarifs",
+  "sb.sa.invoices": "Facturation",
+  "sb.sa.users": "Utilisateurs",
+  "sb.sa.demo": "Démographie",
+  "sb.sa.ai": "Agent IA",
+  "sb.sa.carto": "Cartographie",
+  "sb.sa.audit": "Journal d'audit",
+
+  // Aperçu mobile B2C — items de navigation.
+  "sb.mobile.map": "Carte",
+  "sb.mobile.search": "Recherche",
+  "sb.mobile.promos": "Promotions",
+  "sb.mobile.fidelite": "Fidélité",
+  "sb.mobile.alertes": "Alertes",
+  "sb.mobile.comparateur": "Comparer",
+  "sb.mobile.profil": "Profil",
+
   "sb.mobile.title": "Aperçu mobile B2C",
   "sb.mobile.screens": "Écrans de l'application",
   "sb.agents.title": "Espace agent terrain",
