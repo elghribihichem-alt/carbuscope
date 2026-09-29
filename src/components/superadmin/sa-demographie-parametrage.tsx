@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ROLE_LABELS } from "@/store/app-store"
 import { DEMOGRAPHIC_LEVELS, type DemographicAccessDTO, type DemographicAccessLevel } from "@/lib/saas"
-import { timeAgo } from "./sa-shared"
+import { fmtDate, timeAgo } from "./sa-shared"
 
 type ParamUser = {
   id: string
@@ -36,11 +36,13 @@ type ParamUser = {
 
 type LevelValue = "MASQUE" | DemographicAccessLevel
 
+// T52-R3 : variantes dark ajoutées (les chips restaient claires en thème
+// sombre) et « slate » dur remplacé par zinc (tokens thémés).
 const LEVEL_SELECT_META: Record<LevelValue, { label: string; chip: string }> = {
-  MASQUE: { label: "Masqué", chip: "border-slate-300 bg-slate-50 text-slate-500" },
-  GOUVERNORATS: { label: "Gouvernorats", chip: "border-emerald-300/70 bg-emerald-50 text-emerald-700" },
-  DELEGATIONS: { label: "Gouvernorats + délégations", chip: "border-teal-300/70 bg-teal-50 text-teal-700" },
-  CITES: { label: "Gouvernorats + délégations + cités", chip: "border-violet-300/70 bg-violet-50 text-violet-700" },
+  MASQUE: { label: "Masqué", chip: "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400" },
+  GOUVERNORATS: { label: "Gouvernorats", chip: "border-emerald-300/70 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" },
+  DELEGATIONS: { label: "Gouvernorats + délégations", chip: "border-teal-300/70 bg-teal-50 text-teal-700 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-400" },
+  CITES: { label: "Gouvernorats + délégations + cités", chip: "border-violet-300/70 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-400" },
 }
 
 // Compte racine : accès permanent au module (Super Administration).
@@ -302,7 +304,7 @@ export function SaDemographieParametrage({ access, actor, onChanged }: {
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-right text-[11px] text-muted-foreground">
                         {acc?.updatedAt ? (
-                          <span title={`${acc.updatedAt}${acc.updatedBy ? ` — ${acc.updatedBy}` : ""}`}>
+                          <span title={`${fmtDate(acc.updatedAt)}${acc.updatedBy ? ` — modifié par ${acc.updatedBy}` : ""}`}>
                             {timeAgo(acc.updatedAt)}
                           </span>
                         ) : "—"}

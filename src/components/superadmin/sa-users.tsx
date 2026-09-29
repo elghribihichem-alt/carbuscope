@@ -3,23 +3,61 @@
 // Super Administration — Utilisateurs & accès : comptes par enseigne, suspension
 // et prise de main (« impersonation ») : ouvre la session du compte ciblé pour
 // diagnostiquer un problème — l'action est journalisée en audit.
+// T52-R3 : récapitulatif en tête (actifs / suspendus / 2FA / enseignes),
+// recherche nom + e-mail (accents neutralisés), filtres par rôle, suspension
+// confirmée par dialogue (pattern R2b SaConfirmDialog) et export CSV du filtre.
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Ban, CheckCircle2, Loader2, LogIn, Info, KeyRound, RefreshCw, ShieldCheck } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
+import {
+  Ban, Building2, CheckCircle2, Download, Loader2, LogIn, Info, KeyRound,
+  RefreshCw, Search, ShieldCheck, Users, X,
+} from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { useAppStore, ROLE_LABELS } from "@/store/app-store"
 import { applySession } from "@/components/auth/user-menu"
 import type { SaasUserDTO } from "@/lib/saas"
 import { timeAgo } from "./sa-shared"
+import { SaConfirmDialog } from "./sa-confirm-dialog"
 
 type Row = SaasUserDTO & { brandName: string; brandColor: string; contractStatus: string | null }
 
 const initials = (name: string) =>
   name.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]!.toUpperCase()).join("")
+
+/** Recherche insensible à la casse et aux accents (pattern R2b). */
+const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
+// ---------- Export CSV (pattern R2b : BOM UTF-8 + séparateur « ; ») ----------
+
+function csvEscape(v: string | number): string {
+  const s = String(v ?? "")
+  return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function csvRow(cells: (string | number)[]): string {
+  return cells.map(csvEscape).join(";")
+}
+
+function downloadCsv(filename: string, content: string): void {
+  const blob = new Blob([`\ufeff${content}`], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function todayStamp(): string {
+  return new Date().toISOString().slice(0, 10)
+}
 
 export function SaUsers() {
   const session = useAppStore(s => s.session)
@@ -28,6 +66,9 @@ export function SaUsers() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [roleFilter, setRoleFilter] = useState("TOUS")
+  const [pendingSuspend, setPendingSuspend] = useState<Row | null>(null)
 
   const reload = useCallback(async () => {
     setRefreshing(true)
@@ -45,6 +86,65 @@ export function SaUsers() {
   }, [])
 
   useEffect(() => { reload() }, [reload])
+
+  // ---- Récapitulatif (sur l'ensemble des comptes, indépendant des filtres) ----
+
+  const stats = useMemo(() => {
+    if (!users) return null
+    return {
+      total: users.length,
+      actifs: users.filter(u => u.active).length,
+      suspendus: users.filter(u => !u.active).length,
+      totp: users.filter(u => u.totpEnabled).length,
+      enseignes: new Set(users.filter(u => u.brandSlug).map(u => u.brandSlug)).size,
+    }
+  }, [users])
+
+  // ---- Filtres : recherche texte (nom / e-mail / enseigne) + chips par rôle ----
+
+  const roleCounts = useMemo(() => {
+    if (!users) return []
+    const counts = new Map<string, number>()
+    for (const u of users) counts.set(u.role, (counts.get(u.role) ?? 0) + 1)
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr"))
+      .map(([role, count]) => ({ role, count, label: ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role }))
+  }, [users])
+
+  const needle = norm(search.trim())
+
+  const rows = useMemo(() => {
+    if (!users) return []
+    return users.filter(u =>
+      (roleFilter === "TOUS" || u.role === roleFilter) &&
+      (needle === "" || norm(u.name).includes(needle) || norm(u.email).includes(needle) || norm(u.brandName).includes(needle))
+    )
+  }, [users, roleFilter, needle])
+
+  function exportCsv() {
+    if (rows.length === 0) return
+    const lines: string[] = [csvRow(["Nom", "E-mail", "Enseigne", "Rôle", "Statut", "2FA", "Dernier accès"])]
+    for (const u of rows) {
+      lines.push(csvRow([
+        u.name,
+        u.email,
+        u.brandName,
+        ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] ?? u.role,
+        u.active ? "Actif" : "Suspendu",
+        u.totpEnabled ? "Activée" : "—",
+        u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString("fr-FR") : "jamais",
+      ]))
+    }
+    const scopeParts = [
+      roleFilter !== "TOUS" ? `role-${roleFilter.toLowerCase()}` : "tous-roles",
+      needle !== "" ? `recherche-${csvEscape(search.trim()).slice(0, 24)}` : null,
+    ].filter(Boolean)
+    const filename = `carbuscope-utilisateurs-${scopeParts.join("-")}-${todayStamp()}.csv`
+    downloadCsv(filename, lines.join("\r\n"))
+    toast.success(`Export CSV téléchargé (${rows.length} compte(s))`, {
+      description: `${filename} — filtre ${roleFilter !== "TOUS" ? (ROLE_LABELS[roleFilter as keyof typeof ROLE_LABELS] ?? roleFilter).toLowerCase() : "tous rôles"}${needle !== "" ? ` · recherche « ${search.trim()} »` : ""}.`,
+    })
+  }
 
   async function toggleActive(u: Row) {
     setBusyId(u.id)
@@ -245,7 +345,8 @@ export function SaUsers() {
                 ? "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
                 : "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
             }`}
-              onClick={() => toggleActive(u)} aria-label={u.active ? `Suspendre ${u.name}` : `Réactiver ${u.name}`}>
+              onClick={() => (u.active ? setPendingSuspend(u) : void toggleActive(u))}
+              aria-label={u.active ? `Suspendre ${u.name}` : `Réactiver ${u.name}`}>
               {u.active ? <Ban className="h-3.5 w-3.5" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
               {u.active ? "Suspendre" : "Réactiver"}
             </Button>
@@ -264,21 +365,119 @@ export function SaUsers() {
 
   return (
     <div className="space-y-3">
+      {/* ---- Récapitulatif (T52-R3) ---- */}
+      {stats && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+              <Users className="h-4 w-4 text-teal-700 dark:text-teal-400" aria-hidden />
+              Comptes de la plateforme
+              <span className="ml-auto text-xs font-normal text-muted-foreground tabular-nums">
+                {stats.total} compte(s) · {stats.enseignes} enseigne(s)
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="rounded-lg border bg-emerald-50/50 p-3 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
+                <p className="text-xl font-bold leading-none tabular-nums text-emerald-700 dark:text-emerald-400">{stats.actifs}</p>
+                <p className="mt-1 text-[11px] leading-tight text-muted-foreground">comptes actifs</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                <p className="text-xl font-bold leading-none tabular-nums text-zinc-600 dark:text-zinc-400">{stats.suspendus}</p>
+                <p className="mt-1 text-[11px] leading-tight text-muted-foreground">suspendu(s)</p>
+              </div>
+              <div className="rounded-lg border bg-teal-50/50 p-3 text-center dark:border-teal-900 dark:bg-teal-950/30">
+                <p className="flex items-center justify-center gap-1.5 text-xl font-bold leading-none tabular-nums text-teal-700 dark:text-teal-400">
+                  <ShieldCheck className="h-4 w-4" aria-hidden /> {stats.totp}
+                </p>
+                <p className="mt-1 text-[11px] leading-tight text-muted-foreground">double authentification (2FA)</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                <p className="flex items-center justify-center gap-1.5 text-xl font-bold leading-none tabular-nums text-amber-700 dark:text-amber-400">
+                  <Building2 className="h-4 w-4" aria-hidden /> {stats.enseignes}
+                </p>
+                <p className="mt-1 text-[11px] leading-tight text-muted-foreground">enseignes représentées</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-teal-300 dark:border-teal-800">
         <CardContent className="flex items-start gap-2.5 p-3.5 text-sm">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-teal-700 dark:text-teal-400" aria-hidden />
           <p>
             <span className="font-semibold">Prise de main (impersonation) :</span> le bouton
             « Prendre la main » ouvre la session du compte sélectionné pour diagnostiquer un
-            problème signalé. L&apos;action est journalisée dans le audit et le retour au
+            problème signalé. L&apos;action est journalisée dans le journal d&apos;audit et le retour au
             super-admin se fait depuis le menu du compte (en haut à droite).
           </p>
         </CardContent>
       </Card>
 
+      {/* ---- Recherche + filtres par rôle (T52-R3) ---- */}
+      <Card>
+        <CardContent className="space-y-2 p-3.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher par nom, e-mail ou enseigne…"
+                className="pl-8 pr-9 text-sm"
+                aria-label="Rechercher un utilisateur"
+                maxLength={60}
+              />
+              {search.trim() !== "" && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Effacer la recherche"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              )}
+            </div>
+            <p className="whitespace-nowrap text-xs text-muted-foreground tabular-nums" aria-live="polite">
+              {rows.length} / {users.length} compte(s)
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par rôle">
+            <button
+              onClick={() => setRoleFilter("TOUS")}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                roleFilter === "TOUS"
+                  ? "border-teal-600 bg-teal-600 text-white"
+                  : "border-border bg-background text-muted-foreground hover:border-teal-400 hover:text-foreground"
+              }`}
+              aria-pressed={roleFilter === "TOUS"}
+            >
+              Tous les rôles <span className="opacity-70">({users.length})</span>
+            </button>
+            {roleCounts.map(r => (
+              <button
+                key={r.role}
+                onClick={() => setRoleFilter(r.role)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  roleFilter === r.role
+                    ? "border-teal-600 bg-teal-600 text-white"
+                    : "border-border bg-background text-muted-foreground hover:border-teal-400 hover:text-foreground"
+                }`}
+                aria-pressed={roleFilter === r.role}
+              >
+                {r.label} <span className="opacity-70">({r.count})</span>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       <DataViews<Row>
         viewKey="sa-users"
-        rows={users}
+        rows={rows}
         rowKey={u => u.id}
         columns={columns}
         nested={{
@@ -330,13 +529,59 @@ export function SaUsers() {
         )}
         cardColumns={2}
         maxHeightClassName="max-h-[30rem]"
-        emptyMessage="Aucun compte."
+        emptyMessage={needle !== "" || roleFilter !== "TOUS" ? "Aucun compte ne correspond à ces filtres." : "Aucun compte."}
         toolbarExtra={
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" onClick={reload} disabled={refreshing}>
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden /> Actualiser
-          </Button>
+          <>
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2 text-xs"
+              onClick={exportCsv} disabled={rows.length === 0}
+              title={rows.length === 0 ? "Aucun compte dans ce filtre à exporter" : "Exporter les comptes du filtre actif au format CSV (BOM UTF-8, séparateur « ; »)"}>
+              <Download className="h-3.5 w-3.5" aria-hidden /> Exporter CSV
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" onClick={reload} disabled={refreshing}>
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden /> Actualiser
+            </Button>
+          </>
         }
       />
+
+      {/* Confirmation de suspension (pattern R2b — l'action est réversible
+          depuis le même bouton « Réactiver », mais coupe l'accès immédiatement). */}
+      <SaConfirmDialog
+        open={pendingSuspend !== null}
+        onOpenChange={o => { if (!o) setPendingSuspend(null) }}
+        onConfirm={async () => {
+          if (!pendingSuspend) return
+          await toggleActive(pendingSuspend)
+          setPendingSuspend(null)
+        }}
+        busy={pendingSuspend !== null && busyId === pendingSuspend.id}
+        icon={Ban}
+        tone="amber"
+        title="Suspendre ce compte ?"
+        description={
+          pendingSuspend
+            ? `« ${pendingSuspend.name} » (${pendingSuspend.email}) ne pourra plus se connecter à CarbuScope — ni à son espace enseigne, ni à l'application mobile. La suspension est réversible (« Réactiver ») et l'action est journalisée.`
+            : ""
+        }
+        confirmLabel="Suspendre le compte"
+      >
+        {pendingSuspend && (
+          <div className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-xs">
+            <p className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Enseigne</span>
+              <span className="font-medium">{pendingSuspend.brandName}</span>
+            </p>
+            <p className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Rôle</span>
+              <span className="font-medium">{ROLE_LABELS[pendingSuspend.role as keyof typeof ROLE_LABELS] ?? pendingSuspend.role}</span>
+            </p>
+            <p className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Dernier accès</span>
+              <span className="font-medium">{pendingSuspend.lastLoginAt ? timeAgo(pendingSuspend.lastLoginAt) : "jamais connecté"}</span>
+            </p>
+          </div>
+        )}
+      </SaConfirmDialog>
     </div>
   )
 }

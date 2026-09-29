@@ -4,20 +4,40 @@ import { serializeAudit, logAudit } from "@/lib/saas-server"
 
 export const dynamic = "force-dynamic"
 
-const KINDS = ["AUTH", "CONTRAT", "FACTURE", "UTILISATEUR", "IMPERSONATION", "SYSTEME", "AGENT_IA", "DEMOGRAPHIE"]
+// T52-R3 : « SECURITE » ajouté — les connexions et réinitialisations 2FA sont
+// journalisées avec ce kind (ancien logAudit de sa-server.ts) mais n'étaient pas
+// filtrables : 11 événements invisibles des chips.
+const KINDS = ["AUTH", "CONTRAT", "FACTURE", "UTILISATEUR", "IMPERSONATION", "SECURITE", "SYSTEME", "AGENT_IA", "DEMOGRAPHIE"]
 
-// GET /api/super/audit?page=&pageSize=&kind= — journal d'audit paginé (plus
+// GET /api/super/audit?page=&pageSize=&kind=&q= — journal d'audit paginé (plus
 // récent d'abord). page ≥ 1 (défaut 1), pageSize 1..100 (défaut 8), kind
-// optionnel (filtre par type d'action). Répond {events, total, page, pageSize}
-// (+ kindCounts : totaux par type, pour les compteurs des filtres existants).
+// optionnel (filtre par type d'action), q optionnel (recherche texte libre sur
+// le message et l'acteur, insensible à la casse — T52-R3). Répond
+// {events, total, page, pageSize} (+ kindCounts : totaux par type sur TOUT le
+// journal, pour les compteurs des chips, indépendamment des filtres actifs).
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const page = Math.max(parseInt(sp.get("page") ?? "1", 10) || 1, 1)
   const pageSize = Math.min(Math.max(parseInt(sp.get("pageSize") ?? "8", 10) || 8, 1), 100)
   const kindRaw = sp.get("kind")
   const kind = kindRaw && kindRaw !== "TOUT" && KINDS.includes(kindRaw) ? kindRaw : undefined
+  const q = sp.get("q")?.trim().slice(0, 80) ?? ""
 
-  const where = kind ? { kind } : {}
+  // Recherche texte (message + acteur, accents/casse neutralisés côté SQL via
+  // contains insensible) combinée au filtre par type.
+  const where = kind || q
+    ? {
+        ...(kind ? { kind } : {}),
+        ...(q
+          ? {
+              OR: [
+                { message: { contains: q } },
+                { actor: { contains: q } },
+              ],
+            }
+          : {}),
+      }
+    : {}
   const [events, total, all] = await Promise.all([
     db.auditEvent.findMany({
       where,

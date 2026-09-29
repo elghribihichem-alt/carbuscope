@@ -89,6 +89,16 @@ export function SaCarto() {
   }
   const invalid = v.minLat >= v.maxLat || v.minLng >= v.maxLng
 
+  // T52-R3 : brouillon non enregistré — le formulaire diffère de la zone
+  // enregistrée (comparaison des valeurs parsées, virgule décimale acceptée).
+  const dirty = boundary !== null && (
+    name.trim() !== boundary.name ||
+    parseCoord(minLat) !== boundary.minLat ||
+    parseCoord(maxLat) !== boundary.maxLat ||
+    parseCoord(minLng) !== boundary.minLng ||
+    parseCoord(maxLng) !== boundary.maxLng
+  )
+
   // Étendue indicative : 1° de latitude ≈ 111 km ; longitude corrigée par cos(lat moyenne).
   const midLat = (v.minLat + v.maxLat) / 2
   const nsKm = Math.round(Math.max(0, v.maxLat - v.minLat) * 111)
@@ -157,7 +167,9 @@ export function SaCarto() {
     setMinLng(String(CARTO_DEFAULTS.minLng))
     setMaxLng(String(CARTO_DEFAULTS.maxLng))
     setError(null)
-    toast.info("Valeurs par défaut restaurées dans le formulaire")
+    toast.info("Valeurs par défaut restaurées dans le formulaire", {
+      description: "Rien n'est enregistré — relancez « Enregistrer la zone » pour appliquer.",
+    })
   }
 
   if (loadError) {
@@ -251,7 +263,7 @@ export function SaCarto() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="carto-min-lat">Latitude min</Label>
+                  <Label htmlFor="carto-min-lat">Latitude min (bord sud)</Label>
                   <div className="relative">
                     <Input
                       id="carto-min-lat" type="number" step={0.01} min={-90} max={90}
@@ -259,11 +271,11 @@ export function SaCarto() {
                       onChange={e => setMinLat(e.target.value)}
                       className="pr-8 tabular-nums" disabled={saving}
                     />
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°S</span>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°</span>
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="carto-max-lat">Latitude max</Label>
+                  <Label htmlFor="carto-max-lat">Latitude max (bord nord)</Label>
                   <div className="relative">
                     <Input
                       id="carto-max-lat" type="number" step={0.01} min={-90} max={90}
@@ -271,11 +283,11 @@ export function SaCarto() {
                       onChange={e => setMaxLat(e.target.value)}
                       className="pr-8 tabular-nums" disabled={saving}
                     />
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°N</span>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°</span>
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="carto-min-lng">Longitude min</Label>
+                  <Label htmlFor="carto-min-lng">Longitude min (bord ouest)</Label>
                   <div className="relative">
                     <Input
                       id="carto-min-lng" type="number" step={0.01} min={-180} max={180}
@@ -283,11 +295,11 @@ export function SaCarto() {
                       onChange={e => setMinLng(e.target.value)}
                       className="pr-8 tabular-nums" disabled={saving}
                     />
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°O</span>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°</span>
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="carto-max-lng">Longitude max</Label>
+                  <Label htmlFor="carto-max-lng">Longitude max (bord est)</Label>
                   <div className="relative">
                     <Input
                       id="carto-max-lng" type="number" step={0.01} min={-180} max={180}
@@ -295,7 +307,7 @@ export function SaCarto() {
                       onChange={e => setMaxLng(e.target.value)}
                       className="pr-8 tabular-nums" disabled={saving}
                     />
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°E</span>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground" aria-hidden>°</span>
                   </div>
                 </div>
               </div>
@@ -318,6 +330,14 @@ export function SaCarto() {
                 <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={resetDefaults} disabled={saving}>
                   <RotateCcw className="h-4 w-4" aria-hidden /> Réinitialiser (Tunisie entière)
                 </Button>
+                {dirty && !invalid && (
+                  <span
+                    role="status"
+                    className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                  >
+                    Modifications non enregistrées
+                  </span>
+                )}
               </div>
 
               <p className="border-t pt-3 text-xs text-muted-foreground">
