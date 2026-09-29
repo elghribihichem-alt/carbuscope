@@ -416,7 +416,7 @@ export function SaInvoices() {
           {rows.length} facture(s) · {fmtDT(filteredTotal)}
         </span>
       </div>
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-muted-foreground">
         Politique : relance manuelle groupée — l&apos;automatisation planifiée (J+7) est prévue en phase 3.
       </p>
 
