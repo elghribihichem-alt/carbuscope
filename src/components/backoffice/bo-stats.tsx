@@ -38,7 +38,8 @@ const TYPE_SHORT: Record<string, string> = {
 const SEVERITY_META: Record<string, { label: string; color: string; cls: string }> = {
   CRITICAL: { label: "Critique", color: "#dc2626", cls: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" },
   MEDIUM: { label: "Moyenne", color: "#d97706", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400" },
-  INFO: { label: "Info", color: "#64748b", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+  // T53-T6b : slate → zinc (#71717a = zinc-500) — harmonisation neutres.
+  INFO: { label: "Info", color: "#71717a", cls: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
 }
 
 const ROLE_LABELS: Record<string, string> = {

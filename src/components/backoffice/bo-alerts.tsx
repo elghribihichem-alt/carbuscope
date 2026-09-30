@@ -53,9 +53,10 @@ const STATUS_META: Record<string, { label: string; dot: string; cls: string }> =
     cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
   },
   SKIPPED: {
+    // T53-T6b : slate → zinc (harmonisation neutres, pattern T53-T4b/T5b/T6a).
     label: "Non due — déjà notifiée",
-    dot: "bg-slate-400",
-    cls: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400",
+    dot: "bg-zinc-400",
+    cls: "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
   },
 }
 
@@ -139,7 +140,7 @@ function freqChip(freq: string) {
 }
 
 function statusBadge(status: string) {
-  const m = STATUS_META[status] ?? { label: status, dot: "bg-slate-400", cls: "" }
+  const m = STATUS_META[status] ?? { label: status, dot: "bg-zinc-400", cls: "" }
   return (
     <Badge variant="outline" className={cn("gap-1.5 px-2 py-0.5 text-[10px] font-medium", m.cls)}>
       <span className={cn("h-1.5 w-1.5 rounded-full", m.dot)} aria-hidden />
@@ -398,7 +399,7 @@ export function BoAlerts() {
             {d.examples.map(ex => (
               <span
                 key={ex.name}
-                className="inline-flex items-center gap-1 rounded-md border border-red-200/70 bg-white/70 px-1.5 py-0.5 text-[10px] text-red-700 dark:border-red-900/60 dark:bg-slate-900/60 dark:text-red-400"
+                className="inline-flex items-center gap-1 rounded-md border border-red-200/70 bg-white/70 px-1.5 py-0.5 text-[10px] text-red-700 dark:border-red-900/60 dark:bg-zinc-900/60 dark:text-red-400"
                 title={`${ex.name} (${ex.gouvernorat}) — ${fr1(ex.previousRating)} → ${fr1(ex.currentRating)}`}
               >
                 <TrendingDown className="h-3 w-3" aria-hidden />
@@ -543,9 +544,14 @@ export function BoAlerts() {
       )}
 
       {data && (
-        <div className="grid gap-4 lg:grid-cols-5">
+        // T53-T6b : min-w-0 sur les deux items de grille (pattern T4b) — sans
+        // lui, min-width:auto portait le min-content de la table du rapport de
+        // passe (≈ 650 px, vue arborescence via Collapsible) et élargissait la
+        // piste à 662 px à 390 (mesuré avant correctif). La table scrolle
+        // désormais dans son overflow-x-auto.
+        <div className="grid min-w-0 gap-4 lg:grid-cols-5">
           {/* ---------- Moteur de veille + historique ---------- */}
-          <div className="space-y-4 lg:col-span-2">
+          <div className="min-w-0 space-y-4 lg:col-span-2">
             <Card className="overflow-hidden">
               <CardHeader className="bg-gradient-to-br from-emerald-50/80 via-transparent to-transparent pb-4 dark:from-emerald-950/40">
                 <div className="flex items-start justify-between gap-3">
@@ -753,7 +759,7 @@ export function BoAlerts() {
                                     </span>
                                   )}
                                   {brandFilter === "ALL" && run.skippedAlerts > 0 && (
-                                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                                       <PauseCircle className="h-3 w-3" aria-hidden /> {run.skippedAlerts} non due{run.skippedAlerts > 1 ? "s" : ""}
                                     </span>
                                   )}
@@ -776,7 +782,7 @@ export function BoAlerts() {
           </div>
 
           {/* ---------- Rapport de passe sélectionnée ---------- */}
-          <div className="space-y-4 lg:col-span-3">
+          <div className="min-w-0 space-y-4 lg:col-span-3">
             <Card>
               <CardHeader className="pb-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -849,7 +855,7 @@ export function BoAlerts() {
                     nested={{
                       groupKey: (d) => d.status,
                       groupLabel: (gk, grows) => {
-                        const m = STATUS_META[gk] ?? { label: gk, dot: "bg-slate-400", cls: "" }
+                        const m = STATUS_META[gk] ?? { label: gk, dot: "bg-zinc-400", cls: "" }
                         const emails = grows.filter(d => d.status === "TRIGGERED").length
                         const stations = grows.reduce((a, d) => a + (d.status === "TRIGGERED" ? d.exceedCount : 0), 0)
                         return (
@@ -1021,25 +1027,27 @@ export function BoAlerts() {
       )}
 
       {/* ---------- Rapport de passe imprimable (T20 — PDF navigateur) ---------- */}
+      {/* T53-T6b : palette d'impression slate → zinc (couleurs littérales
+          volontaires — l'impression reste sur fond blanc). */}
       {typeof document !== "undefined" && selectedRun && createPortal(
-        <div id="cs-run-print" className="hidden bg-white text-slate-900">
+        <div id="cs-run-print" className="hidden bg-white text-zinc-900">
           <style>{RUN_PRINT_CSS}</style>
           <div className="mx-auto max-w-[720px] px-2 py-6 font-sans text-[11px] leading-relaxed">
             {/* En-tête */}
-            <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
+            <div className="flex items-start justify-between border-b-2 border-zinc-800 pb-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-lg font-black text-white">
                   C
                 </div>
                 <div>
                   <p className="text-base font-black tracking-tight">CarbuScope — Rapport de passe de veille</p>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-zinc-500">
                     Back-office plateforme · Moteur de veille des notes (C.2.6+)
                   </p>
                 </div>
               </div>
-              <div className="text-right text-[10px] text-slate-500">
-                <p className="font-semibold text-slate-800">{fmtDateTime(selectedRun.ranAt)}</p>
+              <div className="text-right text-[10px] text-zinc-500">
+                <p className="font-semibold text-zinc-800">{fmtDateTime(selectedRun.ranAt)}</p>
                 <p>{selectedRun.mode === "SCHEDULED" ? "Passe planifiée (08:00 Tunis)" : "Passe manuelle"}</p>
               </div>
             </div>
@@ -1053,20 +1061,20 @@ export function BoAlerts() {
                 { k: "Stations signalées", v: selectedRun.stationsFlagged },
                 { k: "Durée", v: `${selectedRun.durationMs} ms` },
               ].map(c => (
-                <div key={c.k} className="rounded-md border border-slate-200 bg-slate-50 p-2 text-center">
-                  <p className="text-base font-black tabular-nums text-slate-900">{c.v}</p>
-                  <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-500">{c.k}</p>
+                <div key={c.k} className="rounded-md border border-zinc-200 bg-zinc-50 p-2 text-center">
+                  <p className="text-base font-black tabular-nums text-zinc-900">{c.v}</p>
+                  <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-zinc-500">{c.k}</p>
                 </div>
               ))}
             </div>
 
             {/* Tableau par alerte */}
-            <p className="mt-5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <p className="mt-5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
               Détail par alerte {brandFilter !== "ALL" && `— périmètre : ${data?.brands.find(b => b.slug === brandFilter)?.name ?? brandFilter}`}
             </p>
             <table className="mt-1.5 w-full border-collapse text-[10px]">
               <thead>
-                <tr className="border-b border-slate-300 bg-slate-100 text-left">
+                <tr className="border-b border-zinc-300 bg-zinc-100 text-left">
                   <th className="px-2 py-1.5 font-bold">Enseigne</th>
                   <th className="px-2 py-1.5 font-bold">Périmètre</th>
                   <th className="px-2 py-1.5 font-bold">Fréquence</th>
@@ -1077,7 +1085,7 @@ export function BoAlerts() {
               </thead>
               <tbody>
                 {filteredDetails.map(d => (
-                  <tr key={d.alertId} className="border-b border-slate-200 align-top">
+                  <tr key={d.alertId} className="border-b border-zinc-200 align-top">
                     <td className="px-2 py-1.5">
                       <span className="font-semibold" style={{ color: d.brandColor }}>{d.brandName}</span>
                     </td>
@@ -1087,8 +1095,8 @@ export function BoAlerts() {
                       <span
                         className="rounded px-1.5 py-0.5 font-semibold"
                         style={{
-                          backgroundColor: d.status === "TRIGGERED" ? "#fee2e2" : d.status === "STABLE" ? "#d1fae5" : "#f1f5f9",
-                          color: d.status === "TRIGGERED" ? "#b91c1c" : d.status === "STABLE" ? "#047857" : "#475569",
+                          backgroundColor: d.status === "TRIGGERED" ? "#fee2e2" : d.status === "STABLE" ? "#d1fae5" : "#f4f4f5",
+                          color: d.status === "TRIGGERED" ? "#b91c1c" : d.status === "STABLE" ? "#047857" : "#52525b",
                         }}
                       >
                         {STATUS_META[d.status]?.label ?? d.status}
@@ -1097,7 +1105,7 @@ export function BoAlerts() {
                     <td className="px-2 py-1.5 text-right font-bold tabular-nums">
                       {d.status === "TRIGGERED" ? d.exceedCount : "—"}
                     </td>
-                    <td className="px-2 py-1.5 text-slate-600">
+                    <td className="px-2 py-1.5 text-zinc-600">
                       {d.examples.length > 0
                         ? d.examples.map(ex => `${ex.name} (${ex.gouvernorat}) : ${fr1(ex.previousRating)} → ${fr1(ex.currentRating)} (−${fr1(ex.delta)} pt)`).join(" ; ")
                         : "—"}
@@ -1106,7 +1114,7 @@ export function BoAlerts() {
                 ))}
                 {filteredDetails.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-2 py-4 text-center text-slate-500">
+                    <td colSpan={6} className="px-2 py-4 text-center text-zinc-500">
                       Aucune alerte {brandFilter !== "ALL" ? "pour l'enseigne filtrée " : ""}lors de cette passe.
                     </td>
                   </tr>
@@ -1115,7 +1123,7 @@ export function BoAlerts() {
             </table>
 
             {/* Pied méthodologique */}
-            <div className="mt-6 border-t border-slate-300 pt-2.5 text-[9px] leading-relaxed text-slate-500">
+            <div className="mt-6 border-t border-zinc-300 pt-2.5 text-[9px] leading-relaxed text-zinc-500">
               <p>
                 Méthodologie : la passe évalue chaque alerte active contre la watchlist recalculée (chute ≥ seuil
                 sur avis ≤ 90 j). Les fréquences sont honorées — un digest déjà envoyé n&apos;est pas re-notifié.
@@ -1170,7 +1178,7 @@ function RunDetailRow({
         detail.status === "TRIGGERED"
           ? "border-red-200 bg-red-50/40 hover:border-red-300 dark:border-red-900/70 dark:bg-red-950/30"
           : detail.status === "SKIPPED"
-            ? "border-dashed border-slate-200 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/40"
+            ? "border-dashed border-zinc-200 bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-900/40"
             : "border-emerald-200 bg-emerald-50/30 hover:border-emerald-300 dark:border-emerald-800 dark:bg-emerald-950/20",
         previewOpen && "shadow-sm",
       )}
@@ -1218,7 +1226,7 @@ function RunDetailRow({
           {detail.examples.map(ex => (
             <span
               key={ex.name}
-              className="inline-flex items-center gap-1 rounded-md border border-red-200/70 bg-white/70 px-1.5 py-0.5 text-[10px] text-red-700 dark:border-red-900/60 dark:bg-slate-900/60 dark:text-red-400"
+              className="inline-flex items-center gap-1 rounded-md border border-red-200/70 bg-white/70 px-1.5 py-0.5 text-[10px] text-red-700 dark:border-red-900/60 dark:bg-zinc-900/60 dark:text-red-400"
               title={`${ex.name} (${ex.gouvernorat}) — ${fr1(ex.previousRating)} → ${fr1(ex.currentRating)}`}
             >
               <TrendingDown className="h-3 w-3" aria-hidden />

@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ServerCog, ShieldAlert, MapPin, Inbox } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
-import type { ContributionDTO, MissionDTO } from "@/lib/types"
+import type { ContributionDTO, MissionDTO, PlatformStats } from "@/lib/types"
 import { BoModeration } from "./bo-moderation"
 import { BoSovereign } from "./bo-sovereign"
 import { BoFreshness } from "./bo-freshness"
@@ -49,6 +49,20 @@ export function BackofficeView() {
   // la logique de comptage est conservée (le bandeau pourrait la réutiliser).
   const [openMissions, setOpenMissions] = useState<number | null>(null)
 
+  // T53-T6b : total des fiches stations tiré des statistiques plateforme
+  // réelles (/api/stats/platform → stations.total) au lieu d'un chiffre en dur
+  // — même valeur aujourd'hui, mais le badge suit désormais la base.
+  const [stationsTotal, setStationsTotal] = useState<number | null>(null)
+
+  useEffect(() => {
+    const ac = new AbortController()
+    fetch("/api/stats/platform", { signal: ac.signal })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: PlatformStats) => setStationsTotal(j.stations.total))
+      .catch(() => {})
+    return () => ac.abort()
+  }, [])
+
   useEffect(() => {
     const ac = new AbortController()
     fetch("/api/missions", { signal: ac.signal })
@@ -67,11 +81,12 @@ export function BackofficeView() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      {/* Bandeau d'accueil du back-office */}
-      <Card className="group overflow-hidden border-slate-300 bg-gradient-to-br from-slate-50 via-white to-emerald-50/50 dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/25">
+      {/* Bandeau d'accueil du back-office — T53-T6b : tokens zinc
+          (l'ancien dégradé slate suivait un pattern antérieur au design system). */}
+      <Card className="group overflow-hidden border-zinc-300 bg-gradient-to-br from-zinc-50 via-white to-emerald-50/50 dark:border-zinc-700 dark:from-zinc-900 dark:via-zinc-900 dark:to-emerald-950/25">
         <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-100 shadow-sm transition-transform group-hover:scale-105 dark:bg-slate-200 dark:text-slate-900">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-zinc-100 shadow-sm transition-transform group-hover:scale-105 dark:bg-zinc-200 dark:text-zinc-900">
               <ServerCog className="h-5.5 w-5.5" aria-hidden />
             </div>
             <div className="min-w-0">
@@ -97,7 +112,7 @@ export function BackofficeView() {
               <MapPin className="h-3 w-3" aria-hidden /> 24 gouvernorats
             </Badge>
             <Badge variant="outline" className="gap-1">
-              <ShieldAlert className="h-3 w-3" aria-hidden /> 2 985 fiches stations
+              <ShieldAlert className="h-3 w-3" aria-hidden /> {stationsTotal !== null ? `${stationsTotal.toLocaleString("fr-FR")} fiches stations` : "Fiches stations…"}
             </Badge>
           </div>
         </CardContent>

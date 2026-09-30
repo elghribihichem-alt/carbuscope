@@ -90,10 +90,13 @@ export function BoSovereign() {
   }, [])
 
   const inject = (def: SourceDef) => {
+    // T53-T6b : honnêteté du bouton (pattern T4b/T5b) — aucune route
+    // d'injection n'existe côté serveur : la planification reste une simulation
+    // locale, le timestamp horodate l'aperçu de la session uniquement.
     const stamp = fmtDateTime(new Date())
     setLastInjection(prev => ({ ...prev, [def.key]: stamp }))
-    toast.success("Injection planifiée — versioning activé", {
-      description: `${def.title} · ${def.source} · ${stamp}`,
+    toast.info("Aperçu de planification — aucune injection exécutée", {
+      description: `${def.title} · ${def.source} · ${stamp} — simulation locale, aucune écriture serveur.`,
     })
   }
 
@@ -172,7 +175,7 @@ export function BoSovereign() {
 
                 {lastInjection[def.key] && (
                   <p className="text-[11px] italic text-muted-foreground">
-                    Dernière injection : {lastInjection[def.key]}
+                    Dernière planification (aperçu local) : {lastInjection[def.key]}
                   </p>
                 )}
 
@@ -192,10 +195,10 @@ export function BoSovereign() {
         })}
       </div>
 
-      {/* Note de gouvernance des données */}
-      <Card className="border-slate-300 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/50">
+      {/* Note de gouvernance des données — T53-T6b : tokens zinc */}
+      <Card className="border-zinc-300 bg-zinc-50/70 dark:border-zinc-700 dark:bg-zinc-900/50">
         <CardContent className="flex flex-col gap-3 p-6 sm:flex-row sm:items-start">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-100 dark:bg-slate-200 dark:text-slate-900">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-zinc-100 dark:bg-zinc-200 dark:text-zinc-900">
             <Quote className="h-4 w-4" aria-hidden />
           </div>
           <div className="space-y-2">

@@ -6,7 +6,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   Check, X, Loader2, XCircle, Ban, AlertTriangle, Fuel, Users, Trash2, Scale, ShieldCheck,
-  Gavel, Inbox, MapPin, User,
+  Gavel, Inbox, MapPin, User, Download,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,7 +23,8 @@ type TypeMeta = { icon: LucideIcon; cls: string }
 
 const TYPE_META: Record<string, TypeMeta> = {
   CLOSED: { icon: XCircle, cls: "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400" },
-  SERVICE_UNAVAILABLE: { icon: Ban, cls: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400" },
+  // T53-T6b : slate → zinc (harmonisation neutres, pattern T53-T4b/T5b/T6a).
+  SERVICE_UNAVAILABLE: { icon: Ban, cls: "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400" },
   PRICE_ABNORMAL: { icon: AlertTriangle, cls: "border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400" },
   PUMP_BROKEN: { icon: Fuel, cls: "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-400" },
   QUEUE: { icon: Users, cls: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400" },
@@ -56,6 +57,38 @@ const CONTESTATIONS: Contestation[] = [
     motif: "Le service lavage a été retiré à tort : il est bien disponible depuis la rénovation.",
   },
 ]
+
+// Export CSV de la file d'attente (données réelles chargées — pattern T52-R2b/T6a :
+// BOM UTF-8 + séparateur « ; » + dates FR).
+function exportPendingCsv(rows: ContributionDTO[]) {
+  const esc = (v: string | number | null) => {
+    const s = v === null ? "" : String(v)
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const header = ["Type", "Station", "Auteur", "Commentaire", "Validations", "Statut", "Déposé le"]
+  const lines = rows.map(c => [
+    esc(CONTRIBUTION_TYPE_LABELS[c.type] ?? c.type),
+    esc(c.stationCode),
+    esc(c.author),
+    esc(c.comment),
+    `${c.validationCount}/3`,
+    c.status,
+    esc(fmtDateTime(c.createdAt)),
+  ].join(";"))
+  const csv = ["\uFEFF" + header.join(";"), ...lines].join("\n")
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `moderation-file-attente-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  toast.success(`File exportée — ${rows.length} signalement(s) en attente.`, {
+    description: "moderation-file-attente.csv · compatible Excel (UTF-8, séparateur « ; »)",
+  })
+}
 
 export function BoModeration({
   pending, loading, error, onRefresh,
@@ -119,14 +152,16 @@ export function BoModeration({
   }
 
   const arbitrate = (cont: Contestation, party: "enseigne" | "contributeur") => {
+    // T53-T6b : honnêteté du bouton (pattern T4b/T5b) — aucune route
+    // d'arbitrage n'existe côté serveur, l'action reste une simulation locale.
     setArbitrated(prev => [...prev, cont.id])
     if (party === "enseigne") {
-      toast.success("Arbitrage rendu — version de l'enseigne maintenue", {
-        description: `${cont.station} (${cont.code}) : la donnée publiée est confirmée, contestation close.`,
+      toast.info("Arbitrage simulé — version de l'enseigne maintenue", {
+        description: `${cont.station} (${cont.code}) : simulation locale de démonstration, aucune écriture serveur (moteur C.3 non branché).`,
       })
     } else {
-      toast.info("Arbitrage rendu — contribution retenue", {
-        description: `${cont.station} (${cont.code}) : la fiche est corrigée, le contributeur est crédité.`,
+      toast.info("Arbitrage simulé — contribution retenue", {
+        description: `${cont.station} (${cont.code}) : simulation locale de démonstration, aucune écriture serveur (moteur C.3 non branché).`,
       })
     }
   }
@@ -193,19 +228,33 @@ export function BoModeration({
                 )}
               </CardDescription>
             </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full sm:w-56" aria-label="Filtrer par type">
-                <SelectValue placeholder="Tous les types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les types ({pending?.length ?? 0})</SelectItem>
-                {ALL_TYPES.map(t => (
-                  <SelectItem key={t} value={t}>
-                    {CONTRIBUTION_TYPE_LABELS[t]} ({pending?.filter(c => c.type === t).length ?? 0})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full sm:w-56" aria-label="Filtrer par type">
+                  <SelectValue placeholder="Tous les types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les types ({pending?.length ?? 0})</SelectItem>
+                  {ALL_TYPES.map(t => (
+                    <SelectItem key={t} value={t}>
+                      {CONTRIBUTION_TYPE_LABELS[t]} ({pending?.filter(c => c.type === t).length ?? 0})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {/* T53-T6b : export CSV de la file filtrée (pattern T52-R2b —
+                  données réelles déjà chargées, aucune requête serveur). */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => exportPendingCsv(filtered)}
+                disabled={!pending || filtered.length === 0}
+                className="h-8 shrink-0 gap-1.5 text-xs"
+                aria-label="Exporter la file d'attente filtrée en CSV"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden /> Exporter CSV
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -268,12 +317,14 @@ export function BoModeration({
                       </div>
 
                       <div className="flex gap-2 pt-1">
+                        {/* T53-T6b : cibles tactiles h-11 (convention 44 px,
+                            pattern T4b/T5b sur les actions en vue cartes). */}
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={busy}
                           onClick={() => { void act(c, "VALIDATE") }}
-                          className="flex-1 gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                          className="h-11 flex-1 gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
                         >
                           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Check className="h-3.5 w-3.5" aria-hidden />}
                           Valider
@@ -283,7 +334,7 @@ export function BoModeration({
                           variant="outline"
                           disabled={busy}
                           onClick={() => { void act(c, "REJECT") }}
-                          className="flex-1 gap-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                          className="h-11 flex-1 gap-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
                         >
                           <X className="h-3.5 w-3.5" aria-hidden /> Rejeter
                         </Button>
@@ -305,7 +356,8 @@ export function BoModeration({
           </CardTitle>
           <CardDescription>
             Les utilisateurs peuvent contester une donnée publiée — la plateforme arbitre en cas de conflit
-            (dernière étape du workflow C.3).
+            (dernière étape du workflow C.3). Exemples de démonstration ci-dessous : le moteur
+            d&apos;arbitrage sera branché sur les contestations réelles.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -330,20 +382,20 @@ export function BoModeration({
                     <Button
                       size="sm" variant="outline" disabled={done}
                       onClick={() => arbitrate(cont, "enseigne")}
-                      className="gap-1"
+                      className="h-11 gap-1"
                     >
                       <Gavel className="h-3.5 w-3.5" aria-hidden /> Arbitrer (enseigne)
                     </Button>
                     <Button
                       size="sm" variant="outline" disabled={done}
                       onClick={() => arbitrate(cont, "contributeur")}
-                      className="gap-1"
+                      className="h-11 gap-1"
                     >
                       <Gavel className="h-3.5 w-3.5" aria-hidden /> Arbitrer (contributeur)
                     </Button>
                     {done && (
                       <Badge variant="secondary" className="gap-1 self-center">
-                        <Check className="h-3 w-3" aria-hidden /> Arbitrage rendu
+                        <Check className="h-3 w-3" aria-hidden /> Arbitrage simulé
                       </Badge>
                     )}
                   </div>

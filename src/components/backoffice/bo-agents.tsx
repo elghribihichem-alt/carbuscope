@@ -1,11 +1,17 @@
 'use client'
 
 // D.2.4 — Agents terrain : zones, vérifications, campagnes, carte des zones assignées
+// T53-T6b : agents RÉELS de /api/field-agents (statistiques dérivées réelles :
+// missions ouvertes/terminées, rapports) — l'ancienne maquette locale (8 agents
+// fictifs + « validité » inventée) est retirée. La réassignation de zone est
+// câblée sur PATCH /api/field-agents?id= { zone } (route réelle T28) ; la
+// planification de campagne reste une simulation locale honnête (aucune route).
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   UserCog, MapPin, ClipboardCheck, MapPinned, Loader2, BadgeCheck, UserRound,
+  Phone, Radar,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -16,18 +22,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorState } from "@/components/shell/loading"
 import { TunisiaMap } from "@/components/map/tunisia-map"
-import type { StationDTO } from "@/lib/types"
+import type { FieldAgentDTO, StationDTO } from "@/lib/types"
 import { useGovernoratNames, num } from "@/components/settings/settings-shared"
-
-type Agent = {
-  id: string
-  nom: string
-  zone: string
-  verifications: number
-  validite: number
-  accent: string
-}
 
 const AGENT_ACCENTS = [
   "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
@@ -40,28 +38,35 @@ const AGENT_ACCENTS = [
   "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
 ]
 
-const INITIAL_AGENTS: Agent[] = [
-  { id: "a1", nom: "Sami Trabelsi", zone: "Tunis", verifications: 42, validite: 97, accent: AGENT_ACCENTS[0] },
-  { id: "a2", nom: "Nour Ben Salah", zone: "Sfax", verifications: 35, validite: 94, accent: AGENT_ACCENTS[1] },
-  { id: "a3", nom: "Karim Mansouri", zone: "Nabeul", verifications: 28, validite: 92, accent: AGENT_ACCENTS[2] },
-  { id: "a4", nom: "Ines Khelifi", zone: "Sousse", verifications: 31, validite: 96, accent: AGENT_ACCENTS[3] },
-  { id: "a5", nom: "Yassine Ayari", zone: "Bizerte", verifications: 18, validite: 89, accent: AGENT_ACCENTS[4] },
-  { id: "a6", nom: "Rania Gharbi", zone: "Kairouan", verifications: 22, validite: 91, accent: AGENT_ACCENTS[5] },
-  { id: "a7", nom: "Mehdi Jlassi", zone: "Gabès", verifications: 15, validite: 86, accent: AGENT_ACCENTS[6] },
-  { id: "a8", nom: "Salma Ferchichi", zone: "Médenine", verifications: 24, validite: 93, accent: AGENT_ACCENTS[7] },
-]
-
 const initials = (nom: string): string =>
   nom.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]!.toUpperCase()).join("")
 
-const validiteColor = (p: number): string => (p >= 95 ? "bg-emerald-500" : p >= 90 ? "bg-amber-500" : "bg-red-500")
+const accentOf = (i: number): string => AGENT_ACCENTS[i % AGENT_ACCENTS.length]!
 
 export function BoAgents() {
   const govNames = useGovernoratNames()
-  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS)
+  // T53-T6b : agents réels de la plateforme (veille terrain T28).
+  const [agents, setAgents] = useState<FieldAgentDTO[] | null>(null)
+  const [agentsError, setAgentsError] = useState<string | null>(null)
   const [stations, setStations] = useState<StationDTO[] | null>(null)
-  const [reassign, setReassign] = useState<Agent | null>(null)
+  const [reassign, setReassign] = useState<FieldAgentDTO | null>(null)
   const [campaignOpen, setCampaignOpen] = useState(false)
+
+  const reloadAgents = useCallback(async () => {
+    try {
+      const r = await fetch("/api/field-agents")
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const j = (await r.json()) as { agents?: FieldAgentDTO[] }
+      setAgents(j.agents ?? [])
+      setAgentsError(null)
+    } catch {
+      setAgentsError("Impossible de charger les agents terrain.")
+    }
+  }, [])
+
+  useEffect(() => {
+    void reloadAgents()
+  }, [reloadAgents])
 
   // Stations légères pour la carte des zones assignées
   useEffect(() => {
@@ -73,7 +78,9 @@ export function BoAgents() {
     return () => ac.abort()
   }, [])
 
-  const assignedZones = useMemo(() => [...new Set(agents.map(a => a.zone))], [agents])
+  // Zones des agents ACTIFS (les inactifs ne couvrent plus leur périmètre).
+  const activeAgents = useMemo(() => (agents ?? []).filter(a => a.active), [agents])
+  const assignedZones = useMemo(() => [...new Set(activeAgents.map(a => a.zone))], [activeAgents])
 
   const zoneStations = useMemo(() => {
     if (!stations) return []
@@ -81,11 +88,12 @@ export function BoAgents() {
     return stations.filter(s => zones.has(s.gouvernorat))
   }, [stations, assignedZones])
 
-  const totalVerifications = useMemo(() => agents.reduce((a, x) => a + x.verifications, 0), [agents])
-  const avgValidite = useMemo(
-    () => Math.round(agents.reduce((a, x) => a + x.validite, 0) / (agents.length || 1)),
-    [agents]
-  )
+  const openMissions = useMemo(() => activeAgents.reduce((a, x) => a + x.missionsOpen, 0), [activeAgents])
+  const totalReports = useMemo(() => (agents ?? []).reduce((a, x) => a + x.reportsCount, 0), [agents])
+
+  if (agentsError) {
+    return <ErrorState message={agentsError} retry={() => { void reloadAgents() }} />
+  }
 
   return (
     <div className="space-y-4">
@@ -99,8 +107,9 @@ export function BoAgents() {
                   <UserCog className="h-4 w-4 text-purple-600" aria-hidden /> Agents terrain
                 </CardTitle>
                 <CardDescription>
-                  {agents.length} agents · {num(totalVerifications)} vérifications ce mois · validité moyenne{" "}
-                  {avgValidite} %.
+                  {agents === null
+                    ? "Chargement des agents…"
+                    : `${agents.length} agent${agents.length > 1 ? "s" : ""} (${activeAgents.length} actif${activeAgents.length > 1 ? "s" : ""}) · ${num(openMissions)} mission${openMissions > 1 ? "s" : ""} ouverte${openMissions > 1 ? "s" : ""} · ${num(totalReports)} rapport${totalReports > 1 ? "s" : ""} remonté${totalReports > 1 ? "s" : ""}.`}
                 </CardDescription>
               </div>
               <Button onClick={() => setCampaignOpen(true)} className="gap-1.5">
@@ -109,52 +118,75 @@ export function BoAgents() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid max-h-[560px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
-              {agents.map(a => (
-                <Card key={a.id} className="border-border/70">
-                  <CardContent className="space-y-3 p-4">
-                    <div className="flex items-start gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className={`text-sm font-semibold ${a.accent}`}>
-                          {initials(a.nom)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold leading-tight">{a.nom}</p>
-                        <Badge variant="secondary" className="mt-1 gap-1 font-normal">
-                          <MapPin className="h-3 w-3" aria-hidden /> {a.zone}
-                        </Badge>
+            {agents === null ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-44 rounded-xl" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid max-h-[560px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+                {agents.map((a, i) => (
+                  <Card key={a.id} className={`border-border/70 ${a.active ? "" : "opacity-70"}`}>
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex items-start gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarFallback className={`text-sm font-semibold ${accentOf(i)}`}>
+                            {initials(a.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold leading-tight">{a.name}</p>
+                          <p className="text-xs font-mono text-muted-foreground">{a.code}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <Badge variant="secondary" className="gap-1 font-normal">
+                              <MapPin className="h-3 w-3" aria-hidden /> {a.zone}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`gap-1 text-[11px] ${a.active
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                                // T53-T6b : slate → zinc (harmonisation neutres).
+                                : "border-zinc-300 bg-zinc-100 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-500"}`}
+                            >
+                              {a.active ? "Actif" : "Inactif"}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Vérifications</p>
-                        <p className="font-semibold tabular-nums">{a.verifications} <span className="text-xs font-normal text-muted-foreground">ce mois</span></p>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Ouvertes</p>
+                          <p className="font-semibold tabular-nums">{a.missionsOpen}</p>
+                        </div>
+                        <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Terminées</p>
+                          <p className="font-semibold tabular-nums">{a.missionsDone}</p>
+                        </div>
+                        <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Rapports</p>
+                          <p className="font-semibold tabular-nums">{a.reportsCount}</p>
+                        </div>
                       </div>
-                      <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Validité</p>
-                        <p className="font-semibold tabular-nums">{a.validite} %</p>
-                      </div>
-                    </div>
 
-                    <div>
-                      <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>Taux de validité des fiches</span>
-                        <span className="tabular-nums">{a.validite} %</span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={a.validite} aria-valuemin={0} aria-valuemax={100} aria-label={`Taux de validité de ${a.nom}`}>
-                        <div className={`h-full rounded-full ${validiteColor(a.validite)}`} style={{ width: `${a.validite}%` }} />
-                      </div>
-                    </div>
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Phone className="h-3 w-3 shrink-0" aria-hidden /> {a.phone || "—"}
+                      </p>
 
-                    <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={() => setReassign(a)}>
-                      <MapPinned className="h-3.5 w-3.5" aria-hidden /> Réassigner la zone
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      {/* T53-T6b : cible tactile h-11 (convention 44 px, pattern T4b/T5b). */}
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-11 w-full gap-1.5"
+                        onClick={() => setReassign(a)}
+                      >
+                        <MapPinned className="h-3.5 w-3.5" aria-hidden /> Réassigner la zone
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -165,7 +197,7 @@ export function BoAgents() {
               <MapPinned className="h-4 w-4 text-emerald-600" aria-hidden /> Zones assignées
             </CardTitle>
             <CardDescription>
-              {assignedZones.length} zones couvertes · {zoneStations.length} stations dans les périmètres.
+              {assignedZones.length} zone{assignedZones.length > 1 ? "s" : ""} couverte{assignedZones.length > 1 ? "s" : ""} par les agents actifs · {zoneStations.length} stations dans les périmètres.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -195,7 +227,8 @@ export function BoAgents() {
         </Card>
       </div>
 
-      {/* Dialog : réassignation de zone */}
+      {/* Dialog : réassignation de zone — T53-T6b : câblée sur la route réelle
+          PATCH /api/field-agents?id= { zone } (T28). */}
       {reassign && (
         <ReassignDialog
           key={reassign.id}
@@ -203,19 +236,17 @@ export function BoAgents() {
           govNames={govNames}
           assignedZones={assignedZones}
           onClose={() => setReassign(null)}
-          onAssign={(agent, zone) => {
-            setAgents(prev => prev.map(a => (a.id === agent.id ? { ...a, zone } : a)))
-            toast.success("Zone réassignée", {
-              description: `${agent.nom} couvre désormais le gouvernorat de ${zone}.`,
-            })
-          }}
+          onAssigned={() => { void reloadAgents() }}
         />
       )}
 
-      {/* Dialog : campagne de vérification */}
+      {/* Dialog : campagne de vérification — simulation locale honnête
+          (aucune route serveur ; les missions réelles se créent via l'outil
+          « Missions » du back-office). */}
       <CampaignDialog
         open={campaignOpen}
         govNames={govNames}
+        staleHint
         onClose={() => setCampaignOpen(false)}
       />
     </div>
@@ -223,33 +254,48 @@ export function BoAgents() {
 }
 
 // ---------------------------------------------------------------------------
-// Dialog de réassignation de zone
+// Dialog de réassignation de zone (PATCH réel)
 // ---------------------------------------------------------------------------
 
 function ReassignDialog({
-  agent, govNames, assignedZones, onClose, onAssign,
+  agent, govNames, assignedZones, onClose, onAssigned,
 }: {
-  agent: Agent
+  agent: FieldAgentDTO
   govNames: string[]
   assignedZones: string[]
   onClose: () => void
-  onAssign: (agent: Agent, zone: string) => void
+  onAssigned: () => void
 }) {
   const [zone, setZone] = useState(agent.zone)
   const [busy, setBusy] = useState(false)
 
-  const submit = () => {
+  const submit = async () => {
     if (zone === agent.zone) {
       toast.info("Zone inchangée — aucune réassignation nécessaire.")
       onClose()
       return
     }
     setBusy(true)
-    window.setTimeout(() => {
-      onAssign(agent, zone)
-      setBusy(false)
+    try {
+      const r = await fetch(`/api/field-agents?id=${agent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zone }),
+      })
+      const j = (await r.json().catch(() => ({}))) as { error?: string }
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`)
+      toast.success("Zone réassignée", {
+        description: `${agent.name} couvre désormais le gouvernorat de ${zone} — mis à jour en base.`,
+      })
+      onAssigned()
       onClose()
-    }, 350)
+    } catch (e) {
+      toast.error("Réassignation refusée", {
+        description: e instanceof Error ? e.message : "Erreur inconnue.",
+      })
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -258,11 +304,11 @@ function ReassignDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPinned className="h-4.5 w-4.5 text-purple-600" aria-hidden />
-            Réassigner la zone — {agent.nom}
+            Réassigner la zone — {agent.name}
           </DialogTitle>
           <DialogDescription>
             Zone actuelle : <span className="font-medium text-foreground">{agent.zone}</span>. Les zones déjà
-            couvertes par un autre agent sont signalées.
+            couvertes par un autre agent actif sont signalées.
           </DialogDescription>
         </DialogHeader>
 
@@ -285,7 +331,7 @@ function ReassignDialog({
 
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button onClick={submit} disabled={busy} className="gap-1.5">
+          <Button onClick={() => { void submit() }} disabled={busy} className="gap-1.5">
             {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             <BadgeCheck className="h-4 w-4" aria-hidden /> Confirmer la réassignation
           </Button>
@@ -296,19 +342,19 @@ function ReassignDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Dialog : campagne de vérification
+// Dialog : campagne de vérification (simulation locale honnête)
 // ---------------------------------------------------------------------------
 
 function CampaignDialog({
-  open, govNames, onClose,
+  open, govNames, staleHint, onClose,
 }: {
   open: boolean
   govNames: string[]
+  staleHint: boolean
   onClose: () => void
 }) {
   const [zone, setZone] = useState(govNames[0] ?? "Tunis")
   const [fiches, setFiches] = useState("40")
-  const [busy, setBusy] = useState(false)
 
   // Suit la liste des gouvernorats quand elle arrive
   useEffect(() => {
@@ -325,14 +371,13 @@ function CampaignDialog({
       toast.error("Nombre de fiches invalide (1 à 500).")
       return
     }
-    setBusy(true)
-    window.setTimeout(() => {
-      toast.success(`Campagne planifiée pour ${num(n)} fiches de la zone ${zone}`, {
-        description: "Les fiches les moins fraîches sont priorisées — suivi disponible dans « Fraîcheur ».",
-      })
-      setBusy(false)
-      onClose()
-    }, 400)
+    // T53-T6b : honnêteté du bouton (pattern T4b/T5b) — aucune route de
+    // campagne côté serveur : planification simulée localement, la création
+    // réelle passe par l'outil « Missions » (POST /api/missions).
+    toast.info(`Campagne simulée pour ${num(n)} fiches de la zone ${zone}`, {
+      description: "Simulation locale, aucune écriture serveur — créez des missions réelles via l'outil « Missions ».",
+    })
+    onClose()
   }
 
   return (
@@ -372,17 +417,19 @@ function CampaignDialog({
               value={fiches}
               onChange={e => setFiches(e.target.value)}
             />
-            <p className="text-[11px] text-muted-foreground">
-              Les fiches non vérifiées depuis plus de 12 mois sont sélectionnées en premier.
-            </p>
+            {staleHint && (
+              <p className="text-[11px] text-muted-foreground">
+                Les fiches non vérifiées depuis plus de 12 mois sont sélectionnées en premier.
+              </p>
+            )}
           </div>
         </div>
 
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button onClick={submit} disabled={busy} className="gap-1.5">
-            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Planifier la campagne
+          <Button onClick={submit} className="gap-1.5">
+            <Radar className="h-4 w-4" aria-hidden />
+            Planifier la campagne (simulation)
           </Button>
         </DialogFooter>
       </DialogContent>

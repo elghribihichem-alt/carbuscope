@@ -15,7 +15,7 @@ import { toast } from "sonner"
 import {
   Radar, ClipboardList, ClipboardCheck, CheckCircle2, UserRound, ShieldCheck, Swords,
   Eye, MapPin, Loader2, Plus, X, Search, Phone, AlertTriangle, Circle, Check, Ban,
-  UserCog, FileText, ChevronDown, Sparkles, type LucideIcon,
+  UserCog, FileText, ChevronDown, Sparkles, Download, type LucideIcon,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils"
 
 // ---------- Conventions & helpers ----------
 
-const NEUTRAL_DOT = "#94a3b8"
+const NEUTRAL_DOT = "#a1a1aa" // T53-T6b : slate-400 → zinc-400
 const DAY_MS = 86_400_000
 const MAX_TARGETS = 30
 
@@ -108,8 +108,9 @@ const STATUS_META: Record<MissionStatus, { label: string; chip: string; dot: str
   },
   PLANIFIEE: {
     label: "Planifiée",
-    chip: "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
-    dot: "bg-slate-400",
+    // T53-T6b : slate → zinc (harmonisation neutres, pattern T53-T4b/T5b/T6a).
+    chip: "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400",
+    dot: "bg-zinc-400",
     rank: 1,
   },
   TERMINEE: {
@@ -120,8 +121,8 @@ const STATUS_META: Record<MissionStatus, { label: string; chip: string; dot: str
   },
   ANNULEE: {
     label: "Annulée",
-    chip: "border-dashed border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-500",
-    dot: "bg-slate-300",
+    chip: "border-dashed border-zinc-300 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-500",
+    dot: "bg-zinc-300",
     rank: 3,
   },
 }
@@ -129,9 +130,9 @@ const STATUS_META: Record<MissionStatus, { label: string; chip: string; dot: str
 const TASK_STATUS_META: Record<MissionTaskStatus, { label: string; chip: string; icon: LucideIcon; iconColor: string }> = {
   TODO: {
     label: "À faire",
-    chip: "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
+    chip: "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400",
     icon: Circle,
-    iconColor: "text-slate-400",
+    iconColor: "text-zinc-400",
   },
   FAITE: {
     label: "Réalisée",
@@ -145,6 +146,41 @@ const TASK_STATUS_META: Record<MissionTaskStatus, { label: string; chip: string;
     icon: AlertTriangle,
     iconColor: "text-red-600 dark:text-red-400",
   },
+}
+
+// Export CSV de la liste des missions (données réelles chargées — pattern
+// T52-R2b/T6a : BOM UTF-8 + séparateur « ; » + dates FR).
+function exportMissionsCsv(missions: MissionDTO[], brandOf: BrandLookup) {
+  const esc = (v: string | number | null) => {
+    const s = v === null ? "" : String(v)
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const header = ["Mission", "Type", "Commanditaire", "Agent", "Zone", "Cibles", "Réalisées", "Anomalies", "Échéance", "Statut"]
+  const lines = missions.map(m => [
+    esc(m.title),
+    TYPE_META[m.type]?.label ?? m.type,
+    esc(brandOf(m.brandSlug).name),
+    esc(m.agentName ?? "Non assignée"),
+    esc(m.zone),
+    m.tasksTotal,
+    m.tasksDone,
+    m.tasksAnomaly,
+    m.dueDate ? esc(fmtDate(m.dueDate)) : "",
+    STATUS_META[m.status]?.label ?? m.status,
+  ].join(";"))
+  const csv = ["\uFEFF" + header.join(";"), ...lines].join("\n")
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `missions-terrain-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  toast.success(`Liste exportée — ${missions.length} mission${missions.length > 1 ? "s" : ""}.`, {
+    description: "missions-terrain.csv · compatible Excel (UTF-8, séparateur « ; »)",
+  })
 }
 
 // ---------- Petits composants de rendu ----------
@@ -426,7 +462,8 @@ export function BoMissions() {
               <dd className="mt-0.5"><DueCell mission={m} /></dd>
             </div>
           </dl>
-          <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={() => setDetailId(m.id)}>
+          {/* T53-T6b : cible tactile h-11 (convention 44 px, pattern T4b/T5b). */}
+          <Button variant="outline" size="sm" className="h-11 w-full gap-1.5" onClick={() => setDetailId(m.id)}>
             <Eye className="h-3.5 w-3.5" aria-hidden /> Voir le détail
           </Button>
         </CardContent>
@@ -468,9 +505,23 @@ export function BoMissions() {
                 {filtered.length} mission{filtered.length > 1 ? "s" : ""} sur {missions.length} · {targetsTotal} cible{targetsTotal > 1 ? "s" : ""} · 3 modes d&apos;affichage
               </CardDescription>
             </div>
-            <Button size="sm" className="h-8 shrink-0 gap-1.5" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" aria-hidden /> Nouvelle mission
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              {/* T53-T6b : export CSV de la liste filtrée (pattern T52-R2b —
+                  données réelles déjà chargées, aucune requête serveur). */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => exportMissionsCsv(filtered, brandOf)}
+                disabled={filtered.length === 0}
+                className="h-8 gap-1.5"
+                aria-label="Exporter la liste filtrée des missions en CSV"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden /> Exporter CSV
+              </Button>
+              <Button size="sm" className="h-8 shrink-0 gap-1.5" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-3.5 w-3.5" aria-hidden /> Nouvelle mission
+              </Button>
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Select value={fType} onValueChange={setFType}>
@@ -1020,7 +1071,7 @@ function TaskItem({
           <p className="truncate text-[11px] text-muted-foreground">
             {task.stationCode ? <code className="font-mono">{task.stationCode}</code> : "cible libre"}
             {task.competitorSlug ? " · veille concurrente" : ""}
-            {task.lat != null && task.lng != null ? ` · GPS ${task.lat.toFixed(3)}, ${task.lng.toFixed(3)}` : ""}
+            {task.lat != null && task.lng != null ? ` · GPS ${task.lat.toFixed(3).replace(".", ",")}, ${task.lng.toFixed(3).replace(".", ",")}` : ""}
           </p>
         </div>
         <DropdownMenu>
@@ -1783,7 +1834,7 @@ function FieldAgentsSection({
               variant="outline"
               className={cn("text-[11px]", a.active
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
-                : "border-slate-300 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500")}
+                : "border-zinc-300 bg-zinc-100 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-500")}
             >
               {a.active ? "Actif" : "Inactif"}
             </Badge>

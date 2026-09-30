@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { KpiCard } from "@/components/shell/kpi-card"
 import { TabSkeleton, ErrorState } from "@/components/shell/loading"
-import type { StationDTO } from "@/lib/types"
+import type { PlatformStats, StationDTO } from "@/lib/types"
 import { monthsSince, daysSince, num, pct, fmtDate, relDays } from "@/components/settings/settings-shared"
 import { cn } from "@/lib/utils"
 
@@ -85,6 +85,7 @@ const GOV_COLUMNS: DataViewColumn<GovRow>[] = [
 
 export function BoFreshness() {
   const [stations, setStations] = useState<StationDTO[] | null>(null)
+  const [platform, setPlatform] = useState<PlatformStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -97,6 +98,12 @@ export function BoFreshness() {
         if (e instanceof DOMException && e.name === "AbortError") return
         setError("Impossible de charger les fiches stations.")
       })
+    // T53-T6b : statistiques plateforme (fiches notées, délai modération) —
+    // non bloquant, alimente les KPIs honnêtes ci-dessous.
+    fetch("/api/stats/platform", { signal: ac.signal })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: PlatformStats) => setPlatform(j))
+      .catch(() => {})
     return () => ac.abort()
   }, [reloadKey])
 
@@ -106,6 +113,8 @@ export function BoFreshness() {
     if (!stations || stations.length === 0) return null
     let fresh = 0
     let fresh30 = 0
+    let ageSum = 0
+    const govs = new Set<string>()
     const stale: StationDTO[] = []
     const byGov = new Map<string, { total: number; fresh: number; fresh30: number }>()
 
@@ -115,6 +124,8 @@ export function BoFreshness() {
       if (isFresh) fresh++
       if (is30) fresh30++
       if (!isFresh) stale.push(s)
+      ageSum += Math.max(0, daysSince(s.lastVerified))
+      govs.add(s.gouvernorat)
       const g = byGov.get(s.gouvernorat) ?? { total: 0, fresh: 0, fresh30: 0 }
       g.total++
       if (isFresh) g.fresh++
@@ -142,17 +153,38 @@ export function BoFreshness() {
       rows,
       staleCount: stale.length,
       oldest,
+      // T53-T6b : mesures réelles (KPIs honnêtes, pattern T53-T3/T4b) —
+      // âge moyen des vérifications + couverture territoriale effective.
+      avgAgeDays: Math.round(ageSum / stations.length),
+      govsCovered: govs.size,
     }
   }, [stations])
 
   if (error) return <ErrorState message={error} retry={retry} />
   if (!stations || !computed) return <TabSkeleton title="Calcul des taux de fraîcheur…" />
 
-  const { total, freshPct, fresh30Pct, rows, staleCount, oldest } = computed
+  const { total, freshPct, fresh30Pct, rows, staleCount, oldest, avgAgeDays, govsCovered } = computed
+
+  // KPIs réels dérivés des statistiques plateforme (T53-T6b) :
+  // fiches notées (proxy de précision du référentiel) et délai réel de
+  // traitement modération (dépôt → décision).
+  const ratedPct = platform ? Math.round((platform.stations.rated / (platform.stations.total || 1)) * 100) : null
+  const modDelay = platform?.moderation.avgDelayHours ?? null
+  const modDelayLabel = modDelay == null
+    ? "—"
+    : modDelay >= 48
+      ? `${Math.round(modDelay / 24)} j`
+      : `${modDelay.toString().replace(".", ",")} h`
 
   return (
     <div className="space-y-4">
-      {/* Bandeau KPIs qualité de donnée (cahier des charges D.2.3) */}
+      {/* Bandeau KPIs qualité de donnée (cahier des charges D.2.3).
+          T53-T6b — KPIs honnêtes : les 4 indicateurs du cahier non instrumentés
+          (précision 96,4 % / détection 22 j / mise à jour 5 j / couverture 97,8 %
+          en dur) sont remplacés par des mesures réelles : fiches notées
+          (/api/stats/platform), délai de traitement modération (idem), âge
+          moyen des vérifications (calcul local) et couverture territoriale
+          effective (calcul local). */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Taux de fraîcheur"
@@ -161,10 +193,34 @@ export function BoFreshness() {
           tone={freshPct >= 90 ? "success" : freshPct >= 75 ? "warning" : "danger"}
           sub="Cible : > 90 %"
         />
-        <KpiCard label="Taux de précision" value="96,4 %" icon={Target} tone="success" sub="Cible : > 95 %" />
-        <KpiCard label="Délai de détection" value="22 j" icon={AlertTriangle} tone="info" sub="Cible : < 30 j" />
-        <KpiCard label="Délai de mise à jour" value="5 j" icon={History} tone="success" sub="Cible : < 7 j" />
-        <KpiCard label="Taux de couverture" value="97,8 %" icon={CheckCircle2} tone="success" sub="Cible : > 95 %" />
+        <KpiCard
+          label="Fiches notées"
+          value={ratedPct !== null ? `${ratedPct} %` : "…"}
+          icon={Target}
+          tone={ratedPct !== null && ratedPct >= 95 ? "success" : "info"}
+          sub="avis présent · Cible : > 95 %"
+        />
+        <KpiCard
+          label="Délai de traitement"
+          value={platform ? modDelayLabel : "…"}
+          icon={AlertTriangle}
+          tone={modDelay != null && modDelay > 30 * 24 ? "warning" : "info"}
+          sub="dépôt → décision modération"
+        />
+        <KpiCard
+          label="Âge moyen vérifications"
+          value={`${avgAgeDays} j`}
+          icon={History}
+          tone={avgAgeDays <= 7 ? "success" : "warning"}
+          sub="Cible : < 7 j (cahier)"
+        />
+        <KpiCard
+          label="Couverture territoriale"
+          value={`${govsCovered}/24`}
+          icon={CheckCircle2}
+          tone="success"
+          sub="gouvernorats suivis (réel)"
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -278,7 +334,7 @@ export function BoFreshness() {
             nested={{
               groupKey: (r) => palierOf(r.freshPct),
               groupLabel: (gk, grows) => {
-                const meta = PALIER_META[gk] ?? { label: gk, dot: "bg-slate-400", rank: 9 }
+                const meta = PALIER_META[gk] ?? { label: gk, dot: "bg-zinc-400", rank: 9 }
                 const avg = Math.round(grows.reduce((a, r) => a + r.freshPct, 0) / grows.length)
                 const fiches = grows.reduce((a, r) => a + r.total, 0)
                 return (
