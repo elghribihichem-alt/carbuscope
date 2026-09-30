@@ -45,7 +45,10 @@ export function SettingsTab() {
       </div>
 
       {/* Grille 2 colonnes de cartes de paramètres */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* T53-T4b : grid-cols-1 explicite (piste minmax(0,1fr) de Tailwind) —
+          sans elle, la piste « auto » s’étale au contenu min des cartes et fait
+          déborder la page à 390 px (scrollWidth 467 > 390 mesuré, capture mobile). */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <SettingsProfileCard brandSlug={brandSlug} />
         <SettingsNotificationsCard />
         <SettingsLanguageCard />

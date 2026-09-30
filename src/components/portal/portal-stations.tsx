@@ -30,6 +30,7 @@ import { TabSkeleton, ErrorState } from "@/components/shell/loading"
 import { SERVICE_ICONS } from "@/components/map/tunisia-map"
 import { SERVICE_LABELS, STATUS_LABELS, type StationDTO, type StationStatus } from "@/lib/types"
 import { monthsSince, num } from "@/components/settings/settings-shared"
+import { normalizeFr } from "@/components/veille/veille-utils"
 
 const SERVICE_SLUGS = Object.keys(SERVICE_LABELS)
 const PHOTO_POOL = ["/images/station-1.jpg", "/images/station-2.jpg", "/images/station-3.jpg", "/images/station-4.jpg"]
@@ -77,14 +78,18 @@ export function PortalStations({ brandSlug }: { brandSlug: string }) {
 
   const filtered = useMemo(() => {
     if (!stations) return []
-    const q = search.trim().toLowerCase()
+    // T53-T4 : recherche insensible à la casse ET aux accents (pattern T53-T3,
+    // helper normalizeFr partagé) — « gabes » trouve « Gabès » ; le gouvernorat
+    // est désormais aussi fouillé.
+    const q = normalizeFr(search.trim())
     return stations.filter(s => {
       if (gov !== "all" && s.gouvernorat !== gov) return false
       if (!q) return true
       return (
-        s.name.toLowerCase().includes(q) ||
-        s.code.toLowerCase().includes(q) ||
-        s.delegation.toLowerCase().includes(q)
+        normalizeFr(s.name).includes(q) ||
+        normalizeFr(s.code).includes(q) ||
+        normalizeFr(s.delegation).includes(q) ||
+        normalizeFr(s.gouvernorat).includes(q)
       )
     })
   }, [stations, search, gov])
@@ -201,7 +206,7 @@ export function PortalStations({ brandSlug }: { brandSlug: string }) {
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Rechercher (nom, code, délégation)…"
+                placeholder="Rechercher (nom, code, délégation, gouvernorat)…"
                 className="w-full pl-9 sm:w-64"
                 aria-label="Rechercher une station"
               />
@@ -295,12 +300,13 @@ export function PortalStations({ brandSlug }: { brandSlug: string }) {
                   </div>
 
                   <div className="mt-3 flex justify-end gap-1.5 border-t pt-3">
-                    <Button size="sm" variant="outline" onClick={() => setEditing(s)}>
+                    {/* T53-T4 : cibles tactiles h-11 en vue cartes (pattern G2/T53-T3) */}
+                    <Button size="sm" variant="outline" className="h-11" onClick={() => setEditing(s)}>
                       <Settings2 className="h-3.5 w-3.5" aria-hidden /> Gérer
                     </Button>
                     {s.status !== "CLOSED" && (
                       <ArchiveStationDialog station={s} onArchived={applyUpdate}>
-                        <Button size="sm" variant="ghost" aria-label={`Archiver ${s.name}`}>
+                        <Button size="sm" variant="ghost" className="h-11 w-11 px-0" aria-label={`Archiver ${s.name}`}>
                           <Archive className="h-3.5 w-3.5 text-red-600" aria-hidden />
                         </Button>
                       </ArchiveStationDialog>
@@ -391,7 +397,7 @@ function StationEditDialog({
       toast.success("Modification soumise — publication après vérification de cohérence", {
         description:
           j.changes > 0
-            ? `${j.changes} champ(s) modifié(s) · trace enregistrée (auteur, date, IP).`
+            ? `${j.changes} champ(s) modifié(s) · trace enregistrée (auteur, date, source).`
             : "Aucun changement détecté — fiche inchangée.",
       })
       onSaved(j.station)

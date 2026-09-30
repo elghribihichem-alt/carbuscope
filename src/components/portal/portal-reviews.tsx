@@ -35,6 +35,10 @@ const EMERALD = "#059669"
 const AMBER = "#d97706"
 const SLATE = "#94a3b8"
 
+// T53-T4 — format décimal français : « 3,7 » (virgule, max 1 décimale).
+// Corrige les rendus bruts « 3.7/5 » / « 28.7 % » (point anglo-saxon).
+const fmt1 = (n: number): string => n.toLocaleString("fr-FR", { maximumFractionDigits: 1 })
+
 // Feuille d'impression du rapport réputation : seul le nœud portail #cs-reputation-print
 // reste visible à l'impression (les autres enfants directs de <body> sont masqués).
 const PRINT_CSS = `
@@ -66,7 +70,6 @@ function PrintTrendChart({ months, own, market, counts }: {
   const barW = Math.min(16, step * 0.45)
   const ownPts = own.map((v, i) => `${x(i)},${yRating(v)}`).join(" ")
   const mktPts = market.map((v, i) => `${x(i)},${yRating(v)}`).join(" ")
-  const fmt1 = (v: number) => v.toFixed(1).replace(".", ",")
 
   return (
     <svg
@@ -119,7 +122,7 @@ function PrintTrendChart({ months, own, market, counts }: {
 // ---------- Étoiles ----------
 function Stars({ value, className = "h-3.5 w-3.5" }: { value: number; className?: string }) {
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`${value} sur 5 étoiles`}>
+    <span className="inline-flex items-center gap-0.5" aria-label={`${fmt1(value)} sur 5 étoiles`}>
       {[1, 2, 3, 4, 5].map(i => (
         <Star
           key={i}
@@ -145,7 +148,7 @@ function ChartTip({ active, payload, label, suffix = "" }: {
       {payload.map((p, i) => (
         <p key={i} className="flex items-center gap-1.5 text-muted-foreground">
           <span className="h-2 w-2 rounded-full" style={{ background: p.color ?? EMERALD }} aria-hidden />
-          {p.name} : <span className="font-semibold text-foreground tabular-nums">{p.value}{suffix}</span>
+          {p.name} : <span className="font-semibold text-foreground tabular-nums">{typeof p.value === "number" ? fmt1(p.value) : p.value}{suffix}</span>
         </p>
       ))}
     </div>
@@ -347,8 +350,8 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
     return { comparison, maxNote, dist, radar, trend, delta, rank }
   }, [stats])
 
-  // Flux d'avis filtré (tous / sans réponse / avec réponse) + compteurs
-  // (calcul direct — le compilateur React mémoïse automatiquement)
+  // Flux d'avis filtré (tous / sans réponse / avec réponse) + compteurs.
+  // (calcul léger volontairement recalculé au rendu — listes ≤ 20 avis)
   const allReviews = stats?.own.recentReviews ?? []
   const pendingCount = allReviews.filter(r => !r.replyText).length
   const repliedCount = allReviews.length - pendingCount
@@ -380,18 +383,18 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 {d.delta >= 0 ? (
                   <>
-                    Votre enseigne est notée <strong className="text-foreground">{own.avgRating}/5</strong> sur{" "}
+                    Votre enseigne est notée <strong className="text-foreground">{fmt1(own.avgRating)}/5</strong> sur{" "}
                     <strong className="text-foreground">{num(own.reviewsCount)} avis</strong>, soit{" "}
                     <strong className="text-emerald-600">+{d.delta.toFixed(1).replace(".", ",")} point{d.delta > 1 ? "s" : ""} au-dessus de la moyenne marché</strong>{" "}
-                    ({market.avgRating}/5). Vous captez <strong className="text-foreground">{own.shareOfVoice} %</strong> du
+                    ({fmt1(market.avgRating)}/5). Vous captez <strong className="text-foreground">{fmt1(own.shareOfVoice)} %</strong> du
                     volume d’avis des consommateurs.
                   </>
                 ) : (
                   <>
-                    Votre enseigne est notée <strong className="text-foreground">{own.avgRating}/5</strong> sur{" "}
+                    Votre enseigne est notée <strong className="text-foreground">{fmt1(own.avgRating)}/5</strong> sur{" "}
                     <strong className="text-foreground">{num(own.reviewsCount)} avis</strong>, soit{" "}
                     <strong className="text-red-600">{Math.abs(d.delta).toFixed(1).replace(".", ",")} point{"(s)"} en dessous de la moyenne marché</strong>{" "}
-                    ({market.avgRating}/5) — un axe prioritaire d’amélioration de l’expérience client.
+                    ({fmt1(market.avgRating)}/5) — un axe prioritaire d’amélioration de l’expérience client.
                   </>
                 )}
               </p>
@@ -402,11 +405,11 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                 </Badge>
                 <Badge variant="outline" className="gap-1.5">
                   <Users className="h-3.5 w-3.5" />
-                  Part de voix : {own.shareOfVoice} %
+                  Part de voix : {fmt1(own.shareOfVoice)} %
                 </Badge>
                 <Badge variant="outline" className="gap-1.5">
                   <MessageSquareReply className="h-3.5 w-3.5 text-emerald-600" />
-                  Taux de réponse : {own.responseRate} %
+                  Taux de réponse : {fmt1(own.responseRate)} %
                   {own.avgReplyDelayHours != null && (
                     <span className="text-muted-foreground">· sous {Math.max(1, Math.round(own.avgReplyDelayHours / 24))} j</span>
                   )}
@@ -453,7 +456,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Note moyenne"
-          value={`${own.avgRating}/5`}
+          value={`${fmt1(own.avgRating)}/5`}
           icon={Star}
           tone="default"
           trend={{ value: d.delta, label: " pts vs marché" }}
@@ -466,7 +469,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
         />
         <KpiCard
           label="Taux de réponse"
-          value={`${own.responseRate} %`}
+          value={`${fmt1(own.responseRate)} %`}
           icon={MessageSquareReply}
           tone="success"
           trend={{ value: Math.round((own.responseRate - market.responseRate) * 10) / 10, label: " pts vs marché" }}
@@ -491,7 +494,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Note moyenne par enseigne</CardTitle>
-            <CardDescription>Positionnement de {brand.name} face aux concurrents (toutes enseignes confondues : {market.avgRating}/5).</CardDescription>
+            <CardDescription>Positionnement de {brand.name} face aux concurrents (toutes enseignes confondues : {fmt1(market.avgRating)}/5).</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={{}} className="aspect-auto h-[300px] w-full">
@@ -578,7 +581,9 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
               <LineChart data={d.trend} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="mois" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <YAxis domain={[3, 5]} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                {/* T53-T4b : ticks « 3,5 » à la française (les demi-points de l’axe
+                    rendaient « 3.5 » — pattern T53-T3 prix). */}
+                <YAxis domain={[3, 5]} tickFormatter={(v: number) => fmt1(v)} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <Tooltip content={<ChartTip suffix="/5" />} />
                 <Line type="monotone" dataKey="marche" name="Marché" stroke={SLATE} strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
                 <Line type="monotone" dataKey="moi" name="Mon enseigne" stroke={EMERALD} strokeWidth={2.5} dot={{ r: 3, fill: EMERALD }} activeDot={{ r: 5 }} />
@@ -614,7 +619,7 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                     <span className="font-bold text-foreground">{det.points.toString().replace(".", ",")}</span>/{det.max} pts
                   </span>
                 </div>
-                <Progress value={(det.points / det.max) * 100} className="h-2" aria-label={`${det.label} : ${det.points}/${det.max}`} />
+                <Progress value={(det.points / det.max) * 100} className="h-2" aria-label={`${det.label} : ${fmt1(det.points)}/${det.max}`} />
               </div>
             ))}
             <p className="rounded-lg border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
@@ -1031,19 +1036,19 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
             L’enseigne <strong>{brand.name}</strong> est notée <strong>{own.avgRating.toFixed(1).replace(".", ",")}/5</strong> sur{" "}
             <strong>{num(own.reviewsCount)} avis</strong> (marché : {market.avgRating.toFixed(1).replace(".", ",")}/5), avec{" "}
             <strong>{own.stationsWithReviews}/{own.stationsTotal}</strong> stations notées, une part de voix de{" "}
-            <strong>{own.shareOfVoice} %</strong> et un taux de réponse officielle de <strong>{own.responseRate} %</strong>
+            <strong>{fmt1(own.shareOfVoice)} %</strong> et un taux de réponse officielle de <strong>{fmt1(own.responseRate)} %</strong>
             {own.avgReplyDelayHours != null && <> (délai moyen : {Math.max(1, Math.round(own.avgReplyDelayHours))} h)</>}.
           </p>
 
           {/* KPIs */}
           <div className="mt-3 grid grid-cols-3 gap-2">
             {[
-              { label: "Note client", value: `${own.avgRating.toFixed(1).replace(".", ",")}/5` },
+              { label: "Note client", value: `${fmt1(own.avgRating)}/5` },
               { label: "Avis reçus", value: num(own.reviewsCount) },
               { label: "Rang concurrentiel", value: `${d.rank}e / ${ive.brandsCount}` },
               { label: "IVE", value: `${ive.score}/100` },
-              { label: "Taux de réponse", value: `${own.responseRate} %` },
-              { label: "Part de voix", value: `${own.shareOfVoice} %` },
+              { label: "Taux de réponse", value: `${fmt1(own.responseRate)} %` },
+              { label: "Part de voix", value: `${fmt1(own.shareOfVoice)} %` },
             ].map(k => (
               <div key={k.label} className="rounded-lg border border-slate-300 px-3 py-2">
                 <p className="text-[9.5px] font-bold uppercase tracking-wide text-slate-500">{k.label}</p>
@@ -1103,9 +1108,9 @@ export function PortalReviews({ brandSlug }: { brandSlug: string }) {
                   className={`border-b border-slate-200 ${b.slug === brand.slug ? "bg-emerald-50 font-bold" : ""}`}
                 >
                   <td className="py-1.5 pr-2">{b.name}{b.slug === brand.slug ? " (moi)" : ""}</td>
-                  <td className="py-1.5 px-2 text-right tabular-nums">{b.avgRating.toFixed(1).replace(".", ",")}/5</td>
+                  <td className="py-1.5 px-2 text-right tabular-nums">{fmt1(b.avgRating)}/5</td>
                   <td className="py-1.5 px-2 text-right tabular-nums">{num(b.reviewsCount)}</td>
-                  <td className="py-1.5 px-2 text-right tabular-nums">{b.responseRate} %</td>
+                  <td className="py-1.5 px-2 text-right tabular-nums">{fmt1(b.responseRate)} %</td>
                   <td className="py-1.5 pl-2 text-right tabular-nums">{b.valueIndex}/100</td>
                 </tr>
               ))}

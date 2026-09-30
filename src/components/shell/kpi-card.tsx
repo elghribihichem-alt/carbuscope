@@ -43,7 +43,9 @@ export function KpiCard({ label, value, icon: Icon, sub, trend, tone = "default"
               <span className={cn("inline-flex items-center gap-0.5 text-[11px] font-semibold",
                 trend.value >= 0 ? "text-emerald-600" : "text-red-600")}>
                 {trend.value >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {trend.value > 0 ? "+" : ""}{trend.value}{trend.label ?? " %"}
+                {/* T53-T4b : décimales à la française sur la puce de tendance
+                    (« +0,2 pt » et non « +0.2 ») — l’app est 100 % FR. */}
+                {trend.value > 0 ? "+" : ""}{trend.value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}{trend.label ?? " %"}
               </span>
             )}
           </div>

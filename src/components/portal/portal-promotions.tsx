@@ -43,7 +43,8 @@ function statutOf(p: Promotion): PromoStatut {
 const STATUT_CLS: Record<PromoStatut, string> = {
   "EN COURS": "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
   "PLANIFIÉE": "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
-  "TERMINÉE": "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
+  // T53-T4 : tokens thémés zinc (les classes slate dures suivaient l’ancien pattern)
+  "TERMINÉE": "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400",
 }
 
 const NATIONAL = "National (toutes zones)"
@@ -204,8 +205,8 @@ function PromoCreateDialog({
         <DialogHeader>
           <DialogTitle>Créer une promotion</DialogTitle>
           <DialogDescription>
-            Définissez l&apos;offre, la période et la zone géographique ciblée. Les automobilistes la verront sur
-            l&apos;application mobile.
+            Définissez l&apos;offre, la période et la zone géographique ciblée. La campagne s&apos;ajoute au tableau
+            de ce portail (enregistrement local de démonstration — aucune écriture serveur pour l&apos;instant).
           </DialogDescription>
         </DialogHeader>
 

@@ -109,8 +109,8 @@ export function SettingsApiCard() {
               className="gap-1.5"
               onClick={() => {
                 setKeySuffix(generateKeySuffix())
-                toast.warning("Nouvelle clé API générée", {
-                  description: "L'ancienne clé est révoquée sous 24 h — mettez à jour vos intégrations.",
+                toast.warning("Nouvelle clé affichée", {
+                  description: "Mettez à jour vos intégrations avec la nouvelle clé ci-dessus — copiez-la avant de quitter l’écran.",
                 })
               }}
             >
@@ -129,7 +129,9 @@ export function SettingsApiCard() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        {/* T53-T4b : grid-cols-1 explicite — même correctif que la grille mère
+            du tab (piste auto > contenu min des quotas, débordement 390 px). */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Quotas */}
           <div>
             <DataViews

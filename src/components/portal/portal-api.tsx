@@ -104,9 +104,12 @@ export function PortalApi({ brandName }: { brandName: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-4 lg:grid-cols-2">
+        {/* T53-T4 : min-w-0 sur les colonnes de grille — sinon la piste « auto » du
+            grille s'étale au contenu min du bloc de code (ligne curl ~395 px) et
+            fait déborder toute la page à 390 px (scrollWidth 430 > 390 mesuré). */}
+        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
           {/* Endpoint + clé + quotas */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Endpoint de synchronisation</p>
               <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2.5">
@@ -156,8 +159,8 @@ export function PortalApi({ brandName }: { brandName: string }) {
                   className="gap-1.5"
                   onClick={() => {
                     setKeySuffix(generateKeySuffix())
-                    toast.warning("Nouvelle clé générée", {
-                      description: "L'ancienne clé sera révoquée sous 24 h — mettez à jour vos intégrations.",
+                    toast.warning("Nouvelle clé affichée", {
+                      description: "Mettez à jour vos intégrations avec la nouvelle clé ci-dessus — copiez-la avant de quitter l’écran.",
                     })
                   }}
                 >
@@ -181,7 +184,7 @@ export function PortalApi({ brandName }: { brandName: string }) {
           </div>
 
           {/* Exemples */}
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <CodeBlock title="Exemple de requête (curl)" code={CURL_SAMPLE} icon={Terminal} />
             <CodeBlock title="Exemple de réponse (JSON)" code={RESPONSE_SAMPLE} icon={Braces} />
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-400">

@@ -33,7 +33,8 @@ const ROLES: Record<string, RoleMeta> = {
   NETWORK: { label: "Direction Réseau", cls: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400", icon: Users },
   COMMERCIAL: { label: "Direction Commerciale", cls: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400", icon: Users },
   EXPANSION: { label: "Direction Expansion", cls: "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-400", icon: Users },
-  VIEWER: { label: "Observateur", cls: "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400", icon: Users },
+  // T53-T4 : tokens thémés zinc (les classes slate dures suivaient l'ancien pattern)
+  VIEWER: { label: "Observateur", cls: "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400", icon: Users },
 }
 
 const COMPTES_INITIAUX: Compte[] = [
