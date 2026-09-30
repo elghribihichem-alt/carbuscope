@@ -38,7 +38,7 @@ import type {
 import { cn } from "@/lib/utils"
 import {
   BrandLookup, MAX_TARGETS, STATUS_META, TaskStatusBadge, TypeBadge, MissionStatusBadge,
-  fmtDt, isMissionOverdue,
+  fmtDt, fmtNote, isMissionOverdue, normalizeFr,
 } from "./terrain-shared"
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10)
@@ -59,7 +59,7 @@ function Advancement({
       <Progress
         value={pct}
         className="h-1.5"
-        aria-label={`Avancement : ${done} cibles réalisées sur ${total}`}
+        aria-label={`Avancement : ${done} cible${done > 1 ? "s" : ""} réalisée${done > 1 ? "s" : ""} sur ${total}`}
       />
       {anomaly > 0 && (
         <p className="flex items-center gap-1 text-[10px] font-medium text-red-600 dark:text-red-400">
@@ -106,7 +106,7 @@ function ReportSummary({ report }: { report: VisitReportDTO }) {
             <span className="text-muted-foreground">Personnel&nbsp;: <b className="text-foreground tabular-nums">{report.staffCount}</b></span>
           )}
           {report.cleanliness != null && (
-            <span className="text-muted-foreground">Propreté&nbsp;: <b className="text-foreground tabular-nums">{report.cleanliness}/5</b></span>
+            <span className="text-muted-foreground">Propreté&nbsp;: <b className="text-foreground tabular-nums">{fmtNote(report.cleanliness)}/5</b></span>
           )}
           {report.complianceScore != null && (
             <span className="text-muted-foreground">Conformité&nbsp;: <b className="text-foreground tabular-nums">{report.complianceScore}&nbsp;%</b></span>
@@ -316,7 +316,7 @@ export function TerrainMissions({
                 {filtered.length} mission{filtered.length > 1 ? "s" : ""} sur {missions.length} · {targetsTotal} cible{targetsTotal > 1 ? "s" : ""} · 3 modes d&apos;affichage
               </CardDescription>
             </div>
-            <Button size="sm" className="h-8 shrink-0 gap-1.5" onClick={() => setCreateOpen(true)}>
+            <Button size="sm" className="h-11 shrink-0 gap-1.5" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" aria-hidden /> Demander une mission
             </Button>
           </div>
@@ -767,7 +767,9 @@ function TargetItem({ task, brandOf }: { task: MissionTaskDTO; brandOf: BrandLoo
           <p className="truncate text-[11px] text-muted-foreground">
             {task.stationCode ? <code className="font-mono">{task.stationCode}</code> : "cible libre"}
             {competitor ? ` · veille ${competitor.name}` : ""}
-            {task.lat != null && task.lng != null ? ` · GPS ${task.lat.toFixed(3)}, ${task.lng.toFixed(3)}` : ""}
+            {task.lat != null && task.lng != null
+              ? ` · GPS ${task.lat.toLocaleString("fr-FR", { maximumFractionDigits: 3 })} · ${task.lng.toLocaleString("fr-FR", { maximumFractionDigits: 3 })}`
+              : ""}
           </p>
         </div>
         <TaskStatusBadge status={task.status} />
@@ -867,10 +869,11 @@ function RequestMissionDialog({
 
   const suggestions = useMemo(() => {
     if (!stations) return []
-    const q = search.trim().toLowerCase()
+    // T53-T5 : recherche insensible à la casse et aux accents (pattern « Mes stations »)
+    const q = normalizeFr(search.trim())
     return stations
       .filter(s => s.status !== "CLOSED" && s.status !== "PROJECT")
-      .filter(s => !q || `${s.name} ${s.code} ${s.delegation}`.toLowerCase().includes(q))
+      .filter(s => !q || normalizeFr(`${s.name} ${s.code} ${s.delegation}`).includes(q))
       .slice(0, 8)
   }, [stations, search])
 

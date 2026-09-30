@@ -25,6 +25,14 @@ export const fmtDt = (millimes: number): string =>
 export const fmtMillimesDelta = (delta: number): string =>
   `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${Math.abs(delta)} millimes`
 
+/** Nombre décimal éventuel en virgule française (propreté « 3,5/5 »), pattern fmt1 (T53-T5). */
+export const fmtNote = (v: number): string =>
+  v.toLocaleString("fr-FR", { maximumFractionDigits: 1 })
+
+/** Recherche insensible à la casse et aux accents (« gabes » → « Gabès », pattern T53-T3). */
+export const normalizeFr = (s: string): string =>
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
 /** Mission dépassée : échéance passée et mission non fermée */
 export const isMissionOverdue = (m: { dueDate: string | null; status: MissionStatus }): boolean => {
   if (!m.dueDate || m.status === "TERMINEE" || m.status === "ANNULEE") return false
@@ -83,8 +91,9 @@ export const STATUS_META: Record<MissionStatus, { label: string; chip: string; d
   },
   PLANIFIEE: {
     label: "Planifiée",
-    chip: "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
-    dot: "bg-slate-400",
+    // T53-T5 : neutres slate → zinc (harmonisation design system, pattern T53-T4b)
+    chip: "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400",
+    dot: "bg-zinc-400",
     rank: 1,
   },
   TERMINEE: {
@@ -95,8 +104,8 @@ export const STATUS_META: Record<MissionStatus, { label: string; chip: string; d
   },
   ANNULEE: {
     label: "Annulée",
-    chip: "border-dashed border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-500",
-    dot: "bg-slate-300",
+    chip: "border-dashed border-zinc-300 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-500",
+    dot: "bg-zinc-300",
     rank: 3,
   },
 }
@@ -104,7 +113,7 @@ export const STATUS_META: Record<MissionStatus, { label: string; chip: string; d
 export const TASK_STATUS_META: Record<MissionTaskStatus, { label: string; chip: string }> = {
   TODO: {
     label: "À faire",
-    chip: "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
+    chip: "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400",
   },
   FAITE: {
     label: "Réalisée",

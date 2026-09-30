@@ -8,8 +8,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import {
-  Building2, Eye, Gauge, Lightbulb, MapPin, Star,
+  Building2, Download, Eye, Gauge, Lightbulb, MapPin, Star,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,7 +21,7 @@ import {
 import { DataViews, type DataViewColumn } from "@/components/ui/data-views"
 import { fmtDate } from "@/components/settings/settings-shared"
 import type { BrandDTO, MissionDTO, MissionDetailDTO, StationDTO, VisitReportDTO } from "@/lib/types"
-import { BrandDot, BrandLookup, fmtDt, fmtMillimesDelta } from "./terrain-shared"
+import { BrandDot, BrandLookup, fmtDt, fmtMillimesDelta, fmtNote } from "./terrain-shared"
 
 // ---------- Types locaux ----------
 
@@ -43,6 +44,54 @@ type CompetitorRow = {
 }
 
 // ---------- Petits composants ----------
+
+/** Échappe une cellule CSV si nécessaire (guillemets, « ; », sauts de ligne). */
+function csvCell(v: unknown): string {
+  const s = v == null ? "" : String(v)
+  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+/** Millimes → dinars 3 décimales pour CSV (« 1,885 »), vide si absent. */
+const csvDt = (millimes: number | null): string =>
+  millimes == null
+    ? ""
+    : (millimes / 1000).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+
+/**
+ * T53-T5 — Export CSV des observations terrain (pattern T52-R2b : séparateur
+ * « ; », BOM UTF-8, retours \r\n). Données déjà chargées — aucun fetch.
+ * Écarts signés au décret en millimes lorsque les prix en vigueur sont connus.
+ */
+function exportObservationsCsv(rows: CompetitorRow[], compName: string, decree: DecreePrices | null): void {
+  const header = [
+    "Date", "Mission", "Zone", "Station", "Code station", "Agent",
+    "Gazole (DT)", "Essence (DT)", "GPL (DT)",
+    ...(decree ? ["Écart GA (millimes)", "Écart ES (millimes)", "Écart GPL (millimes)"] : []),
+    "File (min)", "Propreté (/5)", "Pratiques observées", "Notes",
+  ]
+  const lines = rows.map(r => [
+    fmtDate(r.visitedAt), r.missionTitle, r.missionZone, r.stationName,
+    r.stationCode ?? "", r.agentName ?? "",
+    csvDt(r.report.gazolePrice), csvDt(r.report.essencePrice), csvDt(r.report.gplPrice),
+    ...(decree ? [
+      r.report.gazolePrice != null ? r.report.gazolePrice - decree.GAZOLE : "",
+      r.report.essencePrice != null ? r.report.essencePrice - decree.ESSENCE : "",
+      r.report.gplPrice != null ? r.report.gplPrice - decree.GPL : "",
+    ] : []),
+    r.report.queueMinutes ?? "", r.report.cleanliness ?? "",
+    r.report.competitorPractices ?? "", r.report.notes ?? "",
+  ])
+  const csv = `\uFEFF${[header, ...lines].map(l => l.map(csvCell).join(";")).join("\r\n")}`
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `carbuscope-veille-${compName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replaceAll(" ", "-")}-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
 
 /** Prix relevé face au décret : « 1,885 DT » + badge « = décret » / « écart ». */
 function PriceObs({
@@ -360,7 +409,7 @@ export function TerrainCompetitorsSheet({
           <div>
             <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Propreté</dt>
             <dd className="mt-0.5 tabular-nums">
-              {r.report.cleanliness != null ? `${r.report.cleanliness}/5` : "—"}
+              {r.report.cleanliness != null ? `${fmtNote(r.report.cleanliness)}/5` : "—"}
             </dd>
           </div>
         </dl>
@@ -690,14 +739,34 @@ export function TerrainCompetitorsSheet({
       {/* Pratiques observées sur le terrain */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Eye className="h-4 w-4 text-orange-600" aria-hidden /> Pratiques observées sur le terrain
-          </CardTitle>
-          <CardDescription>
-            {veilleRows.length > 0
-              ? `${veilleRows.length} rapport${veilleRows.length > 1 ? "s" : ""} de veille ciblant ${compBrand.name} · prix face au décret · 3 modes d'affichage`
-              : "Rapports de veille remontés par les agents de terrain"}
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Eye className="h-4 w-4 text-orange-600" aria-hidden /> Pratiques observées sur le terrain
+              </CardTitle>
+              <CardDescription>
+                {veilleRows.length > 0
+                  ? `${veilleRows.length} rapport${veilleRows.length > 1 ? "s" : ""} de veille ciblant ${compBrand.name} · prix face au décret · 3 modes d'affichage`
+                  : "Rapports de veille remontés par les agents de terrain"}
+              </CardDescription>
+            </div>
+            {/* T53-T5 — export CSV des observations (données déjà chargées) */}
+            {veille && veilleRows.length > 0 && (
+              <Button
+                size="sm" variant="outline"
+                className="h-11 shrink-0 gap-1.5"
+                onClick={() => {
+                  exportObservationsCsv(veilleRows, compBrand.name, decree)
+                  toast.success("Export CSV généré", {
+                    description: `${veilleRows.length} observation${veilleRows.length > 1 ? "s" : ""} de ${compBrand.name} — prix relevés${decree ? " et écarts au décret" : ""}, prêt pour tableur.`,
+                  })
+                }}
+                aria-label={`Exporter les observations terrain de ${compBrand.name} au format CSV`}
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden /> Exporter (CSV)
+              </Button>
+            )}
+          </div>
           {decree && (
             <p className="text-[11px] text-muted-foreground">
               Prix en vigueur (décret) : GA {fmtDt(decree.GAZOLE)} · ES {fmtDt(decree.ESSENCE)} · GPL {fmtDt(decree.GPL)}

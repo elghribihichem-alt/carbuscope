@@ -227,7 +227,8 @@ export function MobileAgentView() {
                         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{a.name} · {a.zone}</span>
                         <span className={`rounded-full px-1.5 py-px text-[9.5px] font-semibold ${a.missions > 0
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                          : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"}`}>
+                          // T53-T5 : neutre slate → zinc (harmonisation design system, pattern T53-T4b)
+                          : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}`}>
                           {a.missions} mission{a.missions > 1 ? "s" : ""}
                         </span>
                       </li>

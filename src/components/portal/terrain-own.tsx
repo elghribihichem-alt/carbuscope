@@ -312,7 +312,7 @@ export function TerrainOwnSheet({
                   </div>
                   <Button
                     variant="outline" size="sm"
-                    className="h-7 shrink-0 gap-1.5 text-xs"
+                    className="h-11 shrink-0 gap-1.5 text-xs"
                     onClick={() => onOpenMission(a.missionId)}
                     aria-label={`Voir la mission ${a.missionTitle}`}
                   >
