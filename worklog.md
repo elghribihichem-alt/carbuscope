@@ -1631,3 +1631,32 @@ Stage Summary:
 - Honnêteté du module : 4 KPIs fraîcheur en dur remplacés par des mesures réelles (98 % notées / 2 j délai modération 49 h / 210 j âge moyen / 24 gouvernorats), badge 2 985 dynamique, agents terrain RÉELS (6, PATCH de zone câblé et testé+restauré), toasts d'arbitrage/injection/campagne honnêtes, 2 exports CSV additifs (modération + missions, pattern T52-R2b).
 - Périmètre 100 % slate/bleu-FREE (rg → 0 hors commentaires), zinc partout, dark: partout, zéro casse (additif strict), zéro donnée inventée au rendu, mutation unique rétablie, lint 0, tsc périmètre 0.
 - Verdicts pour T7 : back-office INTÈGRE — validation finale tenant peut couvrir un sweep cross-espaces (portail + observatoire) puis passage Mobile B2C léger ; restes à arbitrer : 3 simulations locales honnêtes à brancher si routes créées (contestations C.3, injection souveraine, campagne), hash sans section backoffice au reload (préexistant, même verdict que Shadow), warnings Radix DialogDescription app-wide, KPI repli « 6 » de bo-decrees à suivre si le registre enseignes évolue.
+
+---
+Task ID: T53-T7 (balayage E2E final + dossier de validation espace Tenant + gel)
+Agent: Chef d'orchestration (Z.ai Code)
+Task: Validation groupée de fin d'espace Tenant (arbitrage utilisateur) : balayage E2E cross-espaces des 7 rounds T53, variations de rôles, passage léger Mobile B2C, dossier de validation, gel souple Tenant.
+
+Work Log:
+- Balayage agent-browser session t53t7 (zombies tués avant, session fermée + pkill après) : login Rania → Portail enseigne → 14 modules cliqués un par un à travers les 8 groupes (G1 Tableau de bord + Carte interactive · G2 Stations + Prix & marges + Veille · G3 TDB enseigne + Avis & réputation + API & promotions · G4 Missions terrain + Application agents terrain · G5 Concurrence · G6 Shadow Vue d'Ensemble · G7 Modération (badge 9) · G8 Rapports + Paramètres) → **0 erreur console CUMULÉE**.
+- Langue : navigateur EN détecté (auto-détection préexistante — items EN + groupes FR par fallback, comportement identique pré/post T1, aucune régression) → bascule explicite « Français » pour le balayage canonique (UI 100 % FR = convention).
+- Mobile B2C léger : mode B2C Mobile → items Carte/Promotions/Comparer/Profil rendus, 0 erreur, viewport 390×844 → 390 = 390, capture dédiée.
+- Responsive : portail à 390×844 → 390 = 390 (0 overflow — dette T4b/T6a éteinte partout) ; desktop 1280 propre.
+- Rôles : Leila VIEWER (TotalEnergies) → 6 groupes, Shadow Market + Back-office MASQUÉS ✓ ; Tarek DG (Agil) → 8 groupes COMPLETS (Shadow + BO visibles) ✓ ; 0 erreur sur chaque profil ; captures dédiées.
+- Transverse : footer collé en fin de document (bas=docH, poussé naturellement, aucun flottement) ; thème sombre togglé → capture → restauré, 0 erreur ; aucune mutation de données pendant tout le balayage (lecture seule).
+- Vérifications finales : bun run lint → 0 erreur projet entier ; serveur 200 vivant ; commits du cycle : 3dac778 (T1), 2439f8f (T2), c854310 (T3), f95ab50 (T4b), e60dd97 (T5b), 8aa35bf (T6a), 5d6eb83 (T6b) + présent commit T7.
+- Captures : qa-t53-t7-portail.png, qa-t53-t7-portail-390.png, qa-t53-t7-mobile-b2c-390.png, qa-t53-t7-tarek-dg.png, qa-t53-t7-dark.png.
+
+Stage Summary:
+- **DOSSIER DE VALIDATION ESPACE TENANT (validation groupée, soumis à l'utilisateur)** :
+  ① T1 — Harmonisation i18n : 85 clés sb.* typées DictKey dans fr.ts, zéro libellé de navigation en dur, rendu strictement identique (risque zéro, traductible à terme).
+  ② T2 — Pilotage : bannière d'alertes proactives (fil réel de la veille), KPI note moyenne (avgRating/reviewsCount réels), activité récente vivante (8 traces réelles via extension additive de /api/portal/stats), TDB observatoire audité exemplaire.
+  ③ T3 — Réseau & marché : réponses officielles d'enseigne affichées dans la fiche station, dark mode comparateur, décimales FR (prix/veille), carte Mouvements par enseigne (byBrand réel), compteurs chips, recherches accents-insensibles.
+  ④ T4b — Espace enseigne + Gestion : virgules FR généralisées (KPIs, axes, synthèses), débordement 390 des Paramètres corrigé (467→390), toasts honnêtes (régénérations), recherches accents, cibles 44px.
+  ⑤ T5b — Veille terrain + agents : export CSV des observations concurrents (BOM, « ; », décimales FR — fichier téléchargé et vérifié), helpers fmtNote/normalizeFr partagés, cibles 44px, aperçu agents terrain validé (login agent réel).
+  ⑥ T6a — Shadow Market : débordement 390 ERADIQUÉ (cause racine : table 8 colonnes du rapport mensuel → overflow-x-auto ; preuve 517→390), 24/24 écrans 390=390, zéro bleu résiduel.
+  ⑦ T6b — Back-office : 8/8 outils intègres au 390 (overflow Veille & alertes 662→390), fausses données remplacées par du réel (KPIs fraîcheur mesurés, agents terrain réels + PATCH zone câblé), toasts « simulés » honnêtes, exports CSV.
+  ⑧ T7 — Transverse : 14 modules 0 erreur console, rôles vérifiés (VIEWER 6 groupes / DG 8 groupes / racine tout), Mobile B2C léger OK, footer correct, dark mode OK, lint 0, aucune mutation de données.
+- **GEL SOUPLE ACTIVÉ SUR L'ESPACE TENANT** : correctifs critiques + micro-ajustements autorisés uniquement, sans casser code ni design.
+- Décisions restantes pour l'utilisateur : purge des fichiers morts SA (verdicts de minage T52) ; traduction éventuelle des clés sb.* (en/ar/…) — aujourd'hui FR par convention ; bug /api/relances (kpis national vs liste brand-scoped) ; 3 simulations back-office honnêtes (contestations, injection souveraine, campagne agents) attendant des routes dédiées ; hash sans section au reload (préexistant, sans impact) ; warnings Radix DialogDescription app-wide.
+- Prochaine étape possible : passage Mobile B2C approfondi (écrans B2C complets) ou cycle de votre choix — les deux espaces majeurs (Super Admin + Tenant) sont désormais gelés.
