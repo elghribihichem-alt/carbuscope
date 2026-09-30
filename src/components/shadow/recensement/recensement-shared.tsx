@@ -247,7 +247,7 @@ export function PointDetailDialog({
               <div>
                 <DetailRow label="Volume estimé" value={formatLJ(shown.volumeLJ)} />
                 <DetailRow label="Prix affiché" value={formatMillimes(shown.priceMillimes)} />
-                <DetailRow label="Coordonnées" value={`${shown.lat.toFixed(5)}, ${shown.lng.toFixed(5)}`} />
+                <DetailRow label="Coordonnées" value={`${shown.lat.toFixed(5).replace(".", ",")}, ${shown.lng.toFixed(5).replace(".", ",")}`} />
                 <DetailRow
                   label="Station la plus proche"
                   value={

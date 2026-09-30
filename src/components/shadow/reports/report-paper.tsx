@@ -144,7 +144,10 @@ function PaperThreatTable({ threats, title }: { threats: PaperThreat[]; title: s
       <h3 className="mb-2 border-l-4 border-stone-800 pl-2 text-[12px] font-black uppercase tracking-wide text-stone-800">
         {title}
       </h3>
-      <table className="w-full border-collapse text-[10.5px]">
+      {/* overflow-x-auto : 8 colonnes cellées ≈ 487 px de min-content — à 390 px
+          la table scrolle dans son conteneur au lieu de déborder la page. */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-[10.5px]">
         <thead>
           <tr className="bg-stone-100 text-left text-[9.5px] uppercase tracking-wide text-stone-600">
             <th className="border border-stone-300 px-1.5 py-1.5 font-bold">#</th>
@@ -184,7 +187,8 @@ function PaperThreatTable({ threats, title }: { threats: PaperThreat[]; title: s
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </section>
   )
 }

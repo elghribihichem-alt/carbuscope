@@ -206,7 +206,9 @@ export function SettingsRadiiTab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[1fr_minmax(320px,420px)]">
+      {/* grid-cols-1 explicite (= minmax(0,1fr)) : sans lui, la piste implicite « auto »
+          peut prendre max-content et déborde à 390 px (pattern T53-T6a). */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(320px,420px)]">
         {/* Formulaire */}
         <Card className="border-stone-200 bg-white/95 dark:border-stone-800 dark:bg-stone-900/95">
           <CardContent className="space-y-5 p-4 sm:p-6">

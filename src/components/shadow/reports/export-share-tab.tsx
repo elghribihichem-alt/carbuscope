@@ -319,7 +319,7 @@ export function ExportShareTab({ ctx }: { ctx: ShadowReportsCtx }) {
               {messageDirty && (
                 <button
                   type="button"
-                  className="text-[11px] font-semibold text-[#2196F3] underline-offset-2 hover:underline"
+                  className="text-[11px] font-semibold text-purple-700 underline-offset-2 hover:underline dark:text-purple-400"
                   onClick={() => setMessageDirty(false)}
                 >
                   Restaurer le message auto

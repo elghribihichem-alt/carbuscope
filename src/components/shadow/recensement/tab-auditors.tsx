@@ -151,7 +151,9 @@ export function TabAuditors() {
         <ShadowKpiCard value={num(stats.zones)} label="Zones couvertes" sub="gouvernorats + national" tone="yellow" />
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+      {/* grid-cols-1 explicite (= minmax(0,1fr)) : sans lui, la piste implicite « auto »
+          peut prendre max-content et déborde à 390 px (pattern T53-T6a). */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
         {/* Cartes auditeurs */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">

@@ -91,7 +91,9 @@ export function TabCannibalisation({
   }
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+    // grid-cols-1 explicite (= minmax(0,1fr)) : sans lui, la piste implicite « auto »
+    // prend la largeur max-content du sélecteur (~540 px) et déborde à 390 px.
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
       <StationPicker stations={stations} selectedCode={selectedCode} onSelect={onSelect} />
 
       <div className="space-y-4">

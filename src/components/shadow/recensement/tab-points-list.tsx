@@ -295,7 +295,7 @@ export function TabPointsList({ focusCode }: { focusCode?: string | null }) {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>{p.cite ?? "Cité non renseignée"}</p>
-                              <p className="text-[11px] tabular-nums text-muted-foreground">{p.lat.toFixed(5)}, {p.lng.toFixed(5)}</p>
+                              <p className="text-[11px] tabular-nums text-muted-foreground">{p.lat.toFixed(5).replace(".", ",")}, {p.lng.toFixed(5).replace(".", ",")}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>

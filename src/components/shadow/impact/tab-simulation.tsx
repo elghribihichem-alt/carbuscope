@@ -111,7 +111,9 @@ export function TabSimulation({ stations, stationImpactTraffic }: { stations: Sh
         description="Que se passerait-il si le prix à la pompe baissait ? Modèle pédagogique d'élasticité du marché parallèle (aucune donnée réelle n'est modifiée)."
       />
 
-      <div className="grid items-start gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+      {/* grid-cols-1 explicite (= minmax(0,1fr)) : sans lui, la piste implicite
+          « auto » déborde à 390 px (max-content de la carte Paramètres). */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
         {/* Paramètres */}
         <Card className="lg:sticky lg:top-32">
           <CardHeader>

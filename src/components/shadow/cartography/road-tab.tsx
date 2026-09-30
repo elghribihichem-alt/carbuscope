@@ -337,7 +337,7 @@ function LinearAxisView({
           const r = Math.max(2.2, Math.min(4.2, Math.sqrt(pt.p.volumeLJ) / 12))
           return (
             <g key={pt.p.id} className="cursor-help">
-              <title>{`${pt.p.code} · ${typologyLabel(pt.p.typologyCode)} · ${formatLJ(pt.p.volumeLJ)} · ${formatTnd(pt.p.lossTnd)}/mois · à ${pt.distanceKm.toFixed(1)} km de l'axe (PK ${pt.alongKm.toFixed(0)})`}</title>
+              <title>{`${pt.p.code} · ${typologyLabel(pt.p.typologyCode)} · ${formatLJ(pt.p.volumeLJ)} · ${formatTnd(pt.p.lossTnd)}/mois · à ${pt.distanceKm.toFixed(1).replace(".", ",")} km de l'axe (PK ${Math.round(pt.alongKm)})`}</title>
               <line x1={x} y1={AXIS_Y} x2={x} y2={y} stroke={color} strokeWidth={0.7} opacity={0.5} />
               <circle cx={x} cy={y} r={r} fill={color} stroke="white" strokeWidth={0.7} opacity={0.95} />
             </g>

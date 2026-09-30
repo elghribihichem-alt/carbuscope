@@ -22,7 +22,8 @@ const KIND_LABELS: Record<string, string> = {
 const KIND_STYLES: Record<string, string> = {
   RECENSEMENT: "border-stone-300 bg-stone-100 text-stone-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300",
   RECHECK: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  VALIDATION: "border-[#2196F3]/40 bg-[#2196F3]/10 text-[#2196F3]",
+  // T53-T6a : bleu #2196F3 → prune (palette app, dark: conservé).
+  VALIDATION: "border-purple-300 bg-purple-50 text-purple-800 dark:border-purple-700 dark:bg-purple-950 dark:text-purple-300",
 }
 
 const STATUS_STYLES: Record<string, string> = {

@@ -360,7 +360,9 @@ export function SettingsTypologiesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+      {/* grid-cols-1 explicite (= minmax(0,1fr)) : sans lui, la piste implicite « auto »
+          peut prendre max-content et déborde à 390 px (pattern T53-T6a). */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         {/* Grille des typologies */}
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">

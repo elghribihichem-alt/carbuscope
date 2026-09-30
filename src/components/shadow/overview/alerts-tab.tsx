@@ -132,7 +132,7 @@ export function AlertsTab({ data, onNavigate }: { data: ShadowOverviewResponse; 
                         <button
                           type="button"
                           onClick={() => onNavigate("cartography")}
-                          className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-[#2196F3] transition-colors hover:bg-[#2196F3]/10"
+                          className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
                         >
                           Voir sur la carte
                           <ChevronRight className="h-3 w-3" aria-hidden />

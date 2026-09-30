@@ -47,7 +47,7 @@ export function NationalTab({ data }: { data: ShadowMapResponse }) {
             </div>
             <div className="flex items-center gap-2">
               {selGov && (
-                <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1.5 text-xs" onClick={resetFocus}>
+                <Button size="sm" variant="outline" className="h-11 shrink-0 gap-1.5 text-xs" onClick={resetFocus}>
                   <RotateCcw className="h-3.5 w-3.5" />
                   Vue nationale
                 </Button>

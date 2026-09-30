@@ -292,7 +292,7 @@ export function SettingsNotificationsTab() {
         <CardContent className="space-y-3 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-stone-900 dark:text-stone-50">
-              <FlaskConical className="h-4 w-4 text-[#2196F3]" aria-hidden />
+              <FlaskConical className="h-4 w-4 text-purple-600 dark:text-purple-400" aria-hidden />
               Tester la règle « nouveau point proche station »
             </h3>
             <Button onClick={() => void runSimulation()} disabled={simulating || !config.notifyActive} className="gap-1.5">

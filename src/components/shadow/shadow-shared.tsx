@@ -9,7 +9,11 @@
 //   orange #FF9800  menace modérée (5 000 – 20 000 DT)
 //   jaune  #FFC107  vigilance (< 5 000 DT)
 //   vert   #4CAF50  zone calme / aucun point
-//   bleu   #2196F3  information & navigation (usage parcimonieux)
+//   prune  #7C3AED  information & navigation (usage parcimonieux) — T53-T6a :
+//                   était #2196F3 (bleu), requalifié prune conformément à la
+//                   palette app (bleu/indigo interdits) ; clé `blue` conservée
+//                   pour la stabilité des signatures (aucun consommateur à
+//                   toucher).
 //   gris   #9E9E9E  inactif / non renseigné
 
 import * as React from "react"
@@ -28,7 +32,7 @@ export const SHADOW_COLORS = {
   orange: "#FF9800",
   yellow: "#FFC107",
   green: "#4CAF50",
-  blue: "#2196F3",
+  blue: "#7C3AED",
   gray: "#9E9E9E",
 } as const
 
@@ -181,7 +185,8 @@ const STATUS_STYLES: Record<string, string> = {
   VERIFIE: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
   VALIDE: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
   REJETE: "border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300",
-  DOUBLON: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
+  // T53-T6a : slate → zinc (harmonisation neutres, pattern T53-T4b/T5b).
+  DOUBLON: "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
 }
 
 const STATUS_DOT: Record<string, string> = {

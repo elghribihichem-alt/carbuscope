@@ -339,7 +339,9 @@ export function TabNewPoint({ onGoToList, onNavigate }: { onGoToList?: (code?: s
         </Card>
       ) : null}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      {/* grid-cols-1 explicite (= minmax(0,1fr)) : sans lui, la piste implicite « auto »
+          peut prendre max-content et déborde à 390 px (pattern T53-T6a). */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* ------------------------------ Formulaire ------------------------------ */}
         <div className="space-y-4">
           {/* GPS */}
@@ -418,7 +420,7 @@ export function TabNewPoint({ onGoToList, onNavigate }: { onGoToList?: (code?: s
                 ) : null}
                 {lat != null && lng != null ? (
                   <span className="rounded-full bg-stone-100 px-2 py-0.5 font-medium tabular-nums text-stone-700 dark:bg-stone-800 dark:text-stone-300">
-                    {lat.toFixed(5)}, {lng.toFixed(5)}
+                    {lat.toFixed(5).replace(".", ",")}, {lng.toFixed(5).replace(".", ",")}
                   </span>
                 ) : null}
                 {gpsError ? (
@@ -715,7 +717,7 @@ export function TabNewPoint({ onGoToList, onNavigate }: { onGoToList?: (code?: s
                   {gouvernorat || "—"}{delegation ? ` · ${delegation}` : ""}{cite ? ` · ${cite}` : ""}
                 </p>
                 <p className="tabular-nums text-muted-foreground">
-                  {lat != null && lng != null ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "coordonnées non renseignées"}
+                  {lat != null && lng != null ? `${lat.toFixed(5).replace(".", ",")}, ${lng.toFixed(5).replace(".", ",")}` : "coordonnées non renseignées"}
                 </p>
               </div>
             </div>

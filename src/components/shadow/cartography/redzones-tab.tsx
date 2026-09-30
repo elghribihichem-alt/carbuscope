@@ -101,7 +101,7 @@ export function RedzonesTab({ data }: { data: ShadowMapResponse }) {
                 </CardDescription>
               </div>
               {selectedZone && (
-                <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1.5 text-xs"
+                <Button size="sm" variant="outline" className="h-11 shrink-0 gap-1.5 text-xs"
                   onClick={() => { setSelected(null); setFocus(null) }}>
                   <RotateCcw className="h-3.5 w-3.5" />
                   Toutes les zones
@@ -180,7 +180,7 @@ export function RedzonesTab({ data }: { data: ShadowMapResponse }) {
               <Button
                 size="sm"
                 variant={sortKey === "points" ? "default" : "outline"}
-                className="h-8 gap-1.5 text-xs"
+                className="h-11 gap-1.5 text-xs"
                 onClick={() => toggleSort("points")}
                 aria-pressed={sortKey === "points"}
               >
@@ -190,7 +190,7 @@ export function RedzonesTab({ data }: { data: ShadowMapResponse }) {
               <Button
                 size="sm"
                 variant={sortKey === "lossTnd" ? "default" : "outline"}
-                className="h-8 gap-1.5 text-xs"
+                className="h-11 gap-1.5 text-xs"
                 onClick={() => toggleSort("lossTnd")}
                 aria-pressed={sortKey === "lossTnd"}
               >
