@@ -1,13 +1,16 @@
 'use client'
 
-// CarbuScope — T54-A2/B1 → B2 — Module 1 « Opportunity Radar » : coque du module
+// CarbuScope — T54-A2/B1 → B2/B3 — Module 1 « Opportunity Radar » : coque du module
 // (spec verrouillée T54-A0). 6 volets pilotés par nav.radar (?? "zones") via le
 // store — même contrat que la sidebar (groupe « Opportunity Radar », accent
 // ambre). Le volet « zones » fusionne l'ex-branche Implantation (radar-zones) ;
 // le volet « scoring » est le moteur 5 critères + Top 50 délégations + alertes
-// (T54-B2) ; les 3 derniers rendent une carte « Bientôt » honnête (B3). En tête
-// de module : bandeau discret des alertes de zone non acquittées (détection
-// idempotente /api/radar/alerts, acquittement session, toast au 1er chargement).
+// (T54-B2) ; les volets « formats » et « simulations » (T54-B3a) recommandent
+// les formats d'implantation et chiffrent la rentabilité (handoff léger
+// nav.radarSim = JSON { gouvernorat, format } entre les deux volets). Restent
+// en attente B3 : faisabilité et franchise. En tête de module : bandeau
+// discret des alertes de zone non acquittées (détection idempotente
+// /api/radar/alerts, acquittement session, toast au 1er chargement).
 
 import { useEffect, useRef, useState } from "react"
 import type * as React from "react"
@@ -21,6 +24,8 @@ import { useAppStore } from "@/store/app-store"
 import { ModuleSoonCard } from "@/components/shell/module-soon"
 import { RadarZones, RADAR_ZONE_TOOLS } from "./radar-zones"
 import { RadarScoring } from "./radar-scoring"
+import { RadarFormats } from "./radar-formats"
+import { RadarSimulations } from "./radar-simulations"
 import { RadarAlertsBanner, type ZoneAlertRow } from "./radar-alerts-banner"
 
 /** Les 6 volets du Radar (spec T54-A0 — n'ont pas vocation à changer). */
@@ -39,6 +44,11 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
   const { t } = useI18n()
   const setNav = useAppStore(s => s.setNav)
   const raw = useAppStore(s => s.nav.radar) ?? "zones"
+  // Handoff formats → simulations : JSON léger { gouvernorat, format } posé
+  // dans nav.radarSim par le bouton « Simuler ce format » (volet formats) et
+  // consommé à la MONTURE du volet simulations (Radix Tabs remonte le volet à
+  // chaque activation — l'état initial du calculateur est donc pré-rempli).
+  const simHandoff = useAppStore(s => s.nav.radarSim) ?? ""
 
   // ---- Alertes de zone (T54-B2) : passe de détection idempotente au montage
   // du module, bandeau discret + Sheet d'acquittement + toast au 1er
@@ -144,7 +154,7 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
               6 volets · zones blanches incluses
             </Badge>
             <Badge variant="secondary" className="text-[11px]">
-              Scoring B2 actif · B3 en préparation
+              Scoring B2 · formats &amp; simulations B3 actifs
             </Badge>
           </div>
         </CardContent>
@@ -178,20 +188,10 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
         <TabsContent value="scoring" className="mt-0 space-y-4">
           <RadarScoring alertCount={unackCount} />
         </TabsContent>
-        {/* Volets 3-6 — coques honnêtes en attente du round B3. */}
+        {/* Volet 3 — Formats recommandés (T54-B3a) : classement des 5 formats
+            réels par gouvernorat (adéquation + justifications + comparateur). */}
         <TabsContent value="formats" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={LayoutGrid}
-            accent="amber"
-            planned="B3"
-            title="Formats recommandés"
-            description="Le bon format de station pour chaque profil de zone détectée par le Radar."
-            bullets={[
-              "Formats par profil : station classique, compacte, auto 24-30, food store",
-              "Prescriptions indicatives par format (surface, services, flux)",
-              "Rattachement direct au palier d'équipement du gouvernorat",
-            ]}
-          />
+          <RadarFormats />
         </TabsContent>
         <TabsContent value="faisabilite" className="mt-0 space-y-4">
           <ModuleSoonCard
@@ -208,18 +208,7 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
           />
         </TabsContent>
         <TabsContent value="simulations" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={Calculator}
-            accent="amber"
-            planned="B3"
-            title="Simulations de rentabilité"
-            description="Le calculateur marge / volume pour chiffrer un projet avant d'engager les études."
-            bullets={[
-              "Calculateur de rentabilité : volumes, marges, point d'équilibre",
-              "Scénarios comparés et sensibilité aux hypothèses prix / trafic",
-              "Sauvegarde des scénarios dans vos calculs (SavedCalculation)",
-            ]}
-          />
+          <RadarSimulations prefill={simHandoff} />
         </TabsContent>
         <TabsContent value="franchise" className="mt-0 space-y-4">
           <ModuleSoonCard
