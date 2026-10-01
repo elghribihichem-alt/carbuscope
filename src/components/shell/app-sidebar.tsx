@@ -12,19 +12,19 @@ import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   LayoutDashboard, Map, Fuel, Banknote, Radar, Crosshair, Target, Calculator, Users, FileText,
-  Settings, Lock, MapPinPlus, Clock, GitCompareArrows, Swords, Star, Store, PlugZap, Footprints,
+  Settings, Lock, MapPinPlus, Star, Store, PlugZap, Footprints,
   ShieldCheck, ClipboardList, Eye, BarChart3, TriangleAlert, Trophy, CalendarDays, Globe, MapPin,
   Route, Plus, List, RefreshCw, CircleCheck, Camera, TrendingDown, Landmark, Scale, TrendingUp,
   SlidersHorizontal, Building2, CalendarRange, Share2, KeyRound, Ruler, Tags, Bell,
   FileSignature, Layers, Receipt, UsersRound, Bot, MapPinned, ScrollText, Database, TimerReset,
   UserCog, ShieldAlert, Tag, Gift, UserRound, GitCompare, LogIn, Home, ChevronRight,
   PanelLeftClose, PanelLeftOpen, Search, LineChart, Building, Smartphone, ClipboardCheck,
-  Crown, Ghost,
+  Crown, Ghost, Gauge, LayoutGrid, FileSearch, Handshake, Wrench, LocateFixed,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { useAppStore, TAB_ACCESS, SHADOW_MODULE_ROLES, PLATFORM_MODULE_ROLES, type Mode, type Tab } from "@/store/app-store"
+import { useAppStore, TAB_ACCESS, SHADOW_MODULE_ROLES, PLATFORM_MODULE_ROLES, RADAR_MODULE_ROLES, HUBS_MODULE_ROLES, type Mode, type Tab } from "@/store/app-store"
 import { useI18n, type DictKey } from "@/lib/i18n"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import { CALC_DEFS } from "@/components/calculators/calc-shared"
@@ -62,6 +62,10 @@ interface NavGroup {
   id: string
   label: string
   items: NavItem[]
+  /** T54 — module portail enseigne : icône + accent du groupe (optionnel,
+   *  les groupes historiques n'en portent pas — rendu strictement inchangé). */
+  icon?: IconType
+  accent?: "amber" | "terra"
 }
 
 interface MenuModel {
@@ -86,6 +90,9 @@ export const NAV_DEFAULTS: Record<string, string> = {
   superadmin: "overview",
   backoffice: "moderation",
   implantation: "zones",
+  // T54 — sous-navigation des 2 nouveaux modules du Portail enseigne.
+  radar: "zones",
+  hubs: "carte",
   calculators: "trafic",
   mobile: "map",
   agents: "agent-login",
@@ -204,6 +211,31 @@ function useMenu(mode: Mode): MenuModel {
       const pTab = (id: string, icon: IconType, label: string): NavItem =>
         leaf(id, icon, label, espace === "portail" && cur("portail") === id, () => { setNav("espace", "portail"); setNav("portail", id); closeMobile() })
 
+      // T54 — Module 1 « Opportunity Radar » (6 volets, absorbation officielle de
+      // l'ex-branche Implantation). Clic → portail/radar + sous-onglet nav.radar.
+      // Les outils terrain du volet « zones » (isochrones / comparateur /
+      // cannibalisation) sont portés par la même clé nav.radar : l'item « zones »
+      // reste actif tant qu'un outil du volet est ouvert.
+      const RADAR_ZONE_TOOL_IDS = new Set(["isochrones", "comparateur", "cannibalisation"])
+      const rItem = (id: string, icon: IconType, labelKey: DictKey): NavItem => {
+        const radarActive = espace === "portail" && cur("portail") === "radar"
+        const sub = cur("radar")
+        const inZoneVolet = id === "zones" && RADAR_ZONE_TOOL_IDS.has(sub)
+        return leaf(
+          id, icon, t(labelKey),
+          radarActive && (sub === id || inZoneVolet),
+          () => { setNav("espace", "portail"); setNav("portail", "radar"); setNav("radar", id); closeMobile() },
+        )
+      }
+
+      // T54 — Module 2 « Mobility Hub Operations » (5 volets).
+      const hItem = (id: string, icon: IconType, labelKey: DictKey): NavItem =>
+        leaf(
+          id, icon, t(labelKey),
+          espace === "portail" && cur("portail") === "hubs" && cur("hubs") === id,
+          () => { setNav("espace", "portail"); setNav("portail", "hubs"); setNav("hubs", id); closeMobile() },
+        )
+
       // G6 — sections Shadow Market (accordéons).
       const sBranch = (
         id: string, icon: IconType, label: string,
@@ -221,12 +253,10 @@ function useMenu(mode: Mode): MenuModel {
 
       const analyseItems: NavItem[] = [
         obsTab("competition", Crosshair, "rm.tabs.competition"),
-        obsBranch("implantation", Target, "rm.tabs.implantation", "implantation", [
-          { id: "zones", icon: MapPinPlus, label: t("sb.sub.implantation.zones") },
-          { id: "isochrones", icon: Clock, label: t("sb.sub.implantation.isochrones") },
-          { id: "comparateur", icon: GitCompareArrows, label: t("sb.sub.implantation.comparateur") },
-          { id: "cannibalisation", icon: Swords, label: t("sb.sub.implantation.cannibalisation") },
-        ]),
+        // T54-A2 : la branche « implantation » (G5) est ABSORBÉE par le module
+        // « Opportunity Radar » (arbitrage n°1 de T54-A0) — les 4 outils vivent
+        // désormais dans le volet « Zones blanches » du Radar. ImplantationTab
+        // reste fonctionnel en deep-link (observatoire), la sidebar n'y mène plus.
         obsBranch("calculators", Calculator, "rm.tabs.calculators", "calculators",
           CALC_DEFS.map(def => ({
             id: def.id,
@@ -262,6 +292,28 @@ function useMenu(mode: Mode): MenuModel {
             pTab("api", PlugZap, t("sb.espace.api")),
           ],
         },
+        // T54 — Modules « Opportunity Radar » (6 volets, accent ambre) et
+        // « Mobility Hub Operations » (5 volets, accent terracotta). Gating au
+        // niveau du groupe (pattern G6/G7 : rôles homogènes dans le module).
+        ...(RADAR_MODULE_ROLES.includes(role) ? [{
+          id: "f-radar", label: t("sb.radar.title"), icon: Radar, accent: "amber" as const, items: [
+            rItem("zones", MapPinPlus, "sb.radar.zones"),
+            rItem("scoring", Gauge, "sb.radar.scoring"),
+            rItem("formats", LayoutGrid, "sb.radar.formats"),
+            rItem("faisabilite", FileSearch, "sb.radar.faisabilite"),
+            rItem("simulations", Calculator, "sb.radar.simulations"),
+            rItem("franchise", Handshake, "sb.radar.franchise"),
+          ],
+        }] : []),
+        ...(HUBS_MODULE_ROLES.includes(role) ? [{
+          id: "f-hubs", label: t("sb.hubs.title"), icon: LocateFixed, accent: "terra" as const, items: [
+            hItem("carte", Map, "sb.hubs.carte"),
+            hItem("services", Wrench, "sb.hubs.services"),
+            hItem("clients", Users, "sb.hubs.clients"),
+            hItem("analytics", BarChart3, "sb.hubs.analytics"),
+            hItem("parametres", Settings, "sb.hubs.parametres"),
+          ],
+        }] : []),
         {
           id: "f-terrain", label: t("sb.groups.terrain"), items: [
             branch(
@@ -537,8 +589,18 @@ function SidebarGroups({
     <>
       {menu.groups.map(group => (
         <div key={group.id}>
-          <p className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--c-ink-ghost)]">
-            {group.label}
+          <p
+            className={cn(
+              "flex items-center gap-1.5 px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--c-ink-ghost)]",
+              // T54 — modules enseigne : petite icône d'accent sur le libellé
+              // (ambre pour le Radar, terracotta pour les TMP). Groupes
+              // historiques : aucun changement de rendu (icône absente).
+              group.accent === "amber" && "text-[var(--c-amber)]",
+              group.accent === "terra" && "text-[var(--c-terra)]",
+            )}
+          >
+            {group.icon && <group.icon className="h-3 w-3 shrink-0" aria-hidden />}
+            <span className="truncate">{group.label}</span>
           </p>
           <ul className="space-y-0.5">
             {group.items.map(item => (
@@ -601,8 +663,12 @@ export function AppSidebar({ mode }: { mode: Mode }) {
   const ModeIcon = menu.icon
 
   // Rail replié : aplatissement des groupes en pile d'icônes + séparateurs.
-  const flatItems = menu.groups.flatMap((g, gi) =>
-    g.items.map(item => ({ item, groupIndex: gi })))
+  // T54-A2B1 : clé React préfixée par l'id du groupe — les ids d'items se
+  // répètent d'un groupe à l'autre ("dashboard" G1/G3, "stations" G2/G3,
+  // "agents" G4/G7, "reports"/"settings" G6/G8…), ce qui levait 5 erreurs
+  // console « two children with the same key » au repliement (préexistant).
+  const flatItems = menu.groups.flatMap(g =>
+    g.items.map(item => ({ item, groupId: g.id })))
 
   const railSelect = (item: NavItem) => {
     if (item.locked) return
@@ -641,9 +707,9 @@ export function AppSidebar({ mode }: { mode: Mode }) {
             </div>
             <TooltipProvider delayDuration={150}>
               <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto px-2 py-2 scroll-coffee">
-                {flatItems.map(({ item, groupIndex }, i) => (
-                  <React.Fragment key={item.id}>
-                    {i > 0 && flatItems[i - 1].groupIndex !== groupIndex && (
+                {flatItems.map(({ item, groupId }, i) => (
+                  <React.Fragment key={`${groupId}:${item.id}`}>
+                    {i > 0 && flatItems[i - 1].groupId !== groupId && (
                       <span className="my-1 h-px w-8 shrink-0 bg-[var(--c-line)]" aria-hidden />
                     )}
                     <Tooltip>

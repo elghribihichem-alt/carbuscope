@@ -551,6 +551,26 @@ export const fr = {
   "sb.sa.carto": "Cartographie",
   "sb.sa.audit": "Journal d'audit",
 
+  // T54-A2 — Module 1 « Opportunity Radar » (Portail enseigne).
+  // Absorbe officiellement l'ex-branche « Implantation » (fusion validée T54-A0).
+  "sb.radar.title": "Opportunity Radar",
+  "sb.radar.desc": "Détecter et arbitrer les opportunités d'implantation : zones blanches, scoring pondéré, formats de station, études de faisabilité, simulations de rentabilité et franchise — sur les données réelles du réseau tunisien.",
+  "sb.radar.zones": "Zones blanches",
+  "sb.radar.scoring": "Scoring d'opportunités",
+  "sb.radar.formats": "Formats recommandés",
+  "sb.radar.faisabilite": "Études de faisabilité",
+  "sb.radar.simulations": "Simulations de rentabilité",
+  "sb.radar.franchise": "Franchise",
+
+  // T54-A2 — Module 2 « Mobility Hub Operations » (Portail enseigne).
+  "sb.hubs.title": "Mobility Hub Operations",
+  "sb.hubs.desc": "Piloter les Terminaux Multi-Services (TMP) : carte des hubs, gestion des services, base clients véhicules, analytics de conversion et paramètres d'exploitation.",
+  "sb.hubs.carte": "Carte des TMP",
+  "sb.hubs.services": "Gestion des services",
+  "sb.hubs.clients": "Base clients TMP",
+  "sb.hubs.analytics": "Analytics & conversions",
+  "sb.hubs.parametres": "Paramètres TMP",
+
   // Aperçu mobile B2C — items de navigation.
   "sb.mobile.map": "Carte",
   "sb.mobile.search": "Recherche",

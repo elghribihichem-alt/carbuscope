@@ -17,6 +17,8 @@ import { PortalApi } from "./portal-api"
 import { PortalReviews } from "./portal-reviews"
 import { PortalTerrain } from "./portal-terrain"
 import { NotificationsCenter } from "./notifications-center"
+import { RadarModule } from "@/components/radar/radar-module"
+import { HubModule } from "@/components/hubs/hub-module"
 
 export function PortalView() {
   const brandSlug = useAppStore(s => s.brandSlug)
@@ -107,6 +109,14 @@ export function PortalView() {
         <TabsContent value="api" className="mt-0 space-y-4">
           <PortalPromotions brandName={brandName} />
           <PortalApi brandName={brandName} />
+        </TabsContent>
+        {/* T54-A2 — modules « Opportunity Radar » et « Mobility Hub Operations »
+            (groupes dédiés de la sidebar ; sous-navigation via nav.radar / nav.hubs). */}
+        <TabsContent value="radar" className="mt-0 space-y-4">
+          <RadarModule brandSlug={brandSlug} />
+        </TabsContent>
+        <TabsContent value="hubs" className="mt-0 space-y-4">
+          <HubModule />
         </TabsContent>
       </Tabs>
     </div>

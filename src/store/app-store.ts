@@ -63,6 +63,13 @@ export const PLATFORM_MODULE_ROLES: Role[] = ["ADMIN", "DG"]
 /** T50 — rôles autorisés sur le groupe « Shadow Market » (G6). */
 export const SHADOW_MODULE_ROLES: Role[] = ["ADMIN", "COMMERCIAL", "DG"]
 
+/** T54 — rôles autorisés sur le module « Opportunity Radar » (Portail enseigne).
+ * Même périmètre que l'onglet historique « implantation » qu'il absorbe. */
+export const RADAR_MODULE_ROLES: Role[] = ["ADMIN", "EXPANSION", "COMMERCIAL", "DG"]
+
+/** T54 — rôles autorisés sur le module « Mobility Hub Operations » (Portail enseigne). */
+export const HUBS_MODULE_ROLES: Role[] = ["ADMIN", "NETWORK", "COMMERCIAL", "DG"]
+
 /** T50 — convertit un mode historique (localStorage / deep-link) vers les
  * 3 espaces produit. Observatoire, portail, shadow, back-office et agents
  * fusionnent dans l'espace enseigne ; mobile et superadmin subsistent. */
