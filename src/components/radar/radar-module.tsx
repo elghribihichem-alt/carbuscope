@@ -1,14 +1,18 @@
 'use client'
 
-// CarbuScope — T54-A2/B1 — Module 1 « Opportunity Radar » : coque du module
+// CarbuScope — T54-A2/B1 → B2 — Module 1 « Opportunity Radar » : coque du module
 // (spec verrouillée T54-A0). 6 volets pilotés par nav.radar (?? "zones") via le
 // store — même contrat que la sidebar (groupe « Opportunity Radar », accent
-// ambre). Le volet « zones » fusionne l'ex-branche Implantation (voir
-// radar-zones.tsx) ; les 5 autres rendent ce round une carte « Bientôt » honnête
-// (contenu B2/B3) — aucune fausse donnée.
+// ambre). Le volet « zones » fusionne l'ex-branche Implantation (radar-zones) ;
+// le volet « scoring » est le moteur 5 critères + Top 50 délégations + alertes
+// (T54-B2) ; les 3 derniers rendent une carte « Bientôt » honnête (B3). En tête
+// de module : bandeau discret des alertes de zone non acquittées (détection
+// idempotente /api/radar/alerts, acquittement session, toast au 1er chargement).
 
+import { useEffect, useRef, useState } from "react"
 import type * as React from "react"
 import { Calculator, FileSearch, Gauge, Handshake, LayoutGrid, MapPinPlus, Radar } from "lucide-react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -16,6 +20,8 @@ import { useI18n, type DictKey } from "@/lib/i18n"
 import { useAppStore } from "@/store/app-store"
 import { ModuleSoonCard } from "@/components/shell/module-soon"
 import { RadarZones, RADAR_ZONE_TOOLS } from "./radar-zones"
+import { RadarScoring } from "./radar-scoring"
+import { RadarAlertsBanner, type ZoneAlertRow } from "./radar-alerts-banner"
 
 /** Les 6 volets du Radar (spec T54-A0 — n'ont pas vocation à changer). */
 const RADAR_SUBTABS: ReadonlyArray<{ id: string; icon: React.ComponentType<{ className?: string }>; labelKey: DictKey }> = [
@@ -33,6 +39,71 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
   const { t } = useI18n()
   const setNav = useAppStore(s => s.setNav)
   const raw = useAppStore(s => s.nav.radar) ?? "zones"
+
+  // ---- Alertes de zone (T54-B2) : passe de détection idempotente au montage
+  // du module, bandeau discret + Sheet d'acquittement + toast au 1er
+  // chargement si des alertes sont actives. setState uniquement dans les
+  // callbacks asynchrones (pattern radar-zones). ----
+  const [alerts, setAlerts] = useState<ZoneAlertRow[] | null>(null)
+  const [alertsLoading, setAlertsLoading] = useState(true)
+  const firstLoad = useRef(true)
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    fetch("/api/radar/alerts", { signal: ctrl.signal })
+      .then(async r => {
+        if (!r.ok) throw new Error(`/api/radar/alerts → ${r.status}`)
+        return (await r.json()) as { alerts: ZoneAlertRow[]; newCount: number }
+      })
+      .then(d => {
+        setAlerts(d.alerts)
+        setAlertsLoading(false)
+        if (firstLoad.current) {
+          firstLoad.current = false
+          const unack = d.alerts.filter(a => !a.acknowledged).length
+          const actives = d.newCount > 0 ? d.newCount : unack
+          if (actives > 0) {
+            toast(`Radar : ${actives} alerte${actives > 1 ? "s" : ""} de zone active${actives > 1 ? "s" : ""}`, {
+              description: "Opportunités fortes, zones blanches à fort potentiel ou signaux fonciers à examiner.",
+            })
+          }
+        }
+      })
+      .catch((e: unknown) => {
+        if (e instanceof Error && e.name === "AbortError") return
+        setAlertsLoading(false)
+      })
+    return () => ctrl.abort()
+  }, [])
+
+  /** Acquitte / désacquitte une alerte (PATCH session) — retourne le succès. */
+  const acknowledge = async (id: string, acknowledged: boolean): Promise<boolean> => {
+    try {
+      const r = await fetch("/api/radar/alerts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, acknowledged }),
+      })
+      const body = (await r.json().catch(() => ({}))) as { alert?: ZoneAlertRow; error?: string }
+      if (!r.ok || !body.alert) {
+        toast.error(body.error ?? "Acquittement impossible — réessayez.")
+        return false
+      }
+      const maj = body.alert
+      setAlerts(prev => (prev ? prev.map(a => (a.id === id ? { ...a, ...maj } : a)) : prev))
+      if (acknowledged) {
+        toast.success("Alerte acquittée", { description: maj.message })
+      } else {
+        toast.info("Acquittement annulé", { description: `L'alerte ${maj.gouvernorat} redevient active.` })
+      }
+      return true
+    } catch {
+      toast.error("Acquittement impossible — vérifiez votre connexion.")
+      return false
+    }
+  }
+
+  const unackCount = alerts?.filter(a => !a.acknowledged).length ?? null
 
   // nav.radar peut porter un id de volet (6) OU un id d'outil terrain du volet
   // « zones » (isochrones / comparateur / cannibalisation) : dans ce cas le
@@ -73,11 +144,14 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
               6 volets · zones blanches incluses
             </Badge>
             <Badge variant="secondary" className="text-[11px]">
-              Roadmap B2 → B3
+              Scoring B2 actif · B3 en préparation
             </Badge>
           </div>
         </CardContent>
       </Card>
+
+      {/* ---- Bandeau discret des alertes de zone (T54-B2, tous volets) ---- */}
+      <RadarAlertsBanner alerts={alerts} loading={alertsLoading} onAcknowledge={acknowledge} />
 
       {/* ---- 6 sous-onglets (pilotés par nav.radar, synchronisés sidebar) ---- */}
       <Tabs value={mainTab} onValueChange={v => setNav("radar", v)} className="space-y-4">
@@ -99,22 +173,12 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
           <RadarZones brandSlug={brandSlug} />
         </TabsContent>
 
-        {/* Volets 2-6 — coques honnêtes en attente des rounds B2/B3. */}
+        {/* Volet 2 — Scoring d'opportunités (T54-B2) : moteur 5 critères,
+            Top 50 délégations, simulation de poids locale. */}
         <TabsContent value="scoring" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={Gauge}
-            accent="amber"
-            planned="B2"
-            title="Scoring d'opportunités"
-            description="Le classement pondéré des 24 gouvernorats par potentiel d'implantation, prêt à arbitrer vos décisions réseau."
-            bullets={[
-              "Score à 5 critères : parc véhicules, pouvoir d'achat, trafic, concurrence, foncier",
-              "Top 50 des opportunités avec filtres et drill-down par délégation",
-              "Pouvoir d'achat et foncier en estimation (badge « est. »), éditables par la Super Admin",
-              "Poids des critères pilotés par OpportunityConfig (30 / 20 / 25 / 15 / 10)",
-            ]}
-          />
+          <RadarScoring alertCount={unackCount} />
         </TabsContent>
+        {/* Volets 3-6 — coques honnêtes en attente du round B3. */}
         <TabsContent value="formats" className="mt-0 space-y-4">
           <ModuleSoonCard
             icon={LayoutGrid}

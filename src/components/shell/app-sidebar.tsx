@@ -423,6 +423,7 @@ function useMenu(mode: Mode): MenuModel {
             saItem("invoices", Receipt, t("sb.sa.invoices")),
             saItem("users", UsersRound, t("sb.sa.users")),
             saItem("demo", BarChart3, t("sb.sa.demo")),
+            saItem("radar", Radar, t("sb.sa.radar")),
             saItem("ai", Bot, t("sb.sa.ai")),
             saItem("carto", MapPinned, t("sb.sa.carto")),
             saItem("audit", ScrollText, t("sb.sa.audit")),

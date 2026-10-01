@@ -19,6 +19,7 @@ import { SaDemographie } from "./sa-demographie"
 import { SaAiAgent } from "./sa-ai-agent"
 import { SaCarto } from "./sa-carto"
 import { SaAudit } from "./sa-audit"
+import { SaRadar } from "./sa-radar"
 
 export function SuperAdminView() {
   const userId = useAppStore(s => s.userId)
@@ -86,6 +87,11 @@ export function SuperAdminView() {
         </TabsContent>
         <TabsContent value="demo" className="mt-0 space-y-4">
           <SaDemographie />
+        </TabsContent>
+        {/* T54-B2 — volet « Opportunity Radar » : poids du moteur de scoring,
+            seuils et éditeurs d'indicateurs (pouvoir d'achat / foncier). */}
+        <TabsContent value="radar" className="mt-0 space-y-4">
+          <SaRadar />
         </TabsContent>
         <TabsContent value="ai" className="mt-0 space-y-4">
           <SaAiAgent />
