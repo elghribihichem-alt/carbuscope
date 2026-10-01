@@ -1,10 +1,16 @@
 'use client'
 
-// CarbuScope — T54-A2 — Module 2 « Mobility Hub Operations » : coque du module
-// (spec verrouillée T54-A0). 5 volets pilotés par nav.hubs (?? "carte") via le
-// store — même contrat que la sidebar (groupe « Mobility Hub Operations »,
-// accent terracotta). Ce round : coque + cartes « Bientôt » honnêtes (contenu
-// C1-C3), aucune fausse donnée.
+// CarbuScope — T54-A2 → T54-Ca (volets 1-3/5) — Module 2 « Mobility Hub
+// Operations » : coque du module (spec verrouillée T54-A0). 5 volets pilotés
+// par nav.hubs (?? "carte") via le store — même contrat que la sidebar
+// (groupe « Mobility Hub Operations », accent terracotta).
+// Volets RÉELS depuis T54-Ca : « Carte des TMP » (Leaflet + filtres + Sheet
+// détail + handoffs), « Gestion des services » (CRUD + transitions + clôture
+// définitive) et « Base clients TMP » (recherche/pagination/segment/
+// historique/export CSV). Handoff inter-volets : nav.hubsSel = hubId posé par
+// la carte (boutons du Sheet détail) et consommé à la MONTURE des volets
+// services/clients (pattern nav.radarSim de B3a — Radix Tabs remonte le volet
+// à chaque activation). Volets 4-5 : cartes « Bientôt » honnêtes (C1/C3).
 
 import type * as React from "react"
 import { BarChart3, LocateFixed, Map, Settings, Users, Wrench } from "lucide-react"
@@ -14,6 +20,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n, type DictKey } from "@/lib/i18n"
 import { useAppStore } from "@/store/app-store"
 import { ModuleSoonCard } from "@/components/shell/module-soon"
+import { HubCarte } from "./hub-carte"
+import { HubServices } from "./hub-services"
+import { HubClients } from "./hub-clients"
 
 /** Les 5 volets du module TMP (spec T54-A0). */
 const HUB_SUBTABS: ReadonlyArray<{ id: string; icon: React.ComponentType<{ className?: string }>; labelKey: DictKey }> = [
@@ -31,6 +40,10 @@ export function HubModule() {
   const setNav = useAppStore(s => s.setNav)
   const raw = useAppStore(s => s.nav.hubs) ?? "carte"
   const tab = HUB_IDS.has(raw) ? raw : "carte"
+  // Handoff carte → services/clients : hub présélectionné posé dans nav.hubsSel
+  // (boutons « Gérer les services » / « Base clients » du Sheet détail) et
+  // consommé à la monture des volets concernés.
+  const hubsSel = useAppStore(s => s.nav.hubsSel) ?? ""
 
   return (
     <div className="min-w-0 space-y-4">
@@ -65,7 +78,7 @@ export function HubModule() {
               5 volets · Terminaux Multi-Services
             </Badge>
             <Badge variant="secondary" className="text-[11px]">
-              Roadmap C1 → C3
+              Carte · Services · Clients actifs
             </Badge>
           </div>
         </CardContent>
@@ -86,52 +99,22 @@ export function HubModule() {
           ))}
         </TabsList>
 
-        {/* Volet 1 — Carte des TMP (round C1). */}
+        {/* Volet 1 — Carte des TMP (T54-Ca) : Leaflet réelle + filtres +
+            Sheet détail + handoffs vers services/clients. */}
         <TabsContent value="carte" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={Map}
-            accent="terra"
-            planned="C1"
-            title="Carte des TMP"
-            description="La carte stylisée du réseau des Terminaux Multi-Services et de leur environnement routier."
-            bullets={[
-              "Mini-carte stylisée des hubs (SVG, pas de 3D — arbitrage T54-A0)",
-              "Statuts des sites : actifs, en construction, planifiés",
-              "Trafic quotidien et gouvernorat de rattachement par hub",
-            ]}
-          />
+          <HubCarte />
         </TabsContent>
 
-        {/* Volet 2 — Gestion des services (round C2). */}
+        {/* Volet 2 — Gestion des services (T54-Ca) : CRUD complet,
+            pause/reprise libres, clôture définitive AlertDialog. */}
         <TabsContent value="services" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={Wrench}
-            accent="terra"
-            planned="C2"
-            title="Gestion des services"
-            description="Le paramétrage opérationnel des services proposés dans chaque Terminal Multi-Services."
-            bullets={[
-              "CRUD des services par hub : lavage, vidange, pneus, recharge, boutique…",
-              "Tarifs et statuts par service (actif, en pause)",
-              "Tableau imbriqué hub → services, cohérent avec la charte des listes",
-            ]}
-          />
+          <HubServices preselect={hubsSel} />
         </TabsContent>
 
-        {/* Volet 3 — Base clients TMP (round C2). */}
+        {/* Volet 3 — Base clients TMP (T54-Ca) : recherche/pagination,
+            segment éditable, historique, export CSV. */}
         <TabsContent value="clients" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={Users}
-            accent="terra"
-            planned="C2"
-            title="Base clients TMP"
-            description="La clientèle véhicules des hubs : parcs, segments de fidélité et historique de visites."
-            bullets={[
-              "Fiches véhicules : plaque, segment (fidèle / régulier / nouveau), motorisation",
-              "Historique des interventions et visites par véhicule",
-              "Recherche par plaque, segment et hub de rattachement",
-            ]}
-          />
+          <HubClients preselect={hubsSel} />
         </TabsContent>
 
         {/* Volet 4 — Analytics & conversions (round C3). */}
