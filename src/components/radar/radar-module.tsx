@@ -1,16 +1,19 @@
 'use client'
 
-// CarbuScope — T54-A2/B1 → B2/B3 — Module 1 « Opportunity Radar » : coque du module
-// (spec verrouillée T54-A0). 6 volets pilotés par nav.radar (?? "zones") via le
-// store — même contrat que la sidebar (groupe « Opportunity Radar », accent
-// ambre). Le volet « zones » fusionne l'ex-branche Implantation (radar-zones) ;
-// le volet « scoring » est le moteur 5 critères + Top 50 délégations + alertes
-// (T54-B2) ; les volets « formats » et « simulations » (T54-B3a) recommandent
-// les formats d'implantation et chiffrent la rentabilité (handoff léger
-// nav.radarSim = JSON { gouvernorat, format } entre les deux volets). Restent
-// en attente B3 : faisabilité et franchise. En tête de module : bandeau
-// discret des alertes de zone non acquittées (détection idempotente
-// /api/radar/alerts, acquittement session, toast au 1er chargement).
+// CarbuScope — T54-A2/B1 → B2/B3 → B3b (TERMINÉ) — Module 1 « Opportunity
+// Radar » : coque du module (spec verrouillée T54-A0). 6 volets pilotés par
+// nav.radar (?? "zones") via le store — même contrat que la sidebar (groupe
+// « Opportunity Radar », accent ambre). Le volet « zones » fusionne l'ex-
+// branche Implantation (radar-zones) ; le volet « scoring » est le moteur
+// 5 critères + Top 50 délégations + alertes (T54-B2) ; les volets « formats »
+// et « simulations » (T54-B3a) recommandent les formats d'implantation et
+// chiffrent la rentabilité (handoff léger nav.radarSim = JSON
+// { gouvernorat, format } entre les deux volets) ; les volets « faisabilité »
+// et « franchise » (T54-B3b) closent le module : étude 4 axes + SVG +
+// checklist terrain + export PDF, et pipeline candidatures / kit / contrats.
+// MODULE 1 COMPLET : 6/6 volets réels. En tête de module : bandeau discret
+// des alertes de zone non acquittées (détection idempotente /api/radar/alerts,
+// acquittement session, toast au 1er chargement).
 
 import { useEffect, useRef, useState } from "react"
 import type * as React from "react"
@@ -21,11 +24,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n, type DictKey } from "@/lib/i18n"
 import { useAppStore } from "@/store/app-store"
-import { ModuleSoonCard } from "@/components/shell/module-soon"
 import { RadarZones, RADAR_ZONE_TOOLS } from "./radar-zones"
 import { RadarScoring } from "./radar-scoring"
 import { RadarFormats } from "./radar-formats"
 import { RadarSimulations } from "./radar-simulations"
+import { RadarFaisabilite } from "./radar-faisabilite"
+import { RadarFranchise } from "./radar-franchise"
 import { RadarAlertsBanner, type ZoneAlertRow } from "./radar-alerts-banner"
 
 /** Les 6 volets du Radar (spec T54-A0 — n'ont pas vocation à changer). */
@@ -154,7 +158,7 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
               6 volets · zones blanches incluses
             </Badge>
             <Badge variant="secondary" className="text-[11px]">
-              Scoring B2 · formats &amp; simulations B3 actifs
+              Module complet · B2 + B3 actifs
             </Badge>
           </div>
         </CardContent>
@@ -194,35 +198,13 @@ export function RadarModule({ brandSlug }: { brandSlug: string }) {
           <RadarFormats />
         </TabsContent>
         <TabsContent value="faisabilite" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={FileSearch}
-            accent="amber"
-            planned="B3"
-            title="Études de faisabilité"
-            description="Le dossier de faisabilité d'un site retenu, de la checklist terrain à l'export."
-            bullets={[
-              "Checklist terrain complète : accès, raccordements, autorisations",
-              "Cartes d'études en SVG stylisé (pas de 3D, arbitrage T54-A0)",
-              "Export PDF sur template V1 (génération IA prévue en V2)",
-            ]}
-          />
+          <RadarFaisabilite />
         </TabsContent>
         <TabsContent value="simulations" className="mt-0 space-y-4">
           <RadarSimulations prefill={simHandoff} />
         </TabsContent>
         <TabsContent value="franchise" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={Handshake}
-            accent="amber"
-            planned="B3"
-            title="Franchise"
-            description="Le développement par candidats franchisés, suivi de bout en bout depuis le portail enseigne."
-            bullets={[
-              "Candidatures internes : pipeline de suivi (saisie publique prévue en V2)",
-              "Kit franchise : pièces juridiques, financières, techniques et formation",
-              "Contrats : droits d'entrée, royalties, statuts et échéances",
-            ]}
-          />
+          <RadarFranchise brandSlug={brandSlug} />
         </TabsContent>
       </Tabs>
     </div>

@@ -142,7 +142,9 @@ export const REGION_LABELS: Record<RegionKey, string> = {
   SUD: "Sud",
 }
 
-const GOV_REGION: Record<string, RegionKey> = {
+// T54-B3b : exporté additivement pour la validation serveur des gouvernorats
+// (routes /api/franchise/*) — aucune autre modification du moteur.
+export const GOV_REGION: Record<string, RegionKey> = {
   Tunis: "GRAND_TUNIS",
   Ariana: "GRAND_TUNIS",
   "Ben Arous": "GRAND_TUNIS",
