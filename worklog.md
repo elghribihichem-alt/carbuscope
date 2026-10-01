@@ -1660,3 +1660,72 @@ Stage Summary:
 - **GEL SOUPLE ACTIVÉ SUR L'ESPACE TENANT** : correctifs critiques + micro-ajustements autorisés uniquement, sans casser code ni design.
 - Décisions restantes pour l'utilisateur : purge des fichiers morts SA (verdicts de minage T52) ; traduction éventuelle des clés sb.* (en/ar/…) — aujourd'hui FR par convention ; bug /api/relances (kpis national vs liste brand-scoped) ; 3 simulations back-office honnêtes (contestations, injection souveraine, campagne agents) attendant des routes dédiées ; hash sans section au reload (préexistant, sans impact) ; warnings Radix DialogDescription app-wide.
 - Prochaine étape possible : passage Mobile B2C approfondi (écrans B2C complets) ou cycle de votre choix — les deux espaces majeurs (Super Admin + Tenant) sont désormais gelés.
+
+---
+Task ID: T54-A0 (plan canonique des 2 nouveaux modules — référence OBLIGATOIRE pour tous les agents T54+)
+Agent: orchestrateur principal
+Task: Intégrer Module 1 « Opportunity Radar » (6 sous-modules) + Module 2 « Mobility Hub Operations » (5 sous-modules) dans le Portail enseigne + gestion Super Admin console + analytics. État vérifié : dernier commit = f260b72 (T53-T7, gel souple SA+Tenant). Les rounds A1/A2/B1 n'ont PAS encore été exécutés (planifiés seulement). 43 modèles Prisma, pas encore de nouveaux modèles.
+
+CONTEXTE VERIFIÉ (ne pas re-vérifier, sauf besoin ponctuel) :
+- Sidebar portail : 8 groupes (G1 pilotage, G2 observatoire, G3 portail enseigne, G4 veille terrain, G5 branche « implantation » via obsBranch("implantation", Target, "rm.tabs.implantation", "implantation", [zones/isochrones/comparateur/cannibalisation]), G6 Shadow, G7 analyse, G8 back-office). Fichier : src/components/shell/app-sidebar.tsx (763 lignes).
+- Portal-view : 5 TabsContent (dashboard/reviews/stations/terrain/api) dans src/components/portal/portal-view.tsx. Onglet contrôlé par store useAppStore nav.portail.
+- Composants implantation existants : src/components/implantation/{implantation-tab, zones-blanches, isochrones, comparateur-gouvernorats, cannibalisation, implantation-shared}.tsx — rendus via src/components/fused/brand-space-view.tsx et dashboard-tab. implantation-shared.tsx contient computeGovStats (ANCIEN scoring : ratio 50 + pop 30 + motor 20), GovStat, MARKET_PALIERS.
+- TAB_ACCESS (src/store/app-store.ts) : implantation: [ADMIN, EXPANSION, COMMERCIAL, DG].
+- Assets data : RoadAxis (tmj = trafic réel + heavyVehiclePct + segments GeoJSON Json), GovernoratStat (24 gov., INS 2024, population/vehicles/motorizationRate/avgFleetAge/delegationCount + champs démographie), DemographicDelegation (277 délégations, 5 catégories véhicules), DemographicCite, InfraProject, SaasPlan.features (Json), DemographicAccess, AiTask, SavedCalculation, Station (concurrence réelle par gouvernorat via adresses).
+
+SPEC VERROUILLEE (arbitrages utilisateur APPROUVÉS — ne pas renégocier) :
+1) Fusion : le Radar ABSORBE la branche « Implantation » (les 4 pages existantes zones-blanches/isochrones/comparateur/cannibalisation deviennent sources ou sous-panneaux du Radar — zéro duplication, zéro casse : les composants existants restent utilisables).
+2) Granularité V1 = 24 gouvernorats + drill-down délégations.
+3) Pouvoir d'achat & foncier = V1 estimation dérivée (badge « est. ») + éditeur SA.
+4) Gating = modules intégrés par défaut (pas de kill-switch par statut en V1).
+5) Cartes d'études = SVG stylisé (PAS de 3D).
+6) PDF = templates V1 (génération IA = V2, ne PAS implémenter).
+7) Franchise = saisie interne enseigne V1 (formulaire public = V2).
+8) Seed TMP : ~8 hubs, ~500 interventions, ~350 véhicules.
+
+MOTEUR DE SCORING (cœur B2) — 5 critères, poids SA-configurables :
+parc véhicules 30 / pouvoir d'achat 20 / trafic 25 / concurrence 15 / foncier 10 (somme 100). Config stockée dans OpportunityConfig (singleton row id "default"). Remplace l'ancien ratio 50+pop 30+motor 20 dans les VUES Radar (ne pas casser les usages existants de computeGovStats ailleurs).
+
+NOUVEAUX MODÈLES PRISMA (~12) : OpportunityConfig (poids+seuils, singleton), LandIndicator (foncier par gouvernorat, est. + éditeur SA), PurchasingPower (pouvoir d'achat par gouvernorat, est. + éditeur SA), ZoneAlert (seuils zones blanches + notifications), FranchiseCandidate, FranchiseKitItem, FranchiseContract, MobilityHub (TMP), HubService, HubIntervention, HubVehicle, HubConversion. API STRICTEMENT ADDITIVE : /api/radar/*, /api/franchise/*, /api/hubs/*. Ne JAMAIS modifier une route existante (gel T52/T53).
+
+MODULE 1 « Opportunity Radar » — 6 sous-modules (Portail enseigne) :
+a) Zones Blanches (fusion branche implantation), b) Scoring d'Opportunités (Top 50, filtres, drill-down délégations, badge « est. »), c) Formats Recommandés (station classique/compacte/auto 24-30/food store… par profil de zone), d) Études de Faisabilité (SVG stylisé, checklist terrain, export PDF template V1), e) Simulations de Rentabilité (calculateur marge/volume, scénarios, sauvegarde SavedCalculation), f) Franchise (candidatures internes V1, kit franchise, contrats).
+MODULE 2 « Mobility Hub Operations » — 5 sous-modules :
+a) Carte des TMP (mini map stylisée des hubs), b) Gestion des Services (CRUD services par hub, nested table), c) Base Clients TMP (clients véhicules, nested table), d) Analytics & Conversions (funnel capteurs → conversions → Radar, graphiques thémés), e) Paramètres TMP (config hub, horaires, tarifs).
+
+RULES PERMANENTES (règle n°0 : ne jamais les violer) :
+1. Ne pas casser un code qui marche. 2. Ne pas casser un design qui marche. 3. Qualité avant rapidité. 4. Perfectionnement (styles de plus en plus détaillés, FR impeccable, dark mode, 390 px sans overflow, cibles tactiles ≥ 44 px). 5. Utiliser les composants shadcn (drawer/sheet, toasts via sonner, modal/dialog, tabs, nested tables, mini map) — pas de réimplémentation.
+PALETTE : émeraude (primaire) / ambre (accent) / terracotta (alerte) — INTERDIT bleu/indigo (#2196F3, indigo-*, blue-*). Slate→zinc si neutral. Chiffres FR (espace fine, virgule décimale). UI 100 % française.
+
+DISCIPLINE EXECUTION :
+- Worklog = append-only. Chaque round : lire worklog, travailler, append entrée Task ID, git commit (message FR détaillé).
+- 4 Go RAM : pkill navigateurs AVANT agent-browser ; une seule session ; PAS de lint/tsc pendant navigateur ouvert ; jamais `bun run build` ; ne pas tuer le dev server (vérifier curl localhost:3000 d'abord) ; activité utilisateur réelle (IP 21.0.0.1) jamais rollback.
+- Seeds via script Node dédié (pattern prisma/seed*.ts existant à suivre), en upsert idempotent.
+- QA E2E agent-browser : 0 erreur console, dark, 390, captures qa-t54-*.
+
+ROADMAP : A1 socle (modèles+push+seeds) → A2 coque (sidebar+shells+gating+i18n) → B1 zones blanches fusion → B2 scoring+Top50+alertes+éditeur poids SA → B3 formats+faisabilité+simulations+franchise → C1 carte TMP+paramètres → C2 services+clients → C3 analytics+conversions → D validation groupée+gel+worklog final. L'utilisateur a demandé l'exécution continue jusqu'à TERMINAISON des modules (« continuez à exécuter l'essentiel terminez les modules »).
+
+Stage Summary:
+- Entrée canonique créée : état vérifié (T53-T7 = dernier commit), 8 arbitrages, moteur 5 critères, ~12 modèles, 2 specs modules, 5 règles, discipline. Point de départ réel = A1 (rien n'existe encore côté nouveaux modèles).
+
+---
+Task ID: T54-A1 (socle données des 2 nouveaux modules — Opportunity Radar + Mobility Hub Operations)
+Agent: full-stack-developer (round A1, ZÉRO UI)
+Task: Ajouter les 12 modèles Prisma du plan canonique T54-A0 (OpportunityConfig, PurchasingPower, LandIndicator, ZoneAlert, FranchiseCandidate, FranchiseKitItem, FranchiseContract, MobilityHub, HubService, HubIntervention, HubVehicle, HubConversion), pousser le schéma (db:push) et seeder des données réalistes Tunisie (24 gouvernorats, kit franchise, candidatures/contrats, hubs TMP + véhicules/interventions/conversions). Strictement additif : aucun modèle, route ou composant existant modifié.
+
+Work Log:
+- Lecture du plan canonique T54-A0 (worklog 1665-1709) + conventions globales respectées (palette, discipline, append-only, FR).
+- État de départ vérifié : dev server vivant (curl /api/brands → 200), dernier commit f260b72 (T53-T7), entrée T54-A0 présente mais non commitée (incluse dans le présent commit).
+- prisma/schema.prisma : 12 modèles ajoutés EN FIN de fichier avec commentaires FR « // ---- Module … » (conventions du fichier : String + enum documenté en commentaire, pas de type primitif de liste, relations 1-n nommées). Raffinements additifs par rapport au contrat brut (noms de champs strictement conservés) : relations Prisma explicitées (FranchiseContract→FranchiseCandidate onDelete:Cascade, Hub*→MobilityHub onDelete:Cascade, HubIntervention.vehicle/service + HubConversion.vehicle optionnelles) pour include() propres en B/C ; ids cuid() par défaut ; index exactement ceux du contrat (@@index gouvernorat / [brandSlug,status] / [hubId] / [hubId,scheduledAt] / [hubId,stage]).
+- bun run db:push → « Your database is now in sync » (23 ms) + Prisma Client v6.19.2 régénéré. Aucune migration lancée (règle maison), aucune table existante altérée (additif pur).
+- prisma/seed-opportunity.ts (exécution bunx tsx) : OpportunityConfig singleton « default » upserté (poids 30/20/25/15/10 = 100, seuils zone blanche 35 / alerte 70) ; PurchasingPower 24 gouvernorats exacts du référentiel (Tunis 95 · Ariana 92 · Ben Arous 88 · Sfax 82 · Sousse/Monastir 78 · Nabeul 75 · intérieur/Sud 38-59, PIB 7 400-16 800 DT/an, revenus 1 100-1 850 DT/mois, estimated partout) ; LandIndicator 24 (Tunis 1 450 DT/m², Grand Tunis 640-880, côtes 480-720, intérieur 110-240, disponibilité inverse de la pression) ; FranchiseKitItem 12 pièces (JURIDIQUE 3 · FINANCIÈRE 3 · TECHNIQUE 3 · FORMATION 3 : statuts/RNE, DABEM/APII, business plan 5 ans, financement bancaire, cahier des charges technique, manuel d'exploitation, étude environnementale, sécurité/incendie, commercial/caisse…) ; FranchiseCandidate 14 (agil 10 · staroil 4 ; NEW 4 · CONTACTED 2 · INTERVIEW 3 · APPROVED 3 · REJECTED 2 ; noms/tél. +216/gouvernorats variés) ; FranchiseContract 6 (FR-2025-001 ACTIVE 180 000 DT + 3 % … FR-2025-006 TERMINATED 60 000 DT + 2,5 % ; statuts 5/5 distincts, entryFee 60-250 KDT, royalty 2,5-4 %) ; ZoneAlert volontairement VIDE (0 ligne — remplissage dynamique B2).
+- prisma/seed-mobility.ts (PRNG mulberry32 à graine fixe = déterministe/reproductible, bunx tsx) : MobilityHub 9 — les 9 codes énumérés par le contrat sont honorés (TUN-01/02, ARI-01, SFX-01, SSE-01, NAB-01, BIZ-01, MNS-01, GAB-01), 6 ACTIVE + 1 CONSTRUCTION (BIZ-01) + 2 PLANNED (MNS-01/GAB-01, trafic/CA = 0), coordonnées réelles (Tunis 36,80/10,18 … Gabès 33,88/10,10 ; TUN-02 posé à Djebel Jelloud 36,74/10,29 pour éviter deux points identiques à Tunis) ; HubService 45 (5-8 par hub actif : lavage 25/40 DT, vidange 95-140 DT, pneus 60-320 DT, recharge 8 DT, boutique, café, laverie 12 DT, relais colis 5 DT, 1 service PAUSED à SSE-01 « borne en maintenance ») ; HubVehicle 350 (SSE 80 · TUN-01 75 · TUN-02 65 · SFX 55 · NAB 45 · ARI 30 ; plaques « 123 TU 4567 » au code du gouvernorat d'immatriculation + 10 % visiteurs ; parcs courants Peugeot/Renault/Fiat/VW/Dacia + camions Renault Trucks/Iveco ; 12 ÉLECTRIQUE à Tunis/Ariana/Sousse ; segments cycliques exacts FIDÈLE 108 / RÉGULIER 157 / NOUVEAU 85 = 30,9/44,9/24,3 %) ; HubIntervention 500 sur 90 jours + futures (status cycliques exacts : DONE 400 (80 %) · SCHEDULED 35 (futur J+1-J+14) · IN_PROGRESS 30 · CANCELLED 35 ; prix par type LAVAGE 20-35 · VIDANGE 80-160 · PNEUS 60-320 · RÉPARATION 50-400 · CONTRÔLE 30-60 · RECHARGE 5-15 DT ; durées 20-180 min ; RECHARGE liée aux seuls VE des hubs à borne active) ; HubConversion 900 (funnel décroissance ~45 %/étape : PASSAGE 446 · VISITE 246 · SERVICE 136 · FIDELISE 72 ; sources CAPTEUR_RADAR 40 % · CAPTEUR_PASSAGE 35 % · CAMPAGNE 15 % · BORNE_DIGITALE 10 % ; value = panier 25-160 DT au stade SERVICE et 45-200 DT au stade FIDELISE, 0 sinon ; sur 90 jours).
+- Sanity (prisma/sanity-t54-a1.ts, bunx tsx) : OpportunityConfig 1 · PurchasingPower 24 · LandIndicator 24 · ZoneAlert 0 · FranchiseCandidate 14 · FranchiseContract 6 · FranchiseKitItem 12 · MobilityHub 9 · HubService 45 · HubVehicle 350 · HubIntervention 500 · HubConversion 900 + exemples affichés (Tunis indice 95 · Le Kef 150 DT/m² · hub ARI-01 1 240 véh/j · Zoe FIDÈLE 29 visites · FR-2025-001 ACTIVE 180 000 DT + 3 %). Ré-exécutions des 2 seeds vérifiées idempotentes (deleteMany/upsert).
+- bun run lint → 0 erreur (seuls prisma/schema.prisma + 3 nouveaux fichiers prisma/*.ts modifiés côté code ; zéro route, zéro composant touchés).
+- Dev server jamais tué : curl localhost:3000/api/brands → 200 avant et après (db:push + seeds).
+- ÉCART SIGNALÉ (documenté, non bloquant) : le contrat énumère 9 codes de hubs mais annonce « ~8 hubs / 6 ACTIVE + 1 CONSTRUCTION + 1 PLANNED » (8) ; j'ai honoré l'énumération exhaustive des codes (les rounds B/C les référencent) → 9 hubs : 6 ACTIVE + 1 CONSTRUCTION + 2 PLANNED (la phrase « les hubs plannés = 0 » au pluriel est respectée). Compte sanity annoncé « 8 » → réel 9.
+
+Stage Summary:
+- SOCLE T54-A1 TERMINÉ : 12 modèles Prisma additifs (43 → 55 modèles), db:push OK, client régénéré, 2 seeds réalistes idempotents exécutés (1 852 lignes créées au total : 24+24+12+14+6+1 côté Radar + 9+45+350+500+900 côté TMP), sanity vert, lint 0 erreur, dev server vivant, zéro UI/ route / composant existant modifié.
+- Prêts pour A2 : OpportunityConfig (singleton « default ») pour l'éditeur de poids SA, référentiels par gouvernorat (PurchasingPower/LandIndicator, badge « est. ») pour le scoring B2 (ZoneAlert reste à remplir dynamiquement), kit/candidats/contrats pour B3 (franchise), 9 hubs + services/véhicules/interventions/conversions pour C1-C3 (carte TMP, gestion, analytics funnel).
+- Discipline respectée : worklog append-only, commit dédié, aucune migration, aucune donnée existante altérée (sauf tables nouvelles), dev server intouché.

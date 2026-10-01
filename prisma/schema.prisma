@@ -666,3 +666,256 @@ model VisitReport {
   notes                String       @default("")
   createdAt            DateTime     @default(now())
 }
+
+// ---- Module « Opportunity Radar » (T54-A1, Module 1) : configuration du
+// moteur de scoring d'opportunités d'implantation. Une seule ligne (singleton
+// id « default ») — poids des 5 critères (somme 100) et seuils éditables
+// depuis la console Super Admin ; les vues Radar du portail enseigne s'y
+// réfèrent (B2). Remplace l'ancien ratio de computeGovStats dans les SEULES
+// vues Radar (les usages existants ailleurs restent intacts).
+
+model OpportunityConfig {
+  id                   String   @id @default("default")
+  weightParc           Float    @default(30) // poids « parc véhicules » (%)
+  weightPurchasing     Float    @default(20) // poids « pouvoir d'achat » (%)
+  weightTrafic         Float    @default(25) // poids « trafic routier » (%)
+  weightConcurrence    Float    @default(15) // poids « concurrence » (%)
+  weightFoncier        Float    @default(10) // poids « foncier » (%)
+  zoneBlancheThreshold Float    @default(35) // score < 35 → zone blanche
+  alertThreshold       Float    @default(70) // score ≥ 70 → opportunité forte
+  updatedBy            String? // e-mail du dernier éditeur SA
+  updatedAt            DateTime @updatedAt
+}
+
+// ---- Module « Opportunity Radar » (T54-A1) : pouvoir d'achat par
+// gouvernorat (V1 : estimation dérivée, badge « est. » — éditeur SA en B2).
+// L'indice 0-100 alimente le critère « pouvoir d'achat » du moteur de
+// scoring ; PIB/habitant et revenu moyen sont des estimations cohérentes
+// en dinars tunisiens.
+
+model PurchasingPower {
+  id           String    @id @default(cuid())
+  gouvernorat  String    @unique // « Tunis » (clé vers GovernoratStat.name)
+  gdpPerCapita Float? // PIB/hab./an estimé (DT)
+  avgIncome    Float? // revenu mensuel moyen estimé (DT/mois)
+  index        Float // indice synthétique 0-100
+  estimated    Boolean   @default(true) // valeurs estimées (« est. »)
+  updatedAt    DateTime? // dernière édition (éditeur SA)
+  updatedBy    String? // e-mail du dernier éditeur
+}
+
+// ---- Module « Opportunity Radar » (T54-A1) : indicateur foncier par
+// gouvernorat (V1 : estimation dérivée, badge « est. » — éditeur SA en B2).
+// Prix du m², disponibilité et pression urbaine alimentent le critère
+// « foncier » du moteur de scoring (10 % par défaut).
+
+model LandIndicator {
+  id            String   @id @default(cuid())
+  gouvernorat   String   @unique // « Tunis » (clé vers GovernoratStat.name)
+  pricePerM2    Float? // prix du terrain estimé (DT/m²)
+  availability  Float // disponibilité du foncier 0-100
+  urbanPressure Float // pression urbaine 0-100
+  estimated     Boolean  @default(true) // valeurs estimées (« est. »)
+  updatedAt     DateTime? // dernière édition (éditeur SA)
+  updatedBy     String? // e-mail du dernier éditeur
+}
+
+// ---- Module « Opportunity Radar » (T54-A1) : alertes de zones générées par
+// le moteur de scoring — opportunité forte (score ≥ seuil d'alerte), zone
+// blanche (score < seuil) ou signal foncier (disponibilité + pression).
+// Table volontairement VIDE au seed : remplie dynamiquement à chaque passe
+// de scoring (B2), puis acquittable par l'enseigne.
+
+model ZoneAlert {
+  id             String   @id @default(cuid())
+  gouvernorat    String
+  type           String // OPPORTUNITE | ZONE_BLANCHE | FONCIER
+  score          Float // score d'opportunité constaté
+  threshold      Float // seuil déclencheur (celui de la config)
+  message        String // message FR affiché dans le fil d'alertes
+  acknowledged   Boolean  @default(false) // acquittée par l'enseigne
+  acknowledgedBy String? // e-mail de l'acquittement
+  createdAt      DateTime @default(now())
+
+  @@index([gouvernorat])
+}
+
+// ---- Module « Franchise » (T54-A1, sous-module f du Radar d'Opportunités) :
+// candidature déposée via la saisie interne de l'enseigne (V1 — formulaire
+// public en V2). Pipeline NEW → CONTACTED → INTERVIEW → APPROVED / REJECTED ;
+// les contrats signés référencent le candidat.
+
+model FranchiseCandidate {
+  id              String    @id @default(cuid())
+  brandSlug       String // enseigne visée (ex. « agil »)
+  fullName        String // nom & prénom du candidat
+  email           String
+  phone           String // « +216 98 123 456 »
+  gouvernorat     String
+  delegation      String?
+  city            String?
+  experience      String // NONE | STATION | RETAIL | OTHER
+  investmentRange String // <500K | 500K_1M | 1M_2M | >2M (DT)
+  status          String    @default("NEW") // NEW | CONTACTED | INTERVIEW | APPROVED | REJECTED
+  notes           String? // notes internes du développeur réseau franchise
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  contracts       FranchiseContract[]
+
+  @@index([brandSlug, status])
+}
+
+// ---- Module « Franchise » (T54-A1) : kit d'implantation — pièces à réunir
+// par le candidat (juridique, financier, technique, formation : statuts,
+// dossier DABEM/APII, business plan, manuel d'exploitation…). Le champ
+// « mandatory » distingue les pièces bloquantes des recommandées.
+
+model FranchiseKitItem {
+  id          String  @id @default(cuid())
+  category    String // JURIDIQUE | FINANCIER | TECHNIQUE | FORMATION
+  title       String
+  description String
+  order       Int     @default(0) // ordre d'affichage de la checklist
+  mandatory   Boolean @default(true) // pièce bloquante
+}
+
+// ---- Module « Franchise » (T54-A1) : contrat de franchise — référence
+// unique « FR-2025-001 », conditions financières (droit d'entrée en DT,
+// royalties en % du CA) et cycle de vie DRAFT → SENT → SIGNED → ACTIVE →
+// TERMINATED. La suppression d'un candidat supprime ses contrats (Cascade).
+
+model FranchiseContract {
+  id            String             @id @default(cuid())
+  candidateId   String
+  candidate     FranchiseCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  brandSlug     String
+  reference     String             @unique // « FR-2025-001 »
+  status        String             @default("DRAFT") // DRAFT | SENT | SIGNED | ACTIVE | TERMINATED
+  royaltyPct    Float              @default(3) // royalties sur CA (%)
+  entryFee      Float // droit d'entrée (DT)
+  durationYears Int                @default(5)
+  signedAt      DateTime?
+  createdAt     DateTime           @default(now())
+
+  @@index([brandSlug, status])
+}
+
+// ---- Module « Mobility Hub Operations » (T54-A1, Module 2) : Terminal
+// Multi-Services (TMP) — point multi-énergies & de services adossé au réseau
+// de stations. Coordonnées réelles, statut d'exploitation et indicateurs
+// consolidés (trafic journalier capteurs, CA services mensuel) ; les hubs
+// PLANNED / CONSTRUCTION restent à 0.
+
+model MobilityHub {
+  id             String            @id @default(cuid())
+  code           String            @unique // « TMP-TUN-01 »
+  name           String
+  gouvernorat    String
+  address        String
+  lat            Float
+  lng            Float
+  status         String            @default("ACTIVE") // ACTIVE | CONSTRUCTION | PLANNED | CLOSED
+  type           String // MULTISERVICE | ROUTIER | RÉSIDENTIEL | AUTO
+  openedAt       DateTime? // null = pas encore ouvert
+  surfaceM2      Int?
+  dailyVehicles  Int               @default(0) // véhicules/jour (capteurs)
+  monthlyRevenue Float             @default(0) // CA services mensuel (DT)
+  manager        String?
+  phone          String?
+  createdAt      DateTime          @default(now())
+  services       HubService[]
+  interventions  HubIntervention[]
+  vehicles       HubVehicle[]
+  conversions    HubConversion[]
+
+  @@index([gouvernorat])
+}
+
+// ---- Module « Mobility Hub Operations » (T54-A1) : service proposé dans un
+// TMP (lavage, vidange, pneus, recharge, boutique, café, laverie, relais
+// colis) avec tarif indicatif, capacité/jour et réservations du mois.
+
+model HubService {
+  id                String           @id @default(cuid())
+  hubId             String
+  hub               MobilityHub      @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  category          String // LAVAGE | VIDANGE | PNEUS | RECHARGE | BOUTIQUE | CAFÉ | LAVERIE | RELAIS
+  name              String
+  price             Float? // tarif indicatif (DT, null = vente libre)
+  status            String           @default("ACTIVE") // ACTIVE | PAUSED | CLOSED
+  capacityPerDay    Int? // capacité théorique / jour
+  bookingsThisMonth Int              @default(0) // réservations enregistrées ce mois
+  createdAt         DateTime         @default(now())
+  interventions     HubIntervention[]
+
+  @@index([hubId])
+}
+
+// ---- Module « Mobility Hub Operations » (T54-A1) : intervention réalisée
+// ou planifiée sur un véhicule client (vidange, lavage, pneus, réparation,
+// contrôle, recharge) — historique d'activité des ateliers TMP sur 90 jours.
+
+model HubIntervention {
+  id          String       @id @default(cuid())
+  hubId       String
+  hub         MobilityHub  @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  vehicleId   String?
+  vehicle     HubVehicle?  @relation(fields: [vehicleId], references: [id])
+  serviceId   String?
+  service     HubService?  @relation(fields: [serviceId], references: [id])
+  type        String // VIDANGE | LAVAGE | PNEUS | RÉPARATION | CONTRÔLE | RECHARGE
+  status      String       @default("DONE") // SCHEDULED | IN_PROGRESS | DONE | CANCELLED
+  price       Float // montant encaissé / prévu (DT)
+  durationMin Int?
+  scheduledAt DateTime
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime     @default(now())
+
+  @@index([hubId, scheduledAt])
+}
+
+// ---- Module « Mobility Hub Operations » (T54-A1) : véhicule client rattaché
+// à un TMP — plaque tunisienne unique (« 123 TU 4567 », code du gouvernorat
+// d'immatriculation), segment de fidélité et compteur de visites. Base
+// clients consultée depuis la gestion des services du hub (C2).
+
+model HubVehicle {
+  id            String           @id @default(cuid())
+  hubId         String
+  hub           MobilityHub      @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  plate         String           @unique // « 123 TU 4567 »
+  brand         String
+  model         String
+  type          String // UTILITAIRE | BERLINE | SUV | POIDS_LOURD | ÉLECTRIQUE
+  clientName    String
+  clientPhone   String
+  segment       String // FIDÈLE | RÉGULIER | NOUVEAU
+  lastVisit     DateTime?
+  visitsCount   Int              @default(1)
+  createdAt     DateTime         @default(now())
+  interventions HubIntervention[]
+  conversions   HubConversion[]
+
+  @@index([hubId])
+}
+
+// ---- Module « Mobility Hub Operations » (T54-A1) : événement du tunnel de
+// conversion mesuré par les capteurs du hub (radar, compteur de passage,
+// campagne, borne digitale) — décroissance ~45 % par étape : PASSAGE >
+// VISITE > SERVICE > FIDELISE. La valeur portée correspond au panier moyen
+// aux stades SERVICE / FIDELISE.
+
+model HubConversion {
+  id         String       @id @default(cuid())
+  hubId      String
+  hub        MobilityHub  @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  source     String // CAPTEUR_RADAR | CAPTEUR_PASSAGE | CAMPAGNE | BORNE_DIGITALE
+  vehicleId  String?
+  vehicle    HubVehicle?  @relation(fields: [vehicleId], references: [id])
+  stage      String // PASSAGE | VISITE | SERVICE | FIDELISE
+  value      Float        @default(0) // panier moyen au stade SERVICE/FIDELISE (DT)
+  occurredAt DateTime     @default(now())
+
+  @@index([hubId, stage])
+}
