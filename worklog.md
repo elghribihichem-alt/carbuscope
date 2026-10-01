@@ -1898,3 +1898,39 @@ Stage Summary:
 - Livré : modèle additif HubSetting (db:push OK), 3 routes API additives + PATCH /api/hubs (session + rôles + validations FR + AuditEvent HUBS + sens unique 400 FR), 3 composants volet (hub-analytics 634 l., hub-parametres 833 l., sa-hubs 478 l.) + hub-shared +173 l. + intégrations hub-module/superadmin-view/sidebar/i18n, correctif hydratation AlertDialog en finalisation.
 - QA : 30 captures utiles (6 round interrompu + 24 finalisation), round-trips curl complets (401/403/200/400 FR + settings test→restaure + PATCH identité test→restaure seed + transition ouverture horodatée testée), 390 px sans overflow clair+dark sur les 3 surfaces, console VIERGE après correctif (1 erreur hydratation détectée→corrigée), 0 régression (carte/services/radar + navigation inter-module SA→enseigne).
 - État DB : seeds INTACTS (900 conversions, 350 véhicules, 500 interventions, 45 services) + résidus QA légitimes documentés (MNS-01 CONSTRUCTION sens unique, 2 HubSetting défauts, 2 services CLOSED T54-Ca, 20 audits HUBS).
+
+---
+Task ID: T54-D (validation finale groupée des 2 modules + gel)
+Agent: orchestrateur principal
+Task: Balayage E2E final des DEUX modules livrés (Opportunity Radar 6/6 + Mobility Hub Operations 5/5) par l'orchestrateur lui-même, puis gel documentaire du plan T54.
+
+Work Log:
+- pkill navigateurs (discipline 4 Go), curl /api/brands → 200 (serveur vivant avant/après tout le balayage).
+- Login réel Sonia Beji (ADMIN Agil, bouton persona) → espace enseigne.
+- MODULE 1 Opportunity Radar — 6/6 volets visités et capturés : zones blanches (fusion + bandeau « 5 alertes non acquittées » + bouton Examiner), scoring d'opportunités, formats recommandés, études de faisabilité, simulations de rentabilité, franchise. Header module « Module complet · B2 + B3 actifs ».
+- MODULE 2 Mobility Hub Operations — 5/5 volets visités et capturés : carte des TMP, gestion des services, base clients TMP, analytics & conversions, paramètres TMP.
+- SUPER ADMIN (login réel Rania Feki SUPER_ADMIN) — 2 volets capturés : Opportunity Radar (éditeurs poids/indicateurs) + Mobility Hub (supervision).
+- Responsive : viewport 390×844 → document.documentElement.scrollWidth = 390 (aucun débordement) sur volets visités.
+- Desktop 1440 : scrollWidth 1440, dark mode vérifié (captures 14-15).
+- Footer : présent, contenu 1351 px > viewport 900 → poussé naturellement (comportement conforme).
+- Console : 0 erreur, 0 avertissement bloquant ; page errors : 0 — sur TOUT le balayage (11 volets enseigne + 2 volets SA + bascules thème/viewport).
+- `bun run lint` (navigateur fermé) : 0 erreur.
+- 17 captures qa-captures/qa-t54-d-01→17.
+
+Bilan des 8 rounds T54 (A1→D) :
+- A1 fa96e8b : 12 modèles Prisma + seeds (9 hubs TMP, 350 véhicules, 500 interventions, 900 conversions, 24 gov. pouvoir d'achat/foncier, franchise 14/12/6).
+- A2B1 365fc94 : coque (sidebar 2 groupes + shells) + fusion Radar↔Implantation (branche G5 absorbée, composants gelés intacts).
+- B2 ab826d5 : moteur scoring 5 critères (poids SA configurables), Top 24/Top 50 délégations, what-if, ZoneAlert + acquittement, éditeurs SA.
+- B3a 7ce6dd7 : formats recommandés (moteur R1-R6) + simulations de rentabilité (P&L, TRI, payback, scénarios, SavedCalculation).
+- B3b 601e204 : études de faisabilité (4 axes + SVG stylisé + checklist + PDF jsPDF template V1) + franchise V1 (candidatures/kit/contrats, transitions strictes).
+- Ca 9e635f2 : carte TMP (Leaflet statut/rayon), CRUD services (transitions), base clients (recherche/pagination/historique/CSV).
+- Cb bb319a5 : analytics & conversions (entonnoir 446/246/136/72, sources, tendances, boucle capteurs→Radar navigable), paramètres TMP (identité + cycle de vie + horaires/tarifs HubSetting), supervision SA.
+- D : présente validation.
+
+Résidus documentés en base (légitimes, V1 sans DELETE) : 2 services QA CLOSED, 2 candidats QA REJECTED, contrat FR-2025-007 SENT, MNS-01 en CONSTRUCTION (transition testée), HubSetting défauts SSE-01/MNS-01, ~64 AuditEvent RADAR/FRANCHISE/HUBS tracés, 5 alertes ZoneAlert actives + 1 acquittée. Seeds de référence INTACTS.
+
+Stage Summary:
+- LES DEUX MODULES DU PLAN T54 SONT TERMINÉS ET VALIDÉS : Module 1 Opportunity Radar (6/6 volets : Zones Blanches / Scoring / Formats / Faisabilité / Simulations / Franchise) et Module 2 Mobility Hub Operations (5/5 volets : Carte TMP / Services / Clients / Analytics / Paramètres) — intégrés au Portail enseigne + console SA (2 volets de gestion) + analytics, conformément aux 8 arbitrages approuvés (fusion implantation, granularité 24 gov + drill-down, estimations « est. » + éditeurs SA, intégration par défaut, SVG stylisé, PDF template V1, franchise interne V1, seed ~8-9 hubs).
+- 5 règles permanentes respectées : zéro casse code/design (composants gelés importés, jamais modifiés — computeGovStats/ImplantationTab intacts), qualité (lint 0, 0 erreur console E2E), perfectionnement (design émeraude/ambre/terracotta, dark, 390 px, 44 px, nested tables, mini-carte SVG, toasts, drawers, AlertDialogs), composants shadcn partout.
+- GEL DOUX du périmètre T54 : routes /api/radar/*, /api/franchise/*, /api/hubs/* (14 routes), src/lib/radar/*, src/components/{radar,hubs}/*, sa-radar.tsx/sa-hubs.tsx — toute modification future devra être additive et revalidée E2E.
+- Prochaines étapes possibles (V2, hors périmètre actuel) : PDF génératif IA, formulaire public franchise, kill-switch par statut d'enseigne, carto 3D, scoring par cité.
