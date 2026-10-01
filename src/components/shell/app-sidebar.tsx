@@ -424,6 +424,7 @@ function useMenu(mode: Mode): MenuModel {
             saItem("users", UsersRound, t("sb.sa.users")),
             saItem("demo", BarChart3, t("sb.sa.demo")),
             saItem("radar", Radar, t("sb.sa.radar")),
+            saItem("hubs", LocateFixed, t("sb.sa.hubs")),
             saItem("ai", Bot, t("sb.sa.ai")),
             saItem("carto", MapPinned, t("sb.sa.carto")),
             saItem("audit", ScrollText, t("sb.sa.audit")),

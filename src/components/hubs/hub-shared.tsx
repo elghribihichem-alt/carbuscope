@@ -1,10 +1,11 @@
 'use client'
 
 // ============================================================================
-// CarbuScope — T54-Ca — socle partagé des volets « Mobility Hub Operations »
-// (carte des TMP, gestion des services, base clients). Types des contrats
-// /api/hubs/*, métadonnées FR (libellés + BADGES TONNÉS) et helpers de
-// formatage (chiffres FR via `num` de src/lib/chart, dates FR, recherche
+// CarbuScope — T54-Ca → T54-Cb — socle partagé des volets « Mobility Hub
+// Operations » (carte des TMP, gestion des services, base clients, analytics
+// & conversions, paramètres TMP + console SA « Mobility Hub »). Types des
+// contrats /api/hubs/*, métadonnées FR (libellés + BADGES TONNÉS) et helpers
+// de formatage (chiffres FR via `num` de src/lib/chart, dates FR, recherche
 // accent-insensible — miroir du normalizeFr serveur).
 //
 // MAPPING BADGES (spec T54-Ca — palette émeraude/ambre/terracotta/zinc,
@@ -108,6 +109,173 @@ export interface ClientsStatsDTO {
   regulier: number
   nouveau: number
   avgVisits: number
+}
+
+/* ============================== Contrats T54-Cb (analytics / paramètres / supervision) ============================== */
+
+/** KPIs du volet « Analytics & conversions » (/api/hubs/analytics). */
+export interface HubAnalyticsKpisDTO {
+  passages: number
+  visites: number
+  services: number
+  fidelises: number
+  /** Conversions = événements SERVICE + FIDELISE (prestations facturées). */
+  conversions: number
+  /** tauxGlobal = conversions / passages (%). */
+  tauxGlobal: number
+  valeurService: number
+  valeurFidelise: number
+  valeur: number
+  /** Période précédente (badge de tendance) — null si aucun historique. */
+  prev: { passages: number; conversions: number; tauxGlobal: number; valeur: number } | null
+}
+
+/** Réponse GET /api/hubs/analytics?days=30|90 (défaut 90). */
+export interface HubAnalyticsDTO {
+  days: number
+  kpis: HubAnalyticsKpisDTO
+  funnel: Array<{ stage: string; count: number; rate: number }>
+  byHub: Array<{
+    hubId: string
+    code: string
+    name: string
+    gouvernorat: string
+    status: string
+    passages: number
+    conversions: number
+    taux: number
+    valeur: number
+  }>
+  bySource: Array<{ source: string; count: number; part: number }>
+  timeseries: Array<{ date: string; passages: number; conversions: number }>
+  radarLoop: {
+    alertThreshold: number | null
+    govFortPotentiel: Array<{ gouvernorat: string; passagesCapteur: number; score: number }>
+  }
+  generatedAt: string
+}
+
+/** Réponse GET /api/hubs/settings?hubId= (setting null = défauts non enregistrés). */
+export interface HubSettingDTO {
+  hubId: string
+  horaires: Record<string, string>
+  tarifs: Record<string, { min: number; max: number }>
+  updatedAt: string
+  updatedBy: string | null
+}
+
+/** Réponse GET /api/hubs/supervision (Super Admin uniquement). */
+export interface HubSupervisionDTO {
+  kpis: {
+    hubs: number
+    hubsActifs: number
+    servicesTotal: number
+    passages: number
+    conversions: number
+    tauxGlobal: number
+    valeur: number
+    fidelises: number
+  }
+  funnel: Array<{ stage: string; count: number; rate: number }>
+  bySource: Array<{ source: string; count: number; part: number }>
+  hubs: Array<{
+    id: string
+    code: string
+    name: string
+    gouvernorat: string
+    address: string
+    status: string
+    type: string
+    openedAt: string | null
+    surfaceM2: number | null
+    dailyVehicles: number
+    monthlyRevenue: number
+    manager: string | null
+    phone: string | null
+    activeServices: number
+    totalServices: number
+    passages: number
+    taux: number
+    valeur: number
+    funnel: Array<{ stage: string; count: number; rate: number }>
+    settingsUpdatedAt: string | null
+    settingsUpdatedBy: string | null
+  }>
+  generatedAt: string
+}
+
+/* ============================== Tunnel de conversion (T54-Cb) ============================== */
+
+/**
+ * Stades du funnel capteurs (spec T54-Cb — ordre décroissant) et tons des
+ * barres : PASSAGE zinc → VISITE émeraude clair → SERVICE ambre → FIDELISE
+ * émeraude plein. Chaque ton décline light/dark (charte 0.625rem).
+ */
+export const FUNNEL_STAGE_META: Readonly<
+  Record<string, { label: string; short: string; bar: string; text: string }>
+> = {
+  PASSAGE: {
+    label: "Passage détecté",
+    short: "Passage",
+    bar: "bg-zinc-400 dark:bg-zinc-600",
+    text: "text-zinc-600 dark:text-zinc-300",
+  },
+  VISITE: {
+    label: "Visite du hub",
+    short: "Visite",
+    bar: "bg-emerald-300 dark:bg-emerald-700",
+    text: "text-emerald-700 dark:text-emerald-400",
+  },
+  SERVICE: {
+    label: "Prestation de service",
+    short: "Service",
+    bar: "bg-amber-500 dark:bg-amber-600",
+    text: "text-amber-700 dark:text-amber-400",
+  },
+  FIDELISE: {
+    label: "Client fidélisé",
+    short: "Fidélisé",
+    bar: "bg-emerald-600 dark:bg-emerald-500",
+    text: "text-emerald-700 dark:text-emerald-400",
+  },
+}
+
+/**
+ * Sources capteurs du tunnel (mapping thémé documenté — spec T54-Cb) :
+ *   CAPTEUR_RADAR     → émeraude (#059669) — lien métier avec le Radar ;
+ *   CAPTEUR_PASSAGE   → zinc (#a1a1aa)     — compteur physique ;
+ *   CAMPAGNE          → ambre (#d97706)    — marketing ;
+ *   BORNE_DIGITALE    → terracotta (#b0563b).
+ * Les hex sont volontairement fixes (graphiques recharts thémés — même
+ * pratique que radar-simulations B3a : couleur lisible clair + sombre).
+ */
+export const SOURCE_META: Readonly<
+  Record<string, { label: string; hex: string; badge: string }>
+> = {
+  CAPTEUR_RADAR: {
+    label: "Capteur radar",
+    hex: "#059669",
+    badge:
+      "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
+  },
+  CAPTEUR_PASSAGE: {
+    label: "Capteur de passage",
+    hex: "#a1a1aa",
+    badge:
+      "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
+  },
+  CAMPAGNE: {
+    label: "Campagne",
+    hex: "#d97706",
+    badge:
+      "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
+  },
+  BORNE_DIGITALE: {
+    label: "Borne digitale",
+    hex: "#b0563b",
+    badge:
+      "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-400",
+  },
 }
 
 /* ============================== Statuts de hub ============================== */

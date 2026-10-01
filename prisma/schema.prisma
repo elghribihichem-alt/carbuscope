@@ -827,6 +827,7 @@ model MobilityHub {
   interventions  HubIntervention[]
   vehicles       HubVehicle[]
   conversions    HubConversion[]
+  setting        HubSetting?
 
   @@index([gouvernorat])
 }
@@ -918,4 +919,32 @@ model HubConversion {
   occurredAt DateTime     @default(now())
 
   @@index([hubId, stage])
+}
+
+// ---- Module « Mobility Hub Operations » (T54-Cb, volet « Paramètres TMP ») :
+// paramètres d'exploitation d'un TMP — horaires d'ouverture et tarifs
+// indicatifs par prestation. Une ligne par hub au plus (hubId @unique).
+//   · horaires : { "lundi": "06:00-22:00", … "dimanche": "06:00-22:00" }
+//     (7 clés, créneau « HH:MM-HH:MM » — la validation serveur impose la
+//     regex HH:MM et ouverture < fermeture) ;
+//   · tarifs   : { "lavage": { "min": 20, "max": 35 },
+//                  "vidange": { "min": 80, "max": 160 }, … }
+//     (bornes min ≤ max par prestation, en DT — les prestations affichées
+//     viennent des services réels du hub, avec repli documenté lavage /
+//     vidange / pneus si le hub n'a pas encore de service).
+// Complément STRICTEMENT additif du round T54-Cb (seule modification de
+// schéma autorisée par le plan) ; la relation 1-1 exige le champ retour
+// « setting HubSetting? » ci-dessus sur MobilityHub (mécanique Prisma).
+// Supprimer un hub supprime ses paramètres (onDelete: Cascade).
+
+model HubSetting {
+  id        String      @id @default(cuid())
+  hubId     String      @unique
+  hub       MobilityHub @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  horaires  Json // 7 clés jour → créneau « HH:MM-HH:MM »
+  tarifs    Json // prestation → { min, max } en DT
+  updatedAt DateTime    @updatedAt
+  updatedBy String? // e-mail de la session ayant enregistré (traçabilité)
+
+  @@index([hubId])
 }

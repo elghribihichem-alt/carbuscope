@@ -548,6 +548,7 @@ export const fr = {
   "sb.sa.users": "Utilisateurs",
   "sb.sa.demo": "Démographie",
   "sb.sa.radar": "Opportunity Radar",
+  "sb.sa.hubs": "Mobility Hub",
   "sb.sa.ai": "Agent IA",
   "sb.sa.carto": "Cartographie",
   "sb.sa.audit": "Journal d'audit",

@@ -20,6 +20,7 @@ import { SaAiAgent } from "./sa-ai-agent"
 import { SaCarto } from "./sa-carto"
 import { SaAudit } from "./sa-audit"
 import { SaRadar } from "./sa-radar"
+import { SaHubs } from "./sa-hubs"
 
 export function SuperAdminView() {
   const userId = useAppStore(s => s.userId)
@@ -92,6 +93,11 @@ export function SuperAdminView() {
             seuils et éditeurs d'indicateurs (pouvoir d'achat / foncier). */}
         <TabsContent value="radar" className="mt-0 space-y-4">
           <SaRadar />
+        </TabsContent>
+        {/* T54-Cb — volet « Mobility Hub » : supervision réseau des TMP
+            (lecture seule SA en V1 — KPIs, entonnoir, table des hubs). */}
+        <TabsContent value="hubs" className="mt-0 space-y-4">
+          <SaHubs />
         </TabsContent>
         <TabsContent value="ai" className="mt-0 space-y-4">
           <SaAiAgent />

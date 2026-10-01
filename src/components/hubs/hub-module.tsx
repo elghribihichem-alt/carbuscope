@@ -1,16 +1,19 @@
 'use client'
 
-// CarbuScope — T54-A2 → T54-Ca (volets 1-3/5) — Module 2 « Mobility Hub
-// Operations » : coque du module (spec verrouillée T54-A0). 5 volets pilotés
-// par nav.hubs (?? "carte") via le store — même contrat que la sidebar
-// (groupe « Mobility Hub Operations », accent terracotta).
-// Volets RÉELS depuis T54-Ca : « Carte des TMP » (Leaflet + filtres + Sheet
-// détail + handoffs), « Gestion des services » (CRUD + transitions + clôture
-// définitive) et « Base clients TMP » (recherche/pagination/segment/
-// historique/export CSV). Handoff inter-volets : nav.hubsSel = hubId posé par
-// la carte (boutons du Sheet détail) et consommé à la MONTURE des volets
-// services/clients (pattern nav.radarSim de B3a — Radix Tabs remonte le volet
-// à chaque activation). Volets 4-5 : cartes « Bientôt » honnêtes (C1/C3).
+// CarbuScope — T54-A2 → T54-Cb (volets 1-5/5, MODULE COMPLET) — Module 2
+// « Mobility Hub Operations » : coque du module (spec verrouillée T54-A0).
+// 5 volets pilotés par nav.hubs (?? "carte") via le store — même contrat que
+// la sidebar (groupe « Mobility Hub Operations », accent terracotta).
+// Volets RÉELS : « Carte des TMP » (T54-Ca — Leaflet + filtres + Sheet détail
+// + handoffs), « Gestion des services » (T54-Ca — CRUD + transitions +
+// clôture définitive), « Base clients TMP » (T54-Ca — recherche/pagination/
+// segment/historique/export CSV), « Analytics & conversions » (T54-Cb —
+// entonnoir capteurs, sources, tendances, boucle capteurs → Radar) et
+// « Paramètres TMP » (T54-Cb — identité, cycle de vie à sens unique,
+// horaires/tarifs HubSetting). Handoff inter-volets : nav.hubsSel = hubId
+// posé par la carte (boutons du Sheet détail) et consommé à la MONTURE des
+// volets services/clients/paramètres (pattern nav.radarSim de B3a — Radix
+// Tabs remonte le volet à chaque activation).
 
 import type * as React from "react"
 import { BarChart3, LocateFixed, Map, Settings, Users, Wrench } from "lucide-react"
@@ -19,10 +22,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n, type DictKey } from "@/lib/i18n"
 import { useAppStore } from "@/store/app-store"
-import { ModuleSoonCard } from "@/components/shell/module-soon"
 import { HubCarte } from "./hub-carte"
 import { HubServices } from "./hub-services"
 import { HubClients } from "./hub-clients"
+import { HubAnalytics } from "./hub-analytics"
+import { HubParametres } from "./hub-parametres"
 
 /** Les 5 volets du module TMP (spec T54-A0). */
 const HUB_SUBTABS: ReadonlyArray<{ id: string; icon: React.ComponentType<{ className?: string }>; labelKey: DictKey }> = [
@@ -77,8 +81,11 @@ export function HubModule() {
             <Badge variant="outline" className="gap-1 text-[11px]">
               5 volets · Terminaux Multi-Services
             </Badge>
-            <Badge variant="secondary" className="text-[11px]">
-              Carte · Services · Clients actifs
+            <Badge
+              variant="secondary"
+              className="border-emerald-300 bg-emerald-50 text-[11px] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+            >
+              Module complet · 5/5 volets actifs
             </Badge>
           </div>
         </CardContent>
@@ -117,36 +124,16 @@ export function HubModule() {
           <HubClients preselect={hubsSel} />
         </TabsContent>
 
-        {/* Volet 4 — Analytics & conversions (round C3). */}
+        {/* Volet 4 — Analytics & conversions (T54-Cb) : entonnoir capteurs →
+            fidélisation, sources, tendances, boucle capteurs → Radar. */}
         <TabsContent value="analytics" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={BarChart3}
-            accent="terra"
-            planned="C3"
-            title="Analytics & conversions"
-            description="La mesure de l'efficacité commerciale des hubs, du passage capteur à la fidélisation."
-            bullets={[
-              "Funnel capteurs → visites → services → fidélisation",
-              "Conversions par source : radar de passage, capteur, campagne, borne digitale",
-              "Graphiques thémés (recharts) et valeurs de panier consolidées",
-            ]}
-          />
+          <HubAnalytics />
         </TabsContent>
 
-        {/* Volet 5 — Paramètres TMP (round C1). */}
+        {/* Volet 5 — Paramètres TMP (T54-Cb) : identité, cycle de vie à sens
+            unique, horaires & tarifs (HubSetting). */}
         <TabsContent value="parametres" className="mt-0 space-y-4">
-          <ModuleSoonCard
-            icon={Settings}
-            accent="terra"
-            planned="C1"
-            title="Paramètres TMP"
-            description="La configuration d'exploitation des hubs : horaires, capacités et tarifs de base."
-            bullets={[
-              "Configuration par hub : horaires, surface, capacité d'accueil",
-              "Tarifs de base et seuils d'alerte d'exploitation",
-              "Cycle de vie des sites (planifié → construction → actif)",
-            ]}
-          />
+          <HubParametres preselect={hubsSel} />
         </TabsContent>
       </Tabs>
     </div>
