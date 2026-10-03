@@ -1031,6 +1031,30 @@ html {
 .leaflet-tooltip-left::before { border-left-color: var(--border); }
 .leaflet-tooltip-right::before { border-right-color: var(--border); }
 
+/* Libellés permanents Shadow Market (Marker + divIcon) : pastille texte lisible
+   sur le fond de carte, non interactive, halo clair pour rester lisible nuit/jour. */
+.shadow-map-label {
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
+.shadow-map-label span {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 0.66rem;
+  line-height: 1.2;
+  padding: 1px 5px;
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  border: 1px solid color-mix(in oklab, currentColor 35%, var(--border));
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+}
+/* Losanges « station menacée » : conteneur divIcon sans style par défaut. */
+.shadow-station-diamond {
+  background: transparent;
+  border: none;
+}
+
 /* Scrollbars discrètes (token café) */
 * {
   scrollbar-width: thin;

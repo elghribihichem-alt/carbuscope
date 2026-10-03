@@ -1934,3 +1934,33 @@ Stage Summary:
 - 5 règles permanentes respectées : zéro casse code/design (composants gelés importés, jamais modifiés — computeGovStats/ImplantationTab intacts), qualité (lint 0, 0 erreur console E2E), perfectionnement (design émeraude/ambre/terracotta, dark, 390 px, 44 px, nested tables, mini-carte SVG, toasts, drawers, AlertDialogs), composants shadcn partout.
 - GEL DOUX du périmètre T54 : routes /api/radar/*, /api/franchise/*, /api/hubs/* (14 routes), src/lib/radar/*, src/components/{radar,hubs}/*, sa-radar.tsx/sa-hubs.tsx — toute modification future devra être additive et revalidée E2E.
 - Prochaines étapes possibles (V2, hors périmètre actuel) : PDF génératif IA, formulaire public franchise, kill-switch par statut d'enseigne, carto 3D, scoring par cité.
+
+---
+Task ID: T55 (session suivante — Shadow Market : vraie carte OSM)
+Agent: orchestrator (Z.ai Code)
+Task: Remplacer la carte SVG géométrique du module Shadow Market par une VRAIE carte OpenStreetMap (Leaflet), sans casser l'interface existante des 6 onglets parents.
+
+Work Log:
+- Diagnostic : shadow-map.tsx rendait un fond géométrique SVG (tunisia-geo) — le client voyait une « simulation de carte de Tunisie », pas une vraie carte.
+- Créé src/components/shadow/cartography/shadow-map-leaflet.tsx : implémentation Leaflet complète (react-leaflet v5 + Leaflet 1.9.4, déjà utilisés par osm-map.tsx/hub-map.tsx).
+- Rewrité shadow-map.tsx en wrapper dynamic(..., { ssr: false }) qui conserve l'interface publique exacte (ShadowMapProps, ShadowFocusTarget, StationRadii, RoadTrace) → AUCUN parent modifié (national-tab, district-tab, station-tab, road-tab, redzones-tab, kpis-tab inchangés).
+- Couches portées : points typologies (CircleMarker canvas, rayon par cran de zoom), losanges stations menacées (divIcon), heatmap gouvernorats (Circle, rayon ∝ perte, conversion unités SVG→mètres), zones rouges (cercles tiretés + libellés), rayons cannibalisation 500m/1km/2km (cercles en mètres réels + libellés avec comptages), tracé d'axe routier (Polyline + code RN10).
+- Découverte critique : react-leaflet Tooltip exige un calque parent — les Tooltips « standalone » avec position ne s'affichaient PAS (silencieux). Corrigé via MapLabel (Marker + divIcon non interactif, classe .shadow-map-label stylée dans globals.css : pastille lisible jour/nuit).
+- Commutateur de fond ajouté (bouton calques) : auto (suit le thème), Plan OSM communautaire, Plan détaillé Esri, Clair CARTO, Nuit CARTO, Relief OpenTopoMap — tous sans clé API, testés accessibles depuis la sandbox (curl 200).
+- Fiches point/station au clic (overlays), chips filtres typologies, export CSV, zoom/dézoom/reset personnalisés, attribution Leaflet en bas-droite, aide interaction : parité avec l'ancienne carte.
+- Incident : 2 OOM kills du next-server (~2,9 Go RSS, Turbopack + navigation multi-modules) — relance (setsid bun run dev > dev.log), risque déjà documenté.
+
+QA (agent-browser, session Tarek Mabrouk DG Agil) :
+- Tuiles réelles OSM chargées (https://tile.openstreetmap.org/... vérifié dans le DOM), attribution « © OpenStreetMap contributeurs ».
+- API /api/shadow/map : 847 points, 367 stations, 51 zones rouges, 6 typologies — tous rendus (échantillonnage pixels canvas : centaines de points colorés).
+- Carte Nationale : focus gouvernorat (clic Médenine → flyToBounds, tuiles z6→z9), chip « Bidons » togglée (393/847 pts), légende OK.
+- Par Station : 3 losanges, 3 libellés rayons (« 500 m · 19 pts », « 1 km · 1 pts », « 2 km · 7 pts »), cercles tiretés concentriques.
+- Zones Rouges : libellés zones (« Route de Ras Jedir », « Cité Erriadh »…). Par Axe Routier : polyligne + label « RN10 ». Vue d'Ensemble : carte compacte 398 px, sans aide interaction.
+- Commutateur : basculement Nuit CARTO vérifié (tuiles dark_all basemaps.cartocdn.com).
+- VLM sur captures : vraie carte OSM (Tunis, Sfax, routes visibles), points + heatmap + légende + contrôles, aucun défaut de rendu ; 0 erreur console navigateur.
+
+Stage Summary:
+- Le module Shadow Market affiche désormais une VRAIE carte OpenStreetMap (défaut auto : plan OSM le jour / CARTO Dark la nuit) — la plainte client est résolue à la racine.
+- Interface 100 % rétrocompatible : aucun fichier parent touché ; lint ESLint 0 erreur/0 warning sur src/components/shadow.
+- Risque connu : OOM récurrent du dev server Turbopack (~4 Go conteneur) — surveillé par cron webDevReview 15 min, procédure de relance documentée (setsid).
+- Prochaines étapes candidates : audit nettoyage des routes SA avec modèles Prisma fantômes (500 sur /api/super/annonces…), PDF des rapports shadow, cycle de vie campagnes Publicité.
