@@ -1981,3 +1981,21 @@ Stage Summary:
 - État réel : tout est livré et gelé jusqu'à T55 inclus ; le plan post-T55 (archivage SA, allègement menu, panneaux, promotions, PDF) n'a JAMAIS été exécuté — file d'attente reconstruite ci-dessus et decisions utilisateur désormais consignées ici.
 - Prochaine étape prioritaire proposée (T57) : allègement menu — remplacer les 2 groupes à sous-items par 2 items feuilles (clic → portail/radar et portail/hubs, nav.radar/nav.hubs par défaut zones/carte), suppression des 6+5 sous-items sidebar, onglets in-page inchangés, deep-links nav.* intacts, rail replié allégé ; puis T58 archivage SA (branch archive + suppression routes fantômes du tronc, ex. annonces 500) ; puis module « Panneaux publicitaires » à créer ; puis promotions persistées ; puis PDF au fil du besoin.
 - Risque : cron webDevReview absent → à recréer à la reprise du travail.
+
+---
+Task ID: T57 (allègement du menu — Opportunity Radar + Mobility Hub Operations — APPROUVÉ utilisateur)
+Agent: orchestrator (Z.ai Code)
+Task: Supprimer les sous-menus sidebar des 2 modules T54 : clic sur le nom du module → page chargée avec ses volets en onglets (la page les rend déjà en TabsList). Alléger le menu.
+
+Work Log:
+- Boucle de surveillance recréée AVANT le travail (cron webDevReview 15 min, job 435446, priorité 5) — contrainte utilisateur intégrée au prompt : interdiction de créer/coder de nouveaux modules sans approbation, priorité aux correctifs + file approuvée (T57 → T58 → promotions → PDF), module « panneaux publicitaires » explicitement reporté.
+- app-sidebar.tsx : helpers rItem/hItem + RADAR_ZONE_TOOL_IDS supprimés ; groupes f-radar (6 items) et f-hubs (5 items) supprimés ; les 2 modules deviennent des pTab conditionnels du groupe G3 « Espace enseigne » (pTab("radar", Radar) / pTab("hubs", LocateFixed)) — gating RADAR/HUBS_MODULE_ROLES inchangé via spreads conditionnels, labels i18n sb.radar.title/sb.hubs.title conservés, icônes 6 sous-items retirées des imports.
+- Comportement : clic sur le nom → portail/radar (ou portail/hubs) avec le DERNIER volet visité conservé (nav.radar/nav.hubs inchangés, défauts zones/carte) ; onglets in-page inchangés ; liens profonds et outils terrain du volet zones intacts ; rail replié 41 → 31 boutons ; Sheet mobile allégé d'office (même rendu).
+- Correctif QA (bug PRÉEXISTANT découvert au balayage 390, sans rapport avec T57) : portal-dashboard.tsx ligne 324 — grille workflow/activité « grid gap-4 lg:grid-cols-5 » SANS grid-cols-1 mobile → piste implicite auto = 485 px de max-content → scrollWidth 500 > 390. Fix pattern T4b : grid-cols-1 ajouté + commentaire. Vérifié après : 390 = 390.
+- QA E2E (agent-browser, session unique qa-t57, zombies tués avant, session close + pkill après) : login réel Sonia Beji (ADMIN Agil — accès aux 2 modules) ; sidebar desktop « ESPACE ENSEIGNE » = TDB + Radar + Hubs sans sous-menus ; clic Radar → 6 onglets (Zones sélectionné par défaut) ; bascule onglet Franchise puis re-clic nom du module → Franche CONSERVÉE (mémoire du dernier volet) ; clic Hubs → 5 onglets + données réelles (TMP-ARI-01, hubs actifs) ; rail replié 31 boutons, item hubs actif à l'index exact (10) ; 390 px : Sheet menu mobile allégé → clic Radar → module chargé 6 onglets + scrollWidth 390=390 AVANT fix 500 → dark mode capture ; console 0 erreur (seuls warnings Radix DialogContent préexistants documentés T53) ; régression clic Veille OK ; 4 captures qa-t57-{desktop-radar,desktop-hubs,mobile-dark-radar}.png.
+- Lint ESLint 0 erreur/0 warning sur les 2 fichiers modifiés ; tsc --noEmit 0 erreur sur app-sidebar ; dev server vivant, / + /api/* 200.
+
+Stage Summary:
+- Menu portail allégé : 11 sous-menus sidebar supprimés, 2 entrées directes « Opportunity Radar » et « Mobility Hub Operations » dans G3 — les pages à onglets restent la seule navigation interne des modules (souhait exact du client : « en cliquant sur le nom du module on trouve les pages chargées dans des onglets »).
+- Bonus QA : débordement mobile 390 px du TDB enseigne (préexistant) éteint.
+- Commit T57 (app-sidebar + portal-dashboard + 4 captures). Étape suivante : T58 Grand Nettoyage SA (archivage des routes fantômes + suppression — approbation utilisateur « comme convenu »), file ensuite : promotions persistées, PDF progressif, panneaux publicitaires à discuter.
