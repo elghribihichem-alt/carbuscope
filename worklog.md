@@ -2092,3 +2092,25 @@ Work Log:
 - Qualité : tsc 0 erreur et eslint 0 erreur/0 warning sur les 15 fichiers livrés ; aucun `any` ; ARIA + skeletons + états vides honnêtes ; worklog agent dans agent-ctx/T60-g-full-stack-developer.md.
 Stage Summary:
 - LIVRÉ & QA VALIDÉ : 7 volets SA Média complets (≈ 6 000 lignes, 15 fichiers), base restaurée à l'état seed, console 0 erreur, responsive 390 px, dark mode OK. Risques mineurs : photos par URL seulement en V1 ; imports panneaux = POST ligne à ligne (pas d'API bulk dédiée, accepté V1) ; le journal d'audit conserve les traces de QA (append-only, voulu).
+
+---
+Task ID: T61
+Agent: orchestrateur (session principale)
+Task: Transfert du projet CarbuScope vers le repo GitHub officiel fourni par l'utilisateur — effacement de l'ancien contenu distant et remplacement par l'intégralité du travail local.
+
+Work Log:
+- Utilisateur a fourni le repo https://github.com/elghribihichem-alt/carbuscope + un token d'accès personnel (fine-grained PAT, valeur JAMAIS écrite dans aucun fichier tracké — uniquement dans .git/config du remote URL, jamais poussé).
+- Découverte importante : le distant contenait une ANCIENNE COPIE du projet — commits « Vague 3 à Vague 7 » (IA mobile B2C, devis SaaS, 2FA, assistant IA multi-tenant…) = le travail de l'ancienne session morte d'octobre, celui-là même que l'audit forensique T59 avait invalidé (affirmations non livrées). 291 fichiers à l'ancienne tête 8e55a01.
+- Audit sécurité pré-push : .env tracké ne contient que DATABASE_URL (chemin local SQLite, non sensible) ; aucun fichier credentials/secrets tracké ; repo 2,12 Mo.
+- git remote add origin (URL avec token) + fetch → inspection du distant avant effacement.
+- git push --force origin main : + 8e55a01...8511ca5 (forced update) — l'ancienne copie « Vague 7 » est EFFACÉE, remplacée par notre historique réel.
+- git push origin --tags : tag d'archive archive-sa-ghost-routes-2026-10-04 transféré.
+- Branch main configurée en tracking sur origin/main.
+- Vérification intégrité : git diff origin/main main = 0 fichier de différence (identique octet par octet) ; 68 commits au total sur le distant ; tête = 8511ca5 (T60 Module Média).
+
+Stage Summary:
+- CarbuScope est désormais versionné sur GitHub : https://github.com/elghribihichem-alt/carbuscope (branche main, 68 commits, tout l'historique T1→T60).
+- L'ancienne copie fantôme « Vague 3-7 » du distant a été supprimée par force push — le repo reflète maintenant EXACTEMENT le travail réel validé en local.
+- Le token reste uniquement dans .git/config local (jamais dans un fichier tracké/poussé) ; worklog volontairement rédigé sans la valeur du token.
+- Protocole pour les rounds futurs : commit local systématique puis git push origin main à chaque fin de round (le remote est désormais actif).
+- Mystère « ancienne copie » de l'utilisateur partiellement éclairé : la copie fantôme existait SUR LE REMOTE GitHub (jamais en local) — la confusion venait peut-être de là.
