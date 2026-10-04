@@ -1964,3 +1964,20 @@ Stage Summary:
 - Interface 100 % rétrocompatible : aucun fichier parent touché ; lint ESLint 0 erreur/0 warning sur src/components/shadow.
 - Risque connu : OOM récurrent du dev server Turbopack (~4 Go conteneur) — surveillé par cron webDevReview 15 min, procédure de relance documentée (setsid).
 - Prochaines étapes candidates : audit nettoyage des routes SA avec modèles Prisma fantômes (500 sur /api/super/annonces…), PDF des rapports shadow, cycle de vie campagnes Publicité.
+
+---
+Task ID: T56 (rappel d'état + audit lecture seule — AUCUNE modification de code, demande utilisateur explicite « rappelez-moi sans rien faire d'autre »)
+Agent: orchestrator (Z.ai Code)
+Task: Répondre à « où en est-on ? » + vérifier l'observation utilisateur : les modules Opportunity Radar et Mobility Hub Operations gardent leurs sous-menus sidebar alors que leurs pages chargent les mêmes volets en onglets.
+
+Work Log:
+- Vérifié git log + reflog + stash + status : dernier commit réel = f5e3b84 (T55, shadow-map-leaflet). AUCUN commit, AUCUN fichier modifié, AUCUNE entrée worklog après T55 — la session précédente s'est interrompue (contexte épuisé) AVANT d'exécuter ou de documenter le plan discuté. Les décisions utilisateur suivantes étaient donc non enregistrées : (1) Grand Nettoyage SA → ARCHIVER confirmé ; (2) alléger le menu des 2 modules T54 (supprimer sous-menus, clic sur le nom du module → page à onglets) ; (3) vérifier le module « panneaux publicitaires » ; (4) promotions → persistance serveur OUI ; (5) socle PDF → extension au fil du besoin.
+- Audit sidebar (app-sidebar.tsx) : CONFIRMÉ — groupe f-radar « Opportunity Radar » avec 6 sous-items (zones/scoring/formats/faisabilite/simulations/franchise) + groupe f-hubs « Mobility Hub Operations » avec 5 sous-items (carte/services/clients/analytics/parametres). Or radar-module.tsx (TabsList grid 2/3/6) et hub-module.tsx (TabsList grid 2/3/5) rendent EXACTEMENT les mêmes volets en onglets in-page pilotés par nav.radar/nav.hubs → double navigation confirmée, l'observation client est exacte.
+- Vérification « panneaux publicitaires » : AUCUN module dédié n'existe dans le code (aucun dossier/composant publicité, rien dans la sidebar). Le plus proche : (a) G3 portail « API & promotions » (portal-promotions.tsx, T53-T4, état session-local, sans cycle de vie serveur) ; (b) AnnoncesPanel dans sa-support.tsx qui appelle /api/super/annonces → 500 VÉRIFIÉ (curl) car le modèle Prisma `Annonce` n'existe pas dans schema.prisma (route fantôme). Le module « panneaux publicitaires » dont se souvient le client n'a jamais été livré dans ce dépôt — à construire proprement si demandé.
+- Vérifié cron jobs : LISTE VIDE — la boucle webDevReview 15 min a disparu, ce qui explique l'arrêt du travail autonome en fond (« je vois que le travail est arrêté »).
+- Serveur vérifié vivant (bun run dev PID 1057, GET / 200, /api/brands 200).
+
+Stage Summary:
+- État réel : tout est livré et gelé jusqu'à T55 inclus ; le plan post-T55 (archivage SA, allègement menu, panneaux, promotions, PDF) n'a JAMAIS été exécuté — file d'attente reconstruite ci-dessus et decisions utilisateur désormais consignées ici.
+- Prochaine étape prioritaire proposée (T57) : allègement menu — remplacer les 2 groupes à sous-items par 2 items feuilles (clic → portail/radar et portail/hubs, nav.radar/nav.hubs par défaut zones/carte), suppression des 6+5 sous-items sidebar, onglets in-page inchangés, deep-links nav.* intacts, rail replié allégé ; puis T58 archivage SA (branch archive + suppression routes fantômes du tronc, ex. annonces 500) ; puis module « Panneaux publicitaires » à créer ; puis promotions persistées ; puis PDF au fil du besoin.
+- Risque : cron webDevReview absent → à recréer à la reprise du travail.
