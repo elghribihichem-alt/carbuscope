@@ -12,14 +12,14 @@ import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   LayoutDashboard, Map, Fuel, Banknote, Radar, Crosshair, Target, Calculator, Users, FileText,
-  Settings, Lock, MapPinPlus, Star, Store, PlugZap, Footprints,
+  Settings, Lock, Star, Store, PlugZap, Footprints,
   ShieldCheck, ClipboardList, Eye, BarChart3, TriangleAlert, Trophy, CalendarDays, Globe, MapPin,
   Route, Plus, List, RefreshCw, CircleCheck, Camera, TrendingDown, Landmark, Scale, TrendingUp,
   SlidersHorizontal, Building2, CalendarRange, Share2, KeyRound, Ruler, Tags, Bell,
   FileSignature, Layers, Receipt, UsersRound, Bot, MapPinned, ScrollText, Database, TimerReset,
   UserCog, ShieldAlert, Tag, Gift, UserRound, GitCompare, LogIn, Home, ChevronRight,
   PanelLeftClose, PanelLeftOpen, Search, LineChart, Building, Smartphone, ClipboardCheck,
-  Crown, Ghost, Gauge, LayoutGrid, FileSearch, Handshake, Wrench, LocateFixed,
+  Crown, Ghost, LocateFixed,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -211,30 +211,17 @@ function useMenu(mode: Mode): MenuModel {
       const pTab = (id: string, icon: IconType, label: string): NavItem =>
         leaf(id, icon, label, espace === "portail" && cur("portail") === id, () => { setNav("espace", "portail"); setNav("portail", id); closeMobile() })
 
-      // T54 — Module 1 « Opportunity Radar » (6 volets, absorbation officielle de
-      // l'ex-branche Implantation). Clic → portail/radar + sous-onglet nav.radar.
-      // Les outils terrain du volet « zones » (isochrones / comparateur /
-      // cannibalisation) sont portés par la même clé nav.radar : l'item « zones »
-      // reste actif tant qu'un outil du volet est ouvert.
-      const RADAR_ZONE_TOOL_IDS = new Set(["isochrones", "comparateur", "cannibalisation"])
-      const rItem = (id: string, icon: IconType, labelKey: DictKey): NavItem => {
-        const radarActive = espace === "portail" && cur("portail") === "radar"
-        const sub = cur("radar")
-        const inZoneVolet = id === "zones" && RADAR_ZONE_TOOL_IDS.has(sub)
-        return leaf(
-          id, icon, t(labelKey),
-          radarActive && (sub === id || inZoneVolet),
-          () => { setNav("espace", "portail"); setNav("portail", "radar"); setNav("radar", id); closeMobile() },
-        )
-      }
-
-      // T54 — Module 2 « Mobility Hub Operations » (5 volets).
-      const hItem = (id: string, icon: IconType, labelKey: DictKey): NavItem =>
-        leaf(
-          id, icon, t(labelKey),
-          espace === "portail" && cur("portail") === "hubs" && cur("hubs") === id,
-          () => { setNav("espace", "portail"); setNav("portail", "hubs"); setNav("hubs", id); closeMobile() },
-        )
+      // T57 — Allègement du menu : les 2 modules T54 (« Opportunity Radar » et
+      // « Mobility Hub Operations ») deviennent des ENTRÉES DIRECTES du groupe
+      // G3 (pTab « radar » / « hubs »). Leurs volets vivent déjà en onglets
+      // DANS la page du module (TabsList de radar-module.tsx / hub-module.tsx,
+      // pilotés par nav.radar / nav.hubs) — les ex-sous-menus sidebar (6 + 5
+      // items) étaient une double navigation redondante, supprimés. Le clic sur
+      // le nom du module ouvre la page à onglets sur le dernier volet visité
+      // (défauts NAV_DEFAULTS : « zones » / « carte »). Le gating par rôles
+      // (RADAR/HUBS_MODULE_ROLES) est conservé à l'identique, les liens
+      // profonds nav.* et les outils terrain du volet « zones » (isochrones /
+      // comparateur / cannibalisation) restent inchangés.
 
       // G6 — sections Shadow Market (accordéons).
       const sBranch = (
@@ -290,30 +277,12 @@ function useMenu(mode: Mode): MenuModel {
             pTab("stations", Store, t("sb.espace.stations")),
             pTab("reviews", Star, t("sb.espace.reviews")),
             pTab("api", PlugZap, t("sb.espace.api")),
+            // T57 — modules T54 en entrées directes (volets en onglets dans la
+            // page, plus de sous-menus sidebar). Gating rôles inchangé.
+            ...(RADAR_MODULE_ROLES.includes(role) ? [pTab("radar", Radar, t("sb.radar.title"))] : []),
+            ...(HUBS_MODULE_ROLES.includes(role) ? [pTab("hubs", LocateFixed, t("sb.hubs.title"))] : []),
           ],
         },
-        // T54 — Modules « Opportunity Radar » (6 volets, accent ambre) et
-        // « Mobility Hub Operations » (5 volets, accent terracotta). Gating au
-        // niveau du groupe (pattern G6/G7 : rôles homogènes dans le module).
-        ...(RADAR_MODULE_ROLES.includes(role) ? [{
-          id: "f-radar", label: t("sb.radar.title"), icon: Radar, accent: "amber" as const, items: [
-            rItem("zones", MapPinPlus, "sb.radar.zones"),
-            rItem("scoring", Gauge, "sb.radar.scoring"),
-            rItem("formats", LayoutGrid, "sb.radar.formats"),
-            rItem("faisabilite", FileSearch, "sb.radar.faisabilite"),
-            rItem("simulations", Calculator, "sb.radar.simulations"),
-            rItem("franchise", Handshake, "sb.radar.franchise"),
-          ],
-        }] : []),
-        ...(HUBS_MODULE_ROLES.includes(role) ? [{
-          id: "f-hubs", label: t("sb.hubs.title"), icon: LocateFixed, accent: "terra" as const, items: [
-            hItem("carte", Map, "sb.hubs.carte"),
-            hItem("services", Wrench, "sb.hubs.services"),
-            hItem("clients", Users, "sb.hubs.clients"),
-            hItem("analytics", BarChart3, "sb.hubs.analytics"),
-            hItem("parametres", Settings, "sb.hubs.parametres"),
-          ],
-        }] : []),
         {
           id: "f-terrain", label: t("sb.groups.terrain"), items: [
             branch(

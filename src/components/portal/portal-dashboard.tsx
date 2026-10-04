@@ -321,7 +321,10 @@ export function PortalDashboard({ brandSlug }: { brandSlug: string }) {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
+      {/* T57-QA : grille défensive grid-cols-1 (pattern T4b) — sans elle la piste
+          implicite « auto » mesurait 485 px de max-content et débordait le
+          conteneur au 390 px (scrollWidth 500 > 390, découvert au balayage T57). */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         {/* Workflow de validation (C.3) */}
         <Card className="lg:col-span-3">
           <CardHeader>
