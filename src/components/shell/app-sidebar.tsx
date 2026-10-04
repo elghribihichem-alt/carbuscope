@@ -19,12 +19,12 @@ import {
   FileSignature, Layers, Receipt, UsersRound, Bot, MapPinned, ScrollText, Database, TimerReset,
   UserCog, ShieldAlert, Tag, Gift, UserRound, GitCompare, LogIn, Home, ChevronRight,
   PanelLeftClose, PanelLeftOpen, Search, LineChart, Building, Smartphone, ClipboardCheck,
-  Crown, Ghost, LocateFixed,
+  Crown, Ghost, LocateFixed, Megaphone,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { useAppStore, TAB_ACCESS, SHADOW_MODULE_ROLES, PLATFORM_MODULE_ROLES, RADAR_MODULE_ROLES, HUBS_MODULE_ROLES, type Mode, type Tab } from "@/store/app-store"
+import { useAppStore, TAB_ACCESS, SHADOW_MODULE_ROLES, PLATFORM_MODULE_ROLES, RADAR_MODULE_ROLES, HUBS_MODULE_ROLES, MEDIA_MODULE_ROLES, type Mode, type Tab } from "@/store/app-store"
 import { useI18n, type DictKey } from "@/lib/i18n"
 import { DEMO_ACCOUNTS_MAP } from "@/lib/demo-accounts"
 import { CALC_DEFS } from "@/components/calculators/calc-shared"
@@ -281,6 +281,8 @@ function useMenu(mode: Mode): MenuModel {
             // page, plus de sous-menus sidebar). Gating rôles inchangé.
             ...(RADAR_MODULE_ROLES.includes(role) ? [pTab("radar", Radar, t("sb.radar.title"))] : []),
             ...(HUBS_MODULE_ROLES.includes(role) ? [pTab("hubs", LocateFixed, t("sb.hubs.title"))] : []),
+            // T60 — module Média (panneaux urbains) : entrée directe, volets en onglets in-page
+            ...(MEDIA_MODULE_ROLES.includes(role) ? [pTab("media", Megaphone, t("sb.media.title"))] : []),
           ],
         },
         {
@@ -394,6 +396,7 @@ function useMenu(mode: Mode): MenuModel {
             saItem("demo", BarChart3, t("sb.sa.demo")),
             saItem("radar", Radar, t("sb.sa.radar")),
             saItem("hubs", LocateFixed, t("sb.sa.hubs")),
+            saItem("media", Megaphone, t("sb.sa.media")),
             saItem("ai", Bot, t("sb.sa.ai")),
             saItem("carto", MapPinned, t("sb.sa.carto")),
             saItem("audit", ScrollText, t("sb.sa.audit")),

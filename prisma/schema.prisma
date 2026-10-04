@@ -948,3 +948,239 @@ model HubSetting {
 
   @@index([hubId])
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// MODULE MÉDIA / PANNEAUX URBAINS (T60) — produit d'appel de second degré.
+// V1 : panneaux urbains uniquement, mais mediaType porte URBAIN | MOBILE |
+// FERROVIAIRE dès le départ (le code métier ne suppose JAMAIS qu'un panneau
+// est urbain — il teste le type de média ; les 2 autres familles s'ajouteront
+// sans refonte). Deux entités centrales : le PANNEAU (structure physique) et
+// la FACE (surface commercialisée, vendue indépendamment — le vrai produit).
+// Les permissions vivent sur la face (couche 2) : PUBLIQUE | GRANULAIRE |
+// EXCLUSIVE, avec listes allowed/excluded, groupes, zones et conditions
+// commerciales en Json. Le filtrage est résolu CÔTÉ SERVEUR uniquement
+// (src/lib/media/permissions.ts) — rien de masqué ne transite vers le client.
+// ══════════════════════════════════════════════════════════════════════════
+
+model MediaOwner {
+  id        String       @id @default(cuid())
+  code      String       @unique // « OWN-01 »
+  name      String // Régie / Commune / Propriétaire privé
+  type      String       @default("REGIE") // REGIE | COMMUNE | PRIVE
+  contact   String?
+  phone     String?
+  email     String?
+  brandSlug String? // rattachement enseigne (propriétaire « réseau » : TotalEnergies Média…) — alimente stationsProprietaireRayon
+  panels    MediaPanel[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model MediaPanel {
+  id                 String       @id @default(cuid())
+  code               String       @unique // « PAN-TUN-001 »
+  name               String
+  ownerId            String
+  owner              MediaOwner   @relation(fields: [ownerId], references: [id])
+  mediaType          String       @default("URBAIN") // URBAIN | MOBILE | FERROVIAIRE — V1 livre URBAIN
+  supportType        String // GRAND_FORMAT | ABribus | COLONNE | MUR | ENSEIGNE...
+  format             String // 4x3 | 8x4 | 12x4 | COLONNE_L16 ...
+  technology         String // PAPIER | BACKLIGHT | LED | ECRAN_DYNA ...
+  widthCm            Int
+  heightCm           Int
+  heightAboveGroundM Float // hauteur au sol (m)
+  illumination       String       @default("AUCUNE") // AUCUNE | FRONTALE | PROJETEE | LED
+  lat                Float
+  lng                Float
+  governorat         String
+  delegation         String
+  ville              String
+  rue                String?
+  photos             Json // [{url, angle: "FACE"|"3/4"|"PROFILE", mode: "JOUR"|"NUIT"}]
+  status             String       @default("ACTIF") // ACTIF | MAINTENANCE | RETIRE
+  authorizationRef   String? // référence de l'autorisation municipale
+  authorizationStart DateTime?
+  authorizationEnd   DateTime? // alerte SA si expiration < 30 j
+  faces              MediaFace[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([mediaType])
+  @@index([governorat])
+}
+
+model MediaFace {
+  id           String      @id @default(cuid())
+  panelId      String
+  panel        MediaPanel  @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  code         String      @unique // « PAN-TUN-001-A »
+  orientation  String // N | NE | E | SE | S | SO | O | NO
+  sensLecture  String // GAUCHE_DROITE | DROITE_GAUCHE
+  visibiliteMinM Int
+  visibiliteMaxM Int
+  angleMortDeg  Float? // angle mort éventuel
+  obstacles     String? // obstacles identifiés (texte libre)
+  tempsLectureS Float // temps de lecture estimé automobiliste (s)
+
+  // —— Trafic & flux (éditables en ligne dans le tableau + import fichier)
+  tmja               Int // trafic moyen journalier annuel
+  traficHeurePointe  Int
+  repartitionSens    String  @default("50/50") // répartition par sens
+  partDeuxRoues      Float // % (0-100)
+  partVL             Float
+  partPL             Float
+  partTaxis          Float
+  vitesseReglementaire Int
+  vitesseReelle      Float
+  indiceCongestion   Float // 0-100
+
+  // —— Audience
+  audienceJournaliere  Int
+  audienceMensuelle   Int
+  odvJournalieres     Int // occasions de voir journalières
+  odvMensuelles       Int
+  profilDemographique String
+  cspDominante        String
+  partResidents       Float // %
+  partPassants        Float // %
+
+  // —— Environnement concurrentiel (décomptes — jamais de stations nommées côté enseigne)
+  stationsProprietaireRayon Int // stations du propriétaire dans le rayon concurrentiel
+  stationsConcurrentesRayon Int
+  panneauxRayon1km          Int
+  partDeVoix               Float // % (calculée)
+  pois                     Json // [{type: "CENTRE_COMMERCIAL"|"HOPITAL"|..., nom, distanceM}]
+
+  // —— Commercial
+  prixSemaine    Float // DT
+  prixMois       Float
+  prixTrimestre  Float
+  prixSemestre   Float
+  prixAnnee      Float
+  remiseVolumeMax Float // % remise volume possible
+  tauxOccupation12m Float // % occupation historique 12 mois
+  dateDerniereCampagne DateTime?
+  clientsActuels Json // [noms] — masqué côté enseigne
+
+  // —— Technique & légal
+  contraintesMunicipales String?
+  zonesInterdites        Json // ["ALCOOL" | "TABAC" | "JEUX" | "POLITIQUE"]
+  alcoolAutorise         Boolean @default(false)
+  procedureReservation   String?
+
+  // —— Permissions (couche 2 — cœur du produit)
+  visibilityMode      String  @default("PUBLIQUE") // PUBLIQUE | GRANULAIRE | EXCLUSIVE
+  exclusiveBrandSlug  String? // réservée à UNE enseigne (EXCLUSIVE)
+  allowedBrandSlugs   Json // GRANULAIRE : enseignes autorisées
+  excludedBrandSlugs  Json    @default("[]") // interdictions explicites — PRIMENT toujours
+  allowedGroups       Json // groupes d'enseignes autorisés
+  allowedZones        Json // gouvernorats autorisés
+  visibilityConditions Json?  // {ancienneteMinMois, budgetMin, typesEnseignes[]} — conditions commerciales
+
+  status        String   @default("DISPONIBLE") // DISPONIBLE | OCCUPEE | MAINTENANCE | RETIREE
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([panelId])
+  @@index([status])
+}
+
+// ---- Groupes d'enseignes (SA) : utilisés par les règles GRANULAIRES.
+model MediaBrandGroup {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  brandSlugs Json // ["agil", "totalenergies", ...]
+  createdAt  DateTime @default(now())
+}
+
+// ---- Profil média d'un membre (couche 3 : périmètre géographique + prefs).
+//   perimeterType  : TOUT | GOUVERNORATS | RAYON | POLYGONE
+//   perimeterValue : { gouvernorats: [...] } | { lat, lng, rayonKm } | { polygon: [[lat,lng],...] }
+//   scoreWeights   : { audience, trafic, prix, partDeVoix } — pondérations du score composite
+model MediaMemberSetting {
+  userId          String   @id
+  perimeterType   String   @default("TOUT")
+  perimeterValue  Json
+  scoreWeights    Json
+  favoriteColumns Json
+  branding        Json // branding PDF {logoUrl, couleur, mention}
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ---- Simulations de campagne (assistant 5 étapes, état conservé par étape).
+//   selections : [{faceId, prixUnitaire, remise}] — mélange de formats autorisé
+//   params     : {remiseGlobale, saisonnalite: boolean}
+//   results    : sortie du moteur (ODV, reach, fréquence, CPM, stations touchées…)
+model MediaSimulation {
+  id          String          @id @default(cuid())
+  brandSlug   String
+  authorEmail String
+  name        String
+  client      String?
+  dateStart   DateTime?
+  dateEnd     DateTime?
+  currentStep Int             @default(1)
+  status      String          @default("BROUILLON") // BROUILLON | ENVOYEE | ARCHIVEE
+  selections  Json
+  params      Json
+  results     Json?
+  shareLinks  MediaShareLink[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([brandSlug])
+}
+
+// ---- Liens de partage signés (lecture seule, 30 jours) vers un rapport.
+model MediaShareLink {
+  id           String          @id @default(cuid())
+  token        String          @unique
+  simulationId String
+  simulation   MediaSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  revoked      Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+}
+
+// ---- Journal d'audit INALTÉRABLE (ajout seul, aucune route de modification) :
+// auteur, date, ancienne valeur, nouvelle valeur, adresse réseau.
+model MediaAuditEntry {
+  id          String   @id @default(cuid())
+  actorEmail  String
+  actorName   String
+  action      String // EDIT | CREATE | DELETE | IMPORT | PERMISSION | SIMULATION | SHARE | MEMBRE
+  entityType  String // FACE | PANEL | OWNER | PERMISSION | SIMULATION | MEMBRE | MOTEUR
+  entityId    String?
+  entityLabel String?
+  field       String?
+  oldValue    String?
+  newValue    String?
+  ip          String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ---- Filtres sauvegardés par membre (explorateur de faces).
+model MediaSavedFilter {
+  id        String   @id @default(cuid())
+  userEmail String
+  name      String
+  filters   Json
+  createdAt DateTime @default(now())
+}
+
+// ---- Paramétrage du moteur de simulation (SA) : saisonnalité (coefficients
+// mensuels par gouvernorat), matrices de chevauchement entre zones, formules de coût.
+//   key = SAISONNALITE | CHEVAUCHEMENT | COUT
+//   value (SAISONNALITE) : { "TUNIS": [1.0, 1.05, ..., 0.95], "SOUSS..." } — 12 coefficients
+//   value (CHEVAUCHEMENT): { facteurSupplementaire: 0.12, croissanceJournaliere: 0.08 }
+//   value (COUT)          : { cpmReference: 1.4, margePlateforme: 0.1 }
+model MediaEngineSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}

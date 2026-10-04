@@ -549,6 +549,7 @@ export const fr = {
   "sb.sa.demo": "Démographie",
   "sb.sa.radar": "Opportunity Radar",
   "sb.sa.hubs": "Mobility Hub",
+  "sb.sa.media": "Média (référentiel)",
   "sb.sa.ai": "Agent IA",
   "sb.sa.carto": "Cartographie",
   "sb.sa.audit": "Journal d'audit",
@@ -566,6 +567,7 @@ export const fr = {
 
   // T54-A2 — Module 2 « Mobility Hub Operations » (Portail enseigne).
   "sb.hubs.title": "Mobility Hub Operations",
+  "sb.media.title": "Média & Panneaux urbains",
   "sb.hubs.desc": "Piloter les Terminaux Multi-Services (TMP) : carte des hubs, gestion des services, base clients véhicules, analytics de conversion et paramètres d'exploitation.",
   "sb.hubs.carte": "Carte des TMP",
   "sb.hubs.services": "Gestion des services",

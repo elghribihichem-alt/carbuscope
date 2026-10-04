@@ -19,6 +19,7 @@ import { PortalTerrain } from "./portal-terrain"
 import { NotificationsCenter } from "./notifications-center"
 import { RadarModule } from "@/components/radar/radar-module"
 import { HubModule } from "@/components/hubs/hub-module"
+import { MediaModule } from "@/components/media/media-module"
 
 export function PortalView() {
   const brandSlug = useAppStore(s => s.brandSlug)
@@ -117,6 +118,11 @@ export function PortalView() {
         </TabsContent>
         <TabsContent value="hubs" className="mt-0 space-y-4">
           <HubModule />
+        </TabsContent>
+        {/* T60 — module « Média & Panneaux urbains » (volets en onglets in-page,
+            sous-navigation nav.media). */}
+        <TabsContent value="media" className="mt-0 space-y-4">
+          <MediaModule brandSlug={brandSlug} />
         </TabsContent>
       </Tabs>
     </div>

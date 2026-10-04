@@ -21,6 +21,7 @@ import { SaCarto } from "./sa-carto"
 import { SaAudit } from "./sa-audit"
 import { SaRadar } from "./sa-radar"
 import { SaHubs } from "./sa-hubs"
+import { SaMedia } from "./sa-media"
 
 export function SuperAdminView() {
   const userId = useAppStore(s => s.userId)
@@ -98,6 +99,11 @@ export function SuperAdminView() {
             (lecture seule SA en V1 — KPIs, entonnoir, table des hubs). */}
         <TabsContent value="hubs" className="mt-0 space-y-4">
           <SaHubs />
+        </TabsContent>
+        {/* T60 — volet « Média (référentiel) » : panneaux & faces, propriétaires,
+            matrice de permissions + aperçu, trafic & audience, audit, moteur. */}
+        <TabsContent value="media" className="mt-0 space-y-4">
+          <SaMedia />
         </TabsContent>
         <TabsContent value="ai" className="mt-0 space-y-4">
           <SaAiAgent />

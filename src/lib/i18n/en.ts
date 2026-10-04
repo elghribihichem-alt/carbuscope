@@ -3,6 +3,8 @@
 import type { Dict } from "./fr"
 
 export const en: Partial<Dict> = {
+  "sb.sa.media": "Media (referential)",
+  "sb.media.title": "Media & Urban Panels",
   // ---------- Common ----------
   "common.back": "Back",
   "common.min": "min",
