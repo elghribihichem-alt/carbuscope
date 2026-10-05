@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo } from "react"
 import * as L from "leaflet"
+import "@/lib/leaflet-canvas-guard"
 import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import { useTheme } from "next-themes"
