@@ -2114,3 +2114,21 @@ Stage Summary:
 - Le token reste uniquement dans .git/config local (jamais dans un fichier tracké/poussé) ; worklog volontairement rédigé sans la valeur du token.
 - Protocole pour les rounds futurs : commit local systématique puis git push origin main à chaque fin de round (le remote est désormais actif).
 - Mystère « ancienne copie » de l'utilisateur partiellement éclairé : la copie fantôme existait SUR LE REMOTE GitHub (jamais en local) — la confusion venait peut-être de là.
+
+---
+Task ID: T62
+Agent: orchestrateur (session principale)
+Task: « Veille terrain en 3 onglets » — la proposition d'origine laissée en attente d'approbation formelle a été APPROUVÉE par l'utilisateur (sélection dans la liste des propositions). Mise en œuvre du pattern T57 (Radar/Hubs) : entrée directe sidebar + onglets visibles DANS la page.
+
+Work Log:
+- Diagnostic préalable : portal-terrain.tsx avait DÉJÀ la structure Tabs/TabsContent à 3 volets (missions/own/competitors, T28/T46) mais SANS TabsList visible — la sous-navigation était portée uniquement par la sidebar (3 sous-entrées « branch »). C'est précisément le symptôme utilisateur : « rien, juste les données et tableaux ».
+- app-sidebar.tsx (+9/-14) : branch("terrain", …, "portal-terrain", [3 enfants]) remplacé par pTab("terrain", Footprints, t("sb.terrain.missions")) — entrée directe du groupe f-terrain, exactement le pattern T57 des modules Radar/Hubs/Média. Imports ShieldCheck + Eye retirés (orphelins), ClipboardList conservé (2 usages restants : Shadow recensement + BO missions). NAV_DEFAULTS["portal-terrain"]="missions" inchangé (dernier volet visité mémorisé via le store).
+- portal-terrain.tsx (+29/-2) : TabsList grid-cols-3 + 3 TabsTrigger (ClipboardList « Mes missions » / ShieldCheck « Fiche propriétaire » / Eye « Fiches concurrents »), style identique à radar-module.tsx (min-w-0, truncate, icônes h-3.5, cibles tactiles py-2). Import TabsList/TabsTrigger + icônes ajoutés. La valeur reste portée par nav["portal-terrain"] → sidebar et onglets in-page partagent la même valeur (sync bidirectionnelle), les deep-links internes (alerte qualité → onOpenMission → setSection("missions") + pendingMissionId) inchangés.
+- QA E2E agent-browser (Sonia Beji — Agil, dev server OK) : sidebar G4 = « Missions terrain » + « Application agents terrain » SEULEMENT (plus aucune sous-entrée) ; les 3 onglets visibles et sélectionnables (état [selected] vérifié pour chacun des 3) ; capture missions/propriétaire/concurrents ; 0 erreur console, 0 erreur page ; dark mode capturé ; mobile 390×844 → scrollWidth 390 = clientWidth 390 (zéro débordement) ; VLM confirme les 3 onglets visibles, actif par défaut « Mes missions », aucune erreur visuelle, pas de sous-menu sidebar.
+- Vérifications : bun run lint → 0 erreur ; bunx tsc --noEmit → 0 erreur sur les 2 fichiers modifiés ; dev.log propre (routes 200).
+- Captures : qa-t62-veille-3onglets-missions.png, -proprietaire.png, -concurrents.png, -dark.png, -390.png.
+
+Stage Summary:
+- La page « Veille terrain » du portail enseigne affiche désormais ses 3 volets en ONGLETS VISIBLES (Mes missions / Fiche propriétaire / Fiches concurrents) — conforme à la vision d'origine de l'utilisateur, en enfin matérialisée (l'ancienne session morte l'avait seulement prétendu, la forensique T59 l'avait prouvé).
+- Sidebar allégée (le 4e module à adopter le pattern T57 après Radar/Hubs/Média) : 3 sous-entrées redondantes supprimées, entrée directe « Missions terrain ».
+- Zéro régression : deep-links internes, persistance du dernier volet, données partagées, skeletons et ErrorState inchangés. Lint 0, tsc 0, 0 erreur console, 390px sans débordement, dark mode sain.

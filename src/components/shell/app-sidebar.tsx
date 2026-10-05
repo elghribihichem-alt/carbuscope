@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import {
   LayoutDashboard, Map, Fuel, Banknote, Radar, Crosshair, Target, Calculator, Users, FileText,
   Settings, Lock, Star, Store, PlugZap, Footprints,
-  ShieldCheck, ClipboardList, Eye, BarChart3, TriangleAlert, Trophy, CalendarDays, Globe, MapPin,
+  ClipboardList, BarChart3, TriangleAlert, Trophy, CalendarDays, Globe, MapPin,
   Route, Plus, List, RefreshCw, CircleCheck, Camera, TrendingDown, Landmark, Scale, TrendingUp,
   SlidersHorizontal, Building2, CalendarRange, Share2, KeyRound, Ruler, Tags, Bell,
   FileSignature, Layers, Receipt, UsersRound, Bot, MapPinned, ScrollText, Database, TimerReset,
@@ -287,16 +287,15 @@ function useMenu(mode: Mode): MenuModel {
         },
         {
           id: "f-terrain", label: t("sb.groups.terrain"), items: [
-            branch(
-              "terrain", Footprints, t("sb.terrain.missions"),
-              espace === "portail" && cur("portail") === "terrain",
-              () => { setNav("espace", "portail"); setNav("portail", "terrain"); closeMobile() },
-              "portal-terrain", [
-                { id: "missions", icon: ClipboardList, label: t("sb.terrain.mesMissions") },
-                { id: "own", icon: ShieldCheck, label: t("sb.terrain.proprietaire") },
-                { id: "competitors", icon: Eye, label: t("sb.terrain.concurrents") },
-              ],
-            ),
+            // T62 — Allègement (pattern T57 Radar/Hubs) : « Veille terrain »
+            // devient une ENTRÉE DIRECTE du groupe. Les 3 volets (Mes
+            // missions / Fiche propriétaire / Fiches concurrents) vivent en
+            // onglets DANS la page (TabsList de portal-terrain.tsx, pilotés
+            // par nav["portal-terrain"], défaut NAV_DEFAULTS « missions ») —
+            // les ex-sous-entrées sidebar étaient une double navigation
+            // redondante, supprimées. Les deep-links internes (alerte qualité
+            // → onOpenMission → setSection) restent inchangés.
+            pTab("terrain", Footprints, t("sb.terrain.missions")),
             leaf("agents", Smartphone, t("sb.terrain.app"), espace === "agents", () => { setNav("espace", "agents"); closeMobile() }),
           ],
         },

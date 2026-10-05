@@ -10,10 +10,10 @@
 // la fiche de pilotage de la mission concernée (section « Mes missions »).
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ClipboardList, Footprints, UserRound } from "lucide-react"
+import { ClipboardList, Eye, Footprints, ShieldCheck, UserRound } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/shell/loading"
 import { useAppStore } from "@/store/app-store"
@@ -27,8 +27,9 @@ import { TerrainOwnSheet } from "./terrain-own"
 import { TerrainCompetitorsSheet } from "./terrain-competitors"
 
 export function PortalTerrain({ brandSlug }: { brandSlug: string }) {
-  // Sous-navigation interne pilotée par la sidebar (store T46, clé
-  // « portal-terrain ») : missions | own | competitors
+  // Sous-navigation interne (T62 : onglets visibles in-page + entrée directe
+  // sidebar, pattern T57) — store T46, clé « portal-terrain » :
+  // missions | own | competitors
   const setNav = useAppStore(s => s.setNav)
   const section = useAppStore(s => s.nav["portal-terrain"]) ?? "missions"
   const setSection = useCallback((v: string) => setNav("portal-terrain", v), [setNav])
@@ -231,8 +232,35 @@ export function PortalTerrain({ brandSlug }: { brandSlug: string }) {
         </CardContent>
       </Card>
 
-      {/* Contenu de la section active — la sous-navigation (3 sections) est portée par la sidebar */}
+      {/* T62 — Onglets visibles de la veille terrain (pattern T57 Radar/
+          Hubs) : les 3 volets (Mes missions / Fiche propriétaire / Fiches
+          concurrents) sont pilotés par nav["portal-terrain"] — la sidebar
+          (entrée directe) et les onglets in-page partagent la même valeur,
+          les deep-links internes (onOpenMission) restent inchangés. */}
       <Tabs value={section} onValueChange={setSection} className="space-y-4">
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1">
+          <TabsTrigger
+            value="missions"
+            className="min-w-0 gap-1.5 px-2 py-2 text-xs sm:text-[13px]"
+          >
+            <ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="truncate">Mes missions</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="own"
+            className="min-w-0 gap-1.5 px-2 py-2 text-xs sm:text-[13px]"
+          >
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="truncate">Fiche propriétaire</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="competitors"
+            className="min-w-0 gap-1.5 px-2 py-2 text-xs sm:text-[13px]"
+          >
+            <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="truncate">Fiches concurrents</span>
+          </TabsTrigger>
+        </TabsList>
         <TabsContent value="missions" className="mt-0 space-y-4">
           <TerrainMissions
             brandSlug={brandSlug}
