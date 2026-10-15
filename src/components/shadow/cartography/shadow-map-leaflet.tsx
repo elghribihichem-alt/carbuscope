@@ -16,7 +16,6 @@
 import * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import * as L from "leaflet"
-import "@/lib/leaflet-canvas-guard"
 import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Tooltip, Marker, useMap } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import { useTheme } from "next-themes"

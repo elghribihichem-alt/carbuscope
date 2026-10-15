@@ -13,7 +13,6 @@
 
 import { useEffect, useMemo } from "react"
 import * as L from "leaflet"
-import "@/lib/leaflet-canvas-guard"
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import { useTheme } from "next-themes"

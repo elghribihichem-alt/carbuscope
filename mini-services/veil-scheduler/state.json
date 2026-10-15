@@ -1,6 +1,17 @@
 {
   "journal": [
     {
+      "at": "2026-10-12T07:00:13.772Z",
+      "ok": true,
+      "mode": "SCHEDULED",
+      "httpStatus": 200,
+      "triggeredAlerts": 15,
+      "skippedAlerts": 18,
+      "stationsFlagged": 165,
+      "emailsQueued": 15,
+      "durationMs": 282
+    },
+    {
       "at": "2026-10-05T07:00:21.574Z",
       "ok": true,
       "mode": "SCHEDULED",
@@ -34,5 +45,5 @@
       "durationMs": 221
     }
   ],
-  "lastFireDayKey": "2026-10-05"
+  "lastFireDayKey": "2026-10-12"
 }

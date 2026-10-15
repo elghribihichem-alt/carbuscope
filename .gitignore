@@ -50,7 +50,30 @@ test
 prompt
 
 server.log
-# Skills directory
+
+# ─────────────────────────────────────────────
+# Hygiène du dépôt (T64 — purge artefacts & orphelins)
+# ─────────────────────────────────────────────
+# Bibliothèque de skills locale (infra plateforme, jamais dans le repo)
+/skills/
+.zscripts/
+
+# Captures QA locales (jamais versionnées — voir worklog.md)
+/qa-*.png
+/qa/
+/qa-captures/
+/public/qa/
+
+# Artefacts de travail non versionnés
+/_archive/
+/agent-ctx/
+/tests/
+/tmp-scripts/
+/download/
+/scripts/
+/db/backups/
+
+# Skills directory (legacy entry kept for safety)
 /skills/tool-results/
 
 # artefacts d’outils internes (rounds)
