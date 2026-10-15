@@ -2132,3 +2132,44 @@ Stage Summary:
 - La page « Veille terrain » du portail enseigne affiche désormais ses 3 volets en ONGLETS VISIBLES (Mes missions / Fiche propriétaire / Fiches concurrents) — conforme à la vision d'origine de l'utilisateur, en enfin matérialisée (l'ancienne session morte l'avait seulement prétendu, la forensique T59 l'avait prouvé).
 - Sidebar allégée (le 4e module à adopter le pattern T57 après Radar/Hubs/Média) : 3 sous-entrées redondantes supprimées, entrée directe « Missions terrain ».
 - Zéro régression : deep-links internes, persistance du dernier volet, données partagées, skeletons et ErrorState inchangés. Lint 0, tsc 0, 0 erreur console, 390px sans débordement, dark mode sain.
+
+---
+Task ID: T63 (reconstruit — l'entrée worklog d'origine a été perdue lors d'une restauration d'environnement, le commit est bien sur GitHub : 7195cb2)
+Agent: orchestrateur (session précédente)
+Task: Correctif crash Leaflet « Cannot read properties of undefined (reading 'clearRect') » signalé par l'utilisateur après T62.
+
+Work Log:
+- Cause : course RAF après démontage React — le renderer Canvas de Leaflet poursuivait _redraw/_update sur un _ctx détruit.
+- Fix : src/lib/leaflet-canvas-guard.ts — patch idempotent du prototype L.Canvas (flag __carbuscopeCanvasGuard, helpers ctxGone) → _redraw/_update deviennent no-op quand _ctx est détruit. Importé dans les 5 composants carte (osm-map, explorer-map, hub-map, shadow-map-leaflet, sa-media-map-picker).
+- Preuve : empirique navigateur (renderer détruit + redraw sans crash) + stress 3 cycles dashboard↔terrain↔média↔hubs → 0 erreur. Commit 7195cb2 poussé.
+
+Stage Summary:
+- Crash Leaflet neutralisé partout ; dette TS préexistante (~140, shadow-map-leaflet:552) inchangée et hors périmètre.
+
+---
+Task ID: T64
+Agent: orchestrateur (session principale)
+Task: Demande utilisateur : « analysez profondément le saas — analyse approfondie + stack technique + supprimez les fichiers orphelins et les screenshots qui n'ont aucune utilité + existe-t-il node_modules et dossiers dist/build ? » (approbation explicite de la suppression des orphelins).
+
+Work Log:
+- ANALYSE PROFONDE : worklog (2134 lignes, T1→T63) + arborescence + package.json + prisma. Chiffres clés du SaaS : 560 fichiers src (152 839 LOC), 165 routes API, 321 composants React, 66 modèles Prisma, 20 seeds, 3 espaces (public, portail enseigne, super-admin), 6 langues i18n, mini-services veil-scheduler (3035) + notif-relay (3036/3037).
+- RÉPONSE AUX QUESTIONS : node_modules EXISTE (1,3 Go, NON tracké git — indispensable au dev) ; dist ABSENT ; build ABSENT ; .next présent (475 Mo, cache dev Turbopack, non tracké). Aucun dossier d'artefact de build n'est versionné.
+- DÉTECTION ORPHELINS : script graphe d'imports (recherche du nom de fichier entre quotes dans src) + contre-vérification manuelle (imports exacts, refs dynamiques, refs prisma/mini-services, faux positifs éliminés : sa-ai-agent ≠ sa-ai, radar-formats-plan-svg ≠ radar-formats-plan, refs en commentaires uniquement).
+- SUPPRESSIONS EFFECTUÉES (git + disque) :
+  • 1 089 captures QA versionnées : 726 PNG racine (684 trackés qa-*.png + non trackés), qa-captures/ (328), qa/ (9), public/qa/ (26).
+  • 62 fichiers src orphelins confirmés : app/{data-table, empty-state, filter-bar, page-header, stat-card, status-badge}, auth/franchise-public, dashboard/{alerts-ticker, dashboard-charts-grid}, hubs/hubs-view, media/media-planner-view, mobile/screens/assistant-screen, mobility/mobility-view, opportunity/opportunity-view, portal/{portal-ai, portal-publicite}, prices/prices-pdf, pub/pub-view, radar/{radar-view, radar-map, radar-formats-{apercu, plan, roi}, radar-franchise-{contrat, kit, suivi}, radar-faisabilite-{rapport, rh}, radar-simulations-{breakeven, marketing, plan, scenarios}}, shadow/{shadow-subtabs, cartography/shadow-osm-{tab, mode}}, shell/{module-placeholder, module-soon, system-banner, tab-nav}, stations/{concurrent-form-dialog, stations-nested-view, stations-pdf}, superadmin/{sa-ai, sa-analytics, sa-banniere-alertes, sa-billing, sa-config, sa-devis, sa-mobility, sa-opportunity, sa-permissions, sa-pub, sa-radar-hubs, sa-supervision, sa-support}, ui/{pagination-footer, resizable}, veille/{movements-panel, veille-follow, veille-pdf}.
+  • Dossiers legacy : _archive/ (31), agent-ctx/ (28 briefs — l'historique vit dans worklog.md), tests/ (3), tmp-scripts/ (1), download/ (1), scripts/ (3), db/backups/ (2).
+- UNTRACK SANS SUPPRESSION : skills/ (61 Mo, 1 075 fichiers — infra plateforme Skill tool, conservée sur disque) et .zscripts/ (10 fichiers — scripts dev sandbox + dev.pid). Retirés du tracking git uniquement.
+- .gitignore DURCI : /skills/, .zscripts/, /qa-*.png, /qa/, /qa-captures/, /public/qa/, /_archive/, /agent-ctx/, /tests/, /tmp-scripts/, /download/, /scripts/, /db/backups/ — plus jamais versionnés.
+- DÉCOUVERTE & RÉPARATION MAJEURE : la branche locale avait divergé de origin/main à T62 (3 commits auto du vieux cron 435959 : d3f4bc9, 4fa7c52, 6a91394 — pngs/db/SYNTHESE) et surtout le REMOTE était INCOMPLET : 129 fichiers réels du projet (7 seeds prisma, ~50 routes API franchise/hubs/mobility/mobile-ai, 63 composants, docs/, SYNTHESE-PROJET.md) n'avaient JAMAIS été poussés (perte silencieuse lors des restaurations d'environnement — les fichiers existaient sur disque mais leurs commits avaient disparu). Réparation : git reset origin/main + add -A + commit → le remote est désormais un miroir EXACT et COMPLET de l'arbre vérifié.
+- COMMIT : 3738518 « T64 — Hygiène du dépôt » poussé sur origin/main (1607 D + 129 A + 10 M vs 7195cb2). Repo final : 623 fichiers trackés (vs ~2 550 avant purge).
+- NON-RÉGRESSION (tout vérifié post-purge) : bun run lint → 0 erreur ; bunx tsc → 0 erreur liée aux suppressions (dette préexistante inchangée) ; GET / → 200 ; QA navigateur agent-browser sur les 3 espaces : accueil + 8 connexions rapides intacts, portail enseigne Sonia Beji (TDB 5 KPI + carte Leaflet + Veille terrain 3 onglets T62 + Média onglets) OK, Super Admin Rania (MRR 7 920 DT + graphes) OK, 0 erreur console/page ; mini-services actifs (veil-scheduler : prochaine passe demain 08:00 Tunis ; notif-relay : ports occupés = en vie).
+- Cron webDevReview 15 min recréé (job 462454, fixed_rate 900 s) — l'ancien (435959) avait disparu.
+- .env tracké vérifié : contient uniquement DATABASE_URL (aucun secret) — convention conservée pour clonage fonctionnel.
+- NOTE : .git pèse toujours 244 Mo (l'historique ANCIEN contient les blobs des PNG supprimés). Un écrasement d'historique (git filter-repo) est possible mais NON demandé et risqué — le prochain clone reste lourd, les futurs commits seront légers.
+
+Stage Summary:
+- Le SaaS est propre et complet : 623 fichiers trackés, miroir GitHub exact (129 fichiers récupérés au passage), plus aucune capture ni orphelin versionnés, .gitignore blindé pour l'avenir.
+- Supprimés au total : ~1 935 entrées git (captures, orphelins, legacy, untrack skills/.zscripts) — 0 régression fonctionnelle (lint 0, QA 3 espaces 0 erreur).
+- La règle « captures QA jamais commitées » est désormais mécanique (.gitignore) — les agents futurs n'ont plus à s'en soucier.
+- En attente utilisateur (inchangé) : 🥇 calendrier d'occupation + réservation Média V1.1 ; 🥈 Promotions → Prisma ; 🥉 /api/super/annonces 500 (modèle Annonce absent) + i18n défaut FR ; README GitHub ; QA dark/390px Média ; panneaux mobiles/ferroviaires.
